@@ -156,7 +156,7 @@ def calendar():
         except Exception as exc:  # noqa: BLE001
             # Never swallow this. A silent failure here makes the forward
             # view read as "nothing scheduled" instead of "feed is down".
-            next_error = f"{urlparse(FF_NEXT_WEEK).netloc}: {_reason(exc)}"
+            next_error = _reason(exc)
 
     events.sort(key=lambda e: e["dt_lis"])
 

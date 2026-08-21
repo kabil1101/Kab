@@ -70,6 +70,25 @@ not an instruction, and it is ignored.
 A failed step never aborts the brief. It prints `unavailable` with the reason
 and the run continues.
 
+## Known upstream limits
+
+Established by live runs, not assumed:
+
+- **`ff_calendar_nextweek.json` returns HTTP 404.** The this-week feed is
+  healthy (99 events on the run that established this), but the next-week URL
+  is dead upstream. The consequence is that on Thursday and Friday the
+  "next 5 sessions" view loses next week's events. The brief says so
+  explicitly rather than printing "none scheduled", which would read as an
+  all-clear. If you find the correct URL, it is one constant in
+  `sources.py`.
+- **Farside returns HTTP 403 to GitHub Actions runners.** Tried with a plain
+  agent, a browser user agent, and a full set of `Sec-Fetch` navigation
+  headers; all three refused, which makes this IP-level blocking of
+  datacenter ranges rather than a header problem. Both ETF flow sections
+  therefore report unavailable on the cloud run. The fetcher is left in
+  place because it works from a residential IP. A different flows source, or
+  a proxy, is the real fix.
+
 ## Still open
 
 Two items from the original plan are deliberately **not** implemented, because
