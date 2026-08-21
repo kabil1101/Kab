@@ -96,7 +96,7 @@ def should_run(now: datetime) -> bool:
     if os.environ.get("FORCE_RUN", "").lower() in ("1", "true", "yes"):
         return True
 
-    schedule = (os.environ.get("GITHUB_EVENT_SCHEDULE") or "").strip()
+    schedule = (os.environ.get("BRIEF_SCHEDULE") or "").strip()
     if not schedule:
         # Manual dispatch or local run: always proceed.
         return True

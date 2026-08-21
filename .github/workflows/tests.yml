@@ -12,4 +12,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+      # sources.py imports requests at module scope, so the suite needs the
+      # runtime dependencies even though it never touches the network.
+      - run: pip install -r requirements.txt
       - run: python tests/test_brief.py

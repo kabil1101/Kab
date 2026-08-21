@@ -194,12 +194,12 @@ import main as brief_main  # noqa: E402
 
 
 def guard(schedule, when, force=""):
-    _os.environ["GITHUB_EVENT_SCHEDULE"] = schedule
+    _os.environ["BRIEF_SCHEDULE"] = schedule
     _os.environ["FORCE_RUN"] = force
     try:
         return brief_main.should_run(when)
     finally:
-        _os.environ.pop("GITHUB_EVENT_SCHEDULE", None)
+        _os.environ.pop("BRIEF_SCHEDULE", None)
         _os.environ.pop("FORCE_RUN", None)
 
 

@@ -47,7 +47,9 @@ jobs:
         env:
           # The cron expression that triggered this run. Empty on manual
           # dispatch, which the guard treats as "always run".
-          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
+          # Not GITHUB_EVENT_SCHEDULE: Actions reserves the GITHUB_ prefix and
+          # rejects the whole workflow if you set one.
+          BRIEF_SCHEDULE: ${{ github.event.schedule }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           SKIP_EMAIL: ${{ inputs.skip_email && '1' || '' }}
