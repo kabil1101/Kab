@@ -41,6 +41,18 @@ YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 
 UA = "Mozilla/5.0 (compatible; market-brief/1.0; +https://github.com/kabil1101/Kab)"
 HEADERS = {"User-Agent": UA, "Accept": "*/*"}
+
+# Farside rejects a plain API-style user agent with 403. HTML pages get a
+# browser-shaped header set instead.
+BROWSER_HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                   "AppleWebKit/537.36 (KHTML, like Gecko) "
+                   "Chrome/126.0.0.0 Safari/537.36"),
+    "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
+               "image/avif,image/webp,*/*;q=0.8"),
+    "Accept-Language": "en-GB,en;q=0.9",
+    "Cache-Control": "no-cache",
+}
 TIMEOUT = 30
 
 
@@ -58,12 +70,13 @@ def _reason(exc) -> str:
     return type(exc).__name__
 
 
-def _get(url: str, *, params=None, tries: int = 3):
+def _get(url: str, *, params=None, tries: int = 3, headers=None):
     """GET with bounded retries. Raises a compact error on final failure."""
     last = None
     for _ in range(tries):
         try:
-            r = requests.get(url, params=params, headers=HEADERS, timeout=TIMEOUT)
+            r = requests.get(url, params=params, headers=headers or HEADERS,
+                             timeout=TIMEOUT)
             r.raise_for_status()
             return r
         except Exception as exc:  # noqa: BLE001 - caller decides
@@ -115,16 +128,39 @@ def calendar():
     The this-week feed ends Friday, so from Wednesday on we also pull next
     week or the forward view collapses on Thu/Fri.
     """
+    import sys
+    from collections import Counter
+
     seen: set = set()
     events = _parse_ff(_json(FF_THIS_WEEK), seen)
+    this_count = len(events)
     today = datetime.now(LISBON).date()
-    if today.weekday() >= 2:  # Wed or later
+
+    next_error = None
+    next_count = 0
+    if today.weekday() >= 2:  # Wed or later: this-week feed ends Friday
         try:
-            events += _parse_ff(_json(FF_NEXT_WEEK), seen)
-        except Exception:
-            pass  # forward view degrades, today's view still stands
+            nxt = _parse_ff(_json(FF_NEXT_WEEK), seen)
+            next_count = len(nxt)
+            events += nxt
+        except Exception as exc:  # noqa: BLE001
+            # Never swallow this. A silent failure here makes the forward
+            # view read as "nothing scheduled" instead of "feed is down".
+            next_error = f"{urlparse(FF_NEXT_WEEK).netloc}: {_reason(exc)}"
+
     events.sort(key=lambda e: e["dt_lis"])
-    return {"events": events, "source": "ForexFactory (nfs.faireconomy.media)"}
+
+    impacts = Counter(e["impact"] for e in events)
+    print(f"  calendar: {this_count} this-week + {next_count} next-week events; "
+          f"impacts={dict(impacts)}"
+          + (f"; next-week FAILED: {next_error}" if next_error else ""),
+          file=sys.stderr)
+
+    return {
+        "events": events,
+        "next_week_error": next_error,
+        "source": "ForexFactory (nfs.faireconomy.media)",
+    }
 
 
 # ------------------------------------------------------------------ crypto
@@ -210,7 +246,7 @@ def _money(cell: str):
 def _farside(url: str):
     from bs4 import BeautifulSoup
 
-    html = _get(url).text
+    html = _get(url, headers=BROWSER_HEADERS).text
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
     if table is None:

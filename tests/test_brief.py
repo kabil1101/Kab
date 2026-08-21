@@ -122,7 +122,8 @@ now = datetime(2026, 8, 21, 9, 30, tzinfo=LISBON)
 healthy = {
     "now": now,
     "calendar": {"ok": True, "error": None,
-                 "data": {"events": parsed, "source": "ff"}},
+                 "data": {"events": parsed, "next_week_error": None,
+                          "source": "ff"}},
     "crypto": {"ok": True, "error": None, "data": {"source": "kraken", "pairs": [
         {"symbol": "BTC", "last": 76800.0, "day_open": 75000.0,
          "pct_since_utc_midnight": 2.4, "high_24h": 79500.0,
@@ -230,6 +231,24 @@ check("connection error named", sources._reason(_rq.ConnectionError()),
       "connection failed")
 check_true("error text stays short enough for an email body",
            len(sources._reason(_rq.ConnectionError("x" * 500))) < 40)
+
+print("\n-- forward feed: dead vs genuinely empty --")
+dead_fwd = dict(healthy)
+dead_fwd["calendar"] = {"ok": True, "error": None, "data": {
+    "events": [e for e in parsed if e["dt_lis"].date() == today],
+    "next_week_error": "nfs.faireconomy.media: HTTP 403", "source": "ff"}}
+md3, _ = render.build(dead_fwd)
+check_true("dead forward feed is not reported as 'none scheduled'",
+           "None scheduled" not in md3, md3)
+check_true("dead forward feed names the failure", "HTTP 403" in md3)
+
+empty_fwd = dict(healthy)
+empty_fwd["calendar"] = {"ok": True, "error": None, "data": {
+    "events": [e for e in parsed if e["dt_lis"].date() == today],
+    "next_week_error": None, "source": "ff"}}
+md4, _ = render.build(empty_fwd)
+check_true("genuinely empty forward feed still says none scheduled",
+           "None scheduled" in md4)
 
 print()
 if failures:

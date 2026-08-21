@@ -131,8 +131,15 @@ def build(ctx) -> tuple[str, str]:
                 md.append(f"- {i}")
             html.append("<ul>" + "".join(f"<li>{_hb(i)}</li>" for i in items) + "</ul>")
         else:
-            md.append("- None scheduled in the forward feed.")
-            html.append("<ul><li>None scheduled in the forward feed.</li></ul>")
+            # Distinguish an empty forward view from a dead feed. Printing
+            # "none scheduled" when the fetch failed is the worst outcome:
+            # it reads as an all-clear.
+            err = cal["data"].get("next_week_error")
+            note = (f"Forward feed unavailable — {err}. Next week's High-impact "
+                    f"events are NOT covered by this brief." if err
+                    else "None scheduled in the forward feed.")
+            md.append(f"- {note}")
+            html.append(f"<ul><li>{_hb(note)}</li></ul>")
         md.append("")
 
     # ---- CRYPTO --------------------------------------------------------
