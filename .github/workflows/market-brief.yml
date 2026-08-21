@@ -20,6 +20,10 @@ on:
         description: "Build and log the brief without emailing it"
         type: boolean
         default: false
+      debug:
+        description: "Dump today's raw calendar rows to the log"
+        type: boolean
+        default: false
 
 concurrency:
   group: market-brief
@@ -53,5 +57,6 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           SKIP_EMAIL: ${{ inputs.skip_email && '1' || '' }}
+          BRIEF_DEBUG: ${{ inputs.debug && '1' || '' }}
           FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
         run: python scripts/main.py

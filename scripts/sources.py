@@ -19,6 +19,7 @@ Use the documented APIs instead, which is what this module does.
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlparse
@@ -51,7 +52,14 @@ BROWSER_HEADERS = {
     "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
                "image/avif,image/webp,*/*;q=0.8"),
     "Accept-Language": "en-GB,en;q=0.9",
-    "Cache-Control": "no-cache",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://farside.co.uk/",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Connection": "keep-alive",
 }
 TIMEOUT = 30
 
@@ -67,6 +75,8 @@ def _reason(exc) -> str:
         return "timeout"
     if isinstance(exc, requests.ConnectionError):
         return "connection failed"
+    if isinstance(exc, RuntimeError) and str(exc):
+        return str(exc)      # already compact, e.g. re-wrapped from _get
     return type(exc).__name__
 
 
@@ -155,6 +165,12 @@ def calendar():
           f"impacts={dict(impacts)}"
           + (f"; next-week FAILED: {next_error}" if next_error else ""),
           file=sys.stderr)
+
+    if os.environ.get("BRIEF_DEBUG"):
+        for e in events:
+            if e["dt_lis"].date() == today:
+                print(f"    [debug] {e['dt_lis']:%H:%M} {e['country']:<4} "
+                      f"{e['impact']:<8} {e['title']}", file=sys.stderr)
 
     return {
         "events": events,
