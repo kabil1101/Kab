@@ -1,0 +1,55 @@
+name: Daily Market Brief
+
+# GitHub Actions cron is UTC-only. Two slots are registered; the job's own
+# guard works out which one lands on 09:xx in Lisbon today and the other one
+# exits without sending. That is what keeps delivery at 09:25 Lisbon on both
+# sides of every DST switch — Europe and the US change on different dates, so
+# a single fixed UTC time would drift by an hour twice a year.
+#
+#   25 8 UTC -> 09:25 Lisbon while Portugal is on WEST (UTC+1, summer)
+#   25 9 UTC -> 09:25 Lisbon while Portugal is on WET  (UTC+0, winter)
+#
+# Weekdays only. Change `1-5` to `*` in both entries for a 7-day brief.
+on:
+  schedule:
+    - cron: "25 8 * * 1-5"
+    - cron: "25 9 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      skip_email:
+        description: "Build and log the brief without emailing it"
+        type: boolean
+        default: false
+
+concurrency:
+  group: market-brief
+  cancel-in-progress: false
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Self-test
+        run: python tests/test_brief.py
+
+      - name: Build and send brief
+        env:
+          # The cron expression that triggered this run. Empty on manual
+          # dispatch, which the guard treats as "always run".
+          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          SKIP_EMAIL: ${{ inputs.skip_email && '1' || '' }}
+          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+        run: python scripts/main.py
