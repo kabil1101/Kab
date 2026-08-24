@@ -68,10 +68,17 @@ def gather(now):
 def send_email(subject: str, text: str, html: str) -> None:
     user = os.environ.get("GMAIL_USER")
     password = os.environ.get("GMAIL_APP_PASSWORD")
-    if not user or not password:
+    missing = [n for n, v in (("GMAIL_USER", user),
+                              ("GMAIL_APP_PASSWORD", password)) if not v]
+    if missing:
+        # Name each one separately. "both missing" and "one missing" are
+        # different mistakes and need different fixes, and an empty value here
+        # means the repository secret does not exist under that exact name -
+        # Actions substitutes an empty string for a secret it cannot find.
         raise RuntimeError(
-            "GMAIL_USER / GMAIL_APP_PASSWORD not set - add them as repository "
-            "secrets. See README.md."
+            f"missing repository secret(s): {', '.join(missing)}. "
+            f"Add them at Settings -> Secrets and variables -> Actions with "
+            f"exactly these names. See README.md."
         )
 
     msg = MIMEMultipart("alternative")
