@@ -250,6 +250,31 @@ md4, _ = render.build(empty_fwd)
 check_true("genuinely empty forward feed still says none scheduled",
            "None scheduled" in md4)
 
+print("\n-- app password whitespace tolerance --")
+_os.environ["GMAIL_USER"] = "  kabil.dh@gmail.com  "
+_os.environ["GMAIL_APP_PASSWORD"] = "abcd efgh ijkl mnop"
+try:
+    brief_main.send_email("t", "t", "<p>t</p>")
+except Exception as _e:
+    msg = str(_e)
+    check_true("spaced app password is not rejected as missing",
+               "missing repository secret" not in msg, msg)
+finally:
+    _os.environ.pop("GMAIL_USER", None)
+    _os.environ.pop("GMAIL_APP_PASSWORD", None)
+
+_os.environ["GMAIL_USER"] = "u@example.com"
+_os.environ["GMAIL_APP_PASSWORD"] = "   "
+try:
+    brief_main.send_email("t", "t", "<p>t</p>")
+    failures.append("whitespace-only password should still count as missing")
+except Exception as _e:
+    check_true("whitespace-only password still counts as missing",
+               "GMAIL_APP_PASSWORD" in str(_e), str(_e))
+finally:
+    _os.environ.pop("GMAIL_USER", None)
+    _os.environ.pop("GMAIL_APP_PASSWORD", None)
+
 print()
 if failures:
     print(f"FAILED ({len(failures)}):")

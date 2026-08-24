@@ -66,8 +66,11 @@ def gather(now):
 
 
 def send_email(subject: str, text: str, html: str) -> None:
-    user = os.environ.get("GMAIL_USER")
-    password = os.environ.get("GMAIL_APP_PASSWORD")
+    user = (os.environ.get("GMAIL_USER") or "").strip()
+    # Google displays App Passwords in four space-separated groups
+    # ("abcd efgh ijkl mnop"). People paste them exactly as shown, so strip
+    # whitespace rather than failing authentication on a cosmetic detail.
+    password = "".join((os.environ.get("GMAIL_APP_PASSWORD") or "").split())
     missing = [n for n, v in (("GMAIL_USER", user),
                               ("GMAIL_APP_PASSWORD", password)) if not v]
     if missing:
