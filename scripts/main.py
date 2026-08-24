@@ -131,6 +131,16 @@ def main() -> int:
     if not should_run(now):
         return 0
 
+    sending = os.environ.get("SKIP_EMAIL", "").lower() not in ("1", "true", "yes")
+    have_creds = bool(os.environ.get("GMAIL_USER")
+                      and os.environ.get("GMAIL_APP_PASSWORD"))
+    if sending and not have_creds:
+        # Say this up front. Discovering it only after the brief has been
+        # built buries the one line that explains the failure.
+        print("::warning::GMAIL_USER / GMAIL_APP_PASSWORD are not set - the "
+              "brief will be built but cannot be emailed. See README.md.",
+              file=sys.stderr)
+
     ctx = gather(now)
     markdown, html = render.build(ctx)
 
@@ -146,10 +156,15 @@ def main() -> int:
         return 0
 
     subject = f"Market Brief - {now:%d %B %Y}"
+    sys.stdout.flush()   # keep the failure below the brief, not buried above it
     try:
         send_email(subject, markdown, html)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001
         traceback.print_exc()
+        # A GitHub Actions error annotation surfaces on the run page itself,
+        # so the cause is visible without scrolling the log at all.
+        print(f"::error::Brief built successfully but could not be emailed: "
+              f"{' '.join(str(exc).split())}", file=sys.stderr)
         return 1
     return 0
 
