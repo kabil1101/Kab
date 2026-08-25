@@ -24,12 +24,36 @@ Password**, which requires 2-Step Verification to be on.
    |---|---|
    | `GMAIL_USER` | `kabil.dh@gmail.com` |
    | `GMAIL_APP_PASSWORD` | the 16-character App Password (spaces are fine) |
+   | `ANTHROPIC_API_KEY` | an API key from console.anthropic.com — powers the analysis section |
 
 4. Trigger a test run: **Actions → Daily Market Brief → Run workflow**. Manual
    runs bypass the time guard, so you get the email immediately.
 
 To dry-run without sending, tick **skip_email** on the manual dispatch — the
 brief is written to the job summary and the log instead.
+
+## The analysis section
+
+`scripts/analyst.py` passes everything the fetchers returned to Claude Opus 5,
+which reads it and writes the day's read, the tensions in the data, and what to
+watch. Roughly **$0.18 a run, ~$4/month** at one weekday run.
+
+Three properties keep it honest:
+
+- **The fetchers stay the source of truth.** The model reads their figures; it
+  never re-derives them. Anything it retrieves itself must carry a source and a
+  date inline, or be omitted — an undated number in this domain is worse than a
+  missing one.
+- **Retrieval is allowlisted.** `ALLOWED_DOMAINS` in `analyst.py` is the whole
+  reachable surface. The quarantined sources are absent from it, so the
+  quarantine is structural rather than a request the model could ignore.
+- **It cannot cost you the brief.** The call is wrapped in the same `safe()`
+  guard as every fetcher. If it fails, the email still goes out with the data
+  alone and says the analysis is unavailable.
+
+`web_search` and `web_fetch` here run on Anthropic's infrastructure, not on the
+Actions runner — which is why the analyst may reach sources the runner cannot.
+See the Farside note below.
 
 ## Why two cron entries
 
@@ -86,8 +110,13 @@ Established by live runs, not assumed:
   headers; all three refused, which makes this IP-level blocking of
   datacenter ranges rather than a header problem. Both ETF flow sections
   therefore report unavailable on the cloud run. The fetcher is left in
-  place because it works from a residential IP. A different flows source, or
-  a proxy, is the real fix.
+  place because it works from a residential IP.
+
+  `farside.co.uk` is on the analyst's allowlist for exactly this reason: its
+  `web_fetch` originates from Anthropic's infrastructure, not the runner, so
+  it is not subject to that block. Whether it actually retrieves the table is
+  the open question — check the analysis section of a run for a dated flows
+  figure before assuming the gap is closed.
 
 ## Still open
 
