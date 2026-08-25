@@ -339,6 +339,19 @@ check_true("script tag is escaped", "<script>" not in html7)
 check_true("raw html in model output is escaped", "<b>text</b>" not in html7)
 check_true("escaped form is present", "&lt;script&gt;" in html7)
 
+print("\n-- analyst prompt: salvaged disciplines and their guardrail --")
+_sys = analyst.SYSTEM.lower()
+check_true("prompt asks for confirmation across indicators",
+           "confirmation" in _sys or "two or three pointing" in _sys)
+check_true("prompt asks for a regime judgement", "regime" in _sys)
+check_true("prompt ties cross-asset to crypto beta", "crypto\nbeta" in _sys
+           or "crypto beta" in _sys.replace("\n", " "))
+check_true("no buy/sell calls rule survived", "never give buy/sell calls" in _sys)
+check_true("confidence scores are explicitly barred",
+           "confidence score" in _sys and "invented" in _sys)
+check_true("unreachable sources were NOT adopted from the candidate",
+           not any(x in _sys for x in ("glassnode", "messari", "tradingview")))
+
 print()
 if failures:
     print(f"FAILED ({len(failures)}):")
