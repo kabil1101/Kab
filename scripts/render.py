@@ -80,23 +80,6 @@ def build(ctx) -> tuple[str, str]:
     md.append(f"*Cloud run — built {_hhmm(now)} LIS.*\n")
     html.append(_h_open(title, f"Cloud run — built {_hhmm(now)} LIS."))
 
-    # ---- ANALYSIS ------------------------------------------------------
-    # Placed first: the read is what the reader wants before the numbers.
-    # A failed analysis is stated, not hidden - a brief that silently loses
-    # its analysis looks identical to one that had nothing to say.
-    an = ctx.get("analysis")
-    if an is not None:
-        md.append("## ANALYSIS\n")
-        html.append(_h_section("Analysis"))
-        if an["ok"]:
-            md.append(an["data"])
-            md.append("")
-            html.append(_md_to_html(an["data"]))
-        else:
-            line = f"Analysis unavailable — {an['error']}"
-            md.append(line + "\n")
-            html.append(f"<p><em>{_hb(line)}</em></p>")
-
     # ---- THE SETUP -----------------------------------------------------
     setup = _setup_bullets(ctx)
     md.append("## THE SETUP\n")
@@ -403,7 +386,6 @@ font-size:15px;line-height:1.55;color:#1a1a1a;max-width:720px;margin:0 auto;padd
 h1{font-size:22px;margin:0 0 4px;letter-spacing:-.3px}
 h2{font-size:13px;letter-spacing:1.2px;text-transform:uppercase;color:#444;
 border-bottom:2px solid #1a1a1a;padding-bottom:5px;margin:24px 0 10px}
-h3{font-size:14px;margin:14px 0 4px;color:#1a1a1a}
 ul{margin:0;padding-left:20px}li{margin-bottom:6px}
 table{border-collapse:collapse;width:100%;font-size:13.5px;margin:6px 0}
 th{text-align:left;padding:6px 8px;border-bottom:1px solid #ccc;background:#f2f2f2}
@@ -423,43 +405,6 @@ def _hb(s):
     so content can never inject markup."""
     import re as _re
     return _re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", _esc(s))
-
-
-def _md_to_html(text: str) -> str:
-    """Render the analyst's markdown subset: h3, bullets, bold, paragraphs.
-
-    Deliberately small. Escaping happens inside _hb before any tag is added,
-    so model output cannot inject markup into the email.
-    """
-    out, para, bullets = [], [], []
-
-    def flush_para():
-        if para:
-            out.append(f"<p>{_hb(' '.join(para))}</p>")
-            para.clear()
-
-    def flush_bullets():
-        if bullets:
-            out.append("<ul>" + "".join(f"<li>{_hb(b)}</li>"
-                                        for b in bullets) + "</ul>")
-            bullets.clear()
-
-    for raw in text.splitlines():
-        line = raw.rstrip()
-        stripped = line.lstrip("#").strip() if line.startswith("#") else None
-        if stripped is not None:
-            flush_para(); flush_bullets()
-            out.append(f"<h3>{_hb(stripped)}</h3>")
-        elif line.lstrip().startswith(("- ", "* ")):
-            flush_para()
-            bullets.append(line.lstrip()[2:].strip())
-        elif not line.strip():
-            flush_para(); flush_bullets()
-        else:
-            flush_bullets()
-            para.append(line.strip())
-    flush_para(); flush_bullets()
-    return "".join(out)
 
 
 def _h_open(title, sub):

@@ -56,9 +56,6 @@ jobs:
           BRIEF_SCHEDULE: ${{ github.event.schedule }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          # Powers the analysis section. If absent, the brief still
-          # sends with the data alone.
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SKIP_EMAIL: ${{ inputs.skip_email && '1' || '' }}
           BRIEF_DEBUG: ${{ inputs.debug && '1' || '' }}
           FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}

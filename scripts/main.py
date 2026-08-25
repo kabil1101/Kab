@@ -29,7 +29,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from zoneinfo import ZoneInfo
 
-import analyst
 import render
 import sources
 
@@ -153,10 +152,6 @@ def main() -> int:
               file=sys.stderr)
 
     ctx = gather(now)
-    # The analyst reads the fetched data and reasons over it. Wrapped in the
-    # same guard as every fetcher: if it fails, the brief still goes out with
-    # the data alone rather than not going out at all.
-    ctx["analysis"] = safe(analyst.analyse, ctx)
     markdown, html = render.build(ctx)
 
     print(markdown)  # lands in the Actions log for debugging
