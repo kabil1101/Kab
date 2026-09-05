@@ -26,25 +26,43 @@ BROWSER = {
     "Accept-Language": "en-GB,en;q=0.9",
 }
 
+FR = "https://www.federalregister.gov/api/v1/documents.json"
+# The default response omits effective_on entirely, which is the only field
+# that makes a document forward-looking. It has to be asked for by name.
+FIELDS = ("&fields[]=title&fields[]=type&fields[]=effective_on"
+          "&fields[]=publication_date&fields[]=agencies&fields[]=html_url"
+          "&fields[]=comments_close_on")
+
 CANDIDATES = [
-    # Round 4: is there a free, machine-readable source for scheduled US
-    # policy events - tariff effective dates, executive orders that bite on a
-    # future date - or does that section have to be hand-maintained?
-    ("policy/fedreg-presdocu-recent",
-     "https://www.federalregister.gov/api/v1/documents.json"
-     "?per_page=3&order=newest&conditions[type][]=PRESDOCU"),
-    ("policy/fedreg-future-effective",
-     "https://www.federalregister.gov/api/v1/documents.json"
-     "?per_page=10&order=effective_date"
+    # Round 5: pin the exact queries the policy-calendar fetcher will use.
+    # Round 4 proved the API answers; it did not prove it answers usefully.
+    ("fr/presdocu-future-effective",
+     f"{FR}?per_page=20&order=effective_date{FIELDS}"
+     "&conditions[type][]=PRESDOCU"
      "&conditions[effective_date][gte]=2026-09-06"),
-    ("policy/fedreg-public-inspection",
-     "https://www.federalregister.gov/api/v1/public-inspection-documents/"
-     "current.json"),
-    ("policy/whitehouse-actions-rss",
-     "https://www.whitehouse.gov/presidential-actions/feed/"),
-    ("policy/ustr-press-rss",
-     "https://ustr.gov/rss.xml"),
+    ("fr/trade-terms-future-effective",
+     f"{FR}?per_page=20&order=effective_date{FIELDS}"
+     "&conditions[effective_date][gte]=2026-09-06"
+     "&conditions[term]=tariff OR sanctions OR \"export control\" OR quota"),
+    ("fr/comments-closing",
+     f"{FR}?per_page=10&order=newest{FIELDS}"
+     "&conditions[comments_close_on][gte]=2026-09-06"
+     "&conditions[term]=tariff OR sanctions"),
+    ("fr/presdocu-recent-30d",
+     f"{FR}?per_page=20&order=newest{FIELDS}"
+     "&conditions[type][]=PRESDOCU"
+     "&conditions[publication_date][gte]=2026-08-06"),
+    ("fr/tariff-recent",
+     f"{FR}?per_page=10&order=newest{FIELDS}"
+     "&conditions[term]=tariff"
+     "&conditions[publication_date][gte]=2026-08-01"),
 ]
+
+# Print every record's headline fields, not just the first one: the question
+# these queries answer is "how much of this is signal", and one record cannot
+# say.
+TABLE_KEYS = ("effective_on", "comments_close_on", "publication_date", "type",
+              "title")
 
 DEEP = True   # dump full structure for these, not just a one-line summary
 
@@ -120,26 +138,21 @@ def main() -> int:
                     data = json.loads(r.text)
                 except json.JSONDecodeError:
                     data = None
-                if data is not None:
-                    node, path = data, ""
-                    # Walk into the first list of records we find and show one.
-                    for _ in range(4):
-                        if isinstance(node, dict):
-                            print(f"  {path or '<root>'} keys: {sorted(node)}")
-                            nxt = next((k for k, v in node.items()
-                                        if isinstance(v, (list, dict))), None)
-                            if nxt is None:
-                                break
-                            path, node = f"{path}.{nxt}", node[nxt]
-                        elif isinstance(node, list):
-                            print(f"  {path or '<root>'}: list of {len(node)}")
-                            if node and isinstance(node[0], dict):
-                                print(f"    record keys: {sorted(node[0])}")
-                                print(f"    first: "
-                                      f"{json.dumps(node[0])[:400]}")
-                            break
-                        else:
-                            break
+                if isinstance(data, dict) and isinstance(data.get("results"),
+                                                         list):
+                    print(f"  count={data.get('count')} "
+                          f"returned={len(data['results'])}")
+                    for rec in data["results"]:
+                        bits = []
+                        for k in TABLE_KEYS:
+                            v = rec.get(k)
+                            if k == "title" and v:
+                                v = " ".join(str(v).split())[:90]
+                            bits.append(f"{k}={v}")
+                        ag = [a.get("name") for a in (rec.get("agencies") or [])
+                              if isinstance(a, dict)]
+                        print(f"    - {' · '.join(bits)}"
+                              f"{' · agencies=' + str(ag[:2]) if ag else ''}")
             if "json" not in ctype.lower():
                 urls = hunt(r.text)
                 if urls:
