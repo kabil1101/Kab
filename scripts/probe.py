@@ -27,14 +27,23 @@ BROWSER = {
 }
 
 CANDIDATES = [
-    # Round 2 found the data behind the app shells. Round 3 reads their shape
-    # so the fetchers are written against evidence, not assumption.
-    ("etf/bykaranteli-json",
-     "https://bykaranteli.com/api/v1/public/datasets/etf-flows.json"),
-    ("etf/tftc-json", "https://www.tftc.io/bitcoin-etf-flows/data.json"),
-    ("deriv/deribit-btc-perp",
-     "https://www.deribit.com/api/v2/public/ticker"
-     "?instrument_name=BTC-PERPETUAL"),
+    # Round 4: is there a free, machine-readable source for scheduled US
+    # policy events - tariff effective dates, executive orders that bite on a
+    # future date - or does that section have to be hand-maintained?
+    ("policy/fedreg-presdocu-recent",
+     "https://www.federalregister.gov/api/v1/documents.json"
+     "?per_page=3&order=newest&conditions[type][]=PRESDOCU"),
+    ("policy/fedreg-future-effective",
+     "https://www.federalregister.gov/api/v1/documents.json"
+     "?per_page=10&order=effective_date"
+     "&conditions[effective_date][gte]=2026-09-06"),
+    ("policy/fedreg-public-inspection",
+     "https://www.federalregister.gov/api/v1/public-inspection-documents/"
+     "current.json"),
+    ("policy/whitehouse-actions-rss",
+     "https://www.whitehouse.gov/presidential-actions/feed/"),
+    ("policy/ustr-press-rss",
+     "https://ustr.gov/rss.xml"),
 ]
 
 DEEP = True   # dump full structure for these, not just a one-line summary
