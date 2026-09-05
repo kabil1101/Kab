@@ -31,6 +31,7 @@ from zoneinfo import ZoneInfo
 
 import render
 import sources
+import state
 
 LISBON = ZoneInfo("Europe/Lisbon")
 UTC = timezone.utc
@@ -97,7 +98,7 @@ def send_email(subject: str, text: str, html: str) -> None:
     print(f"Sent to {RECIPIENT}", file=sys.stderr)
 
 
-def should_run(now: datetime) -> bool:
+def should_run(now: datetime, prev: dict | None = None) -> bool:
     """Decide whether this invocation is the one that maps to 09:xx Lisbon.
 
     Resolved from the triggering cron expression, not the wall clock, so a
@@ -110,6 +111,15 @@ def should_run(now: datetime) -> bool:
     if not schedule:
         # Manual dispatch or local run: always proceed.
         return True
+
+    # From here down this is a *scheduled* run, which is only the fallback
+    # behind an external trigger. GitHub fires these hours late, so if the
+    # brief already went out today, sending again would deliver a second copy
+    # with staler numbers than the one already read.
+    if prev and state.already_sent_today(prev, now.date()):
+        print(f"A brief for {now:%Y-%m-%d} was already sent; this scheduled "
+              f"run is a duplicate. Exiting.", file=sys.stderr)
+        return False
 
     parts = schedule.split()
     if len(parts) < 2:
@@ -138,7 +148,8 @@ def should_run(now: datetime) -> bool:
 
 def main() -> int:
     now = datetime.now(LISBON)
-    if not should_run(now):
+    prev = state.load()
+    if not should_run(now, prev):
         return 0
 
     sending = os.environ.get("SKIP_EMAIL", "").lower() not in ("1", "true", "yes")
@@ -152,6 +163,7 @@ def main() -> int:
               file=sys.stderr)
 
     ctx = gather(now)
+    ctx["prev"] = prev          # yesterday's figures, for day-over-day deltas
     markdown, html = render.build(ctx)
 
     print(markdown)  # lands in the Actions log for debugging
@@ -176,6 +188,15 @@ def main() -> int:
         print(f"::error::Brief built successfully but could not be emailed: "
               f"{' '.join(str(exc).split())}", file=sys.stderr)
         return 1
+
+    # Only after a confirmed send. `last_sent_date` means sent, not built, or
+    # the duplicate guard above would suppress a brief that never arrived.
+    try:
+        state.save(state.snapshot(ctx, sent_on=now.date()))
+        print("State written for tomorrow's deltas.", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001
+        print(f"::warning::could not write state ({type(exc).__name__}); "
+              f"tomorrow's brief will have no deltas", file=sys.stderr)
     return 0
 
 

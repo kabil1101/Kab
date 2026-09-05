@@ -13,6 +13,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import state
+
 LISBON = ZoneInfo("Europe/Lisbon")
 UTC = timezone.utc
 
@@ -212,9 +214,12 @@ def build(ctx) -> tuple[str, str]:
         html.append(f"<p><em>Prices unavailable — {c['error']}</em></p>")
     else:
         lines = []
+        prev = ctx.get("prev") or {}
         for p in c["data"]["pairs"]:
+            d = state.delta(prev, p["symbol"].lower(), p["last"])
+            vs = f" · {d[1]:+.1f}% vs yesterday" if d else ""
             lines.append(
-                f"**{p['symbol']}** ${p['last']:,.2f} · "
+                f"**{p['symbol']}** ${p['last']:,.2f}{vs} · "
                 f"{p['pct_since_utc_midnight']:+.2f}% since 00:00 UTC · "
                 f"24h range ${p['low_24h']:,.2f}–${p['high_24h']:,.2f} · "
                 f"24h VWAP ${p['vwap_24h']:,.2f}"
@@ -269,6 +274,9 @@ def build(ctx) -> tuple[str, str]:
         d = fg["data"]
         line = (f"**Crypto Fear & Greed: {d['today']['value']} "
                 f"({d['today']['classification']})**")
+        dd = state.delta(ctx.get("prev") or {}, "fng", d["today"]["value"])
+        if dd:
+            line += f" · {dd[0]:+.0f} vs yesterday"
         if d["week_ago"]:
             delta = d["today"]["value"] - d["week_ago"]["value"]
             line += (f" · 7 days ago {d['week_ago']['value']} "
@@ -394,10 +402,15 @@ def _setup_bullets(ctx):
             # carry; that arrives with the day-over-day state file.
             pos = _range_pos(btc)
             where = f", {pos:.0f}% up its 24h range" if pos is not None else ""
+            # A real day-over-day move is the number that says whether
+            # anything happened, so it leads when we have one. Without it the
+            # honest fallback is where price sits in the 24h range: the
+            # UTC-day figure is near zero by construction early in the day.
+            d = state.delta(ctx.get("prev") or {}, "btc", btc["last"])
+            lead = f", {d[1]:+.1f}% vs yesterday" if d else ""
             out.append(
-                f"BTC ${btc['last']:,.0f}{where} "
-                f"(${btc['low_24h']:,.0f}–${btc['high_24h']:,.0f}), "
-                f"{btc['pct_since_utc_midnight']:+.2f}% since 00:00 UTC."
+                f"BTC ${btc['last']:,.0f}{lead}{where} "
+                f"(${btc['low_24h']:,.0f}–${btc['high_24h']:,.0f})."
             )
     cal = ctx["calendar"]
     if cal["ok"]:

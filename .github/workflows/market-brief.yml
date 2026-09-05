@@ -33,6 +33,11 @@ jobs:
   brief:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Needed only to commit state/latest.json back. The existing
+    # `concurrency: market-brief` group keeps the two daily slots from racing
+    # on that file.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -60,3 +65,19 @@ jobs:
           BRIEF_DEBUG: ${{ inputs.debug && '1' || '' }}
           FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
         run: python scripts/main.py
+
+      # Yesterday's figures, so tomorrow's brief can show deltas. The daily
+      # commit also keeps the repository active, which stops GitHub disabling
+      # a scheduled workflow after 60 idle days.
+      - name: Persist state
+        if: success()
+        run: |
+          if [[ -z "$(git status --porcelain state/)" ]]; then
+            echo "No state change to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/
+          git commit -m "State: brief sent $(date -u +%Y-%m-%d)"
+          git push

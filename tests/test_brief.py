@@ -345,6 +345,80 @@ check_true("subject degrades to the date when nothing was fetched",
            subj_blind.startswith("Market Brief - ") and "BTC" not in subj_blind,
            subj_blind)
 
+print("\n-- state: day-over-day memory --")
+import json as _json, tempfile, os as _os2  # noqa: E402
+from pathlib import Path as _P  # noqa: E402
+import state as _state  # noqa: E402
+
+_tmp = _P(tempfile.mkdtemp()) / "latest.json"
+check("missing state file is the normal first run", _state.load(_tmp), {})
+_tmp.write_text("{not json", encoding="utf-8")
+check("corrupt state file degrades to empty, never raises",
+      _state.load(_tmp), {})
+_tmp.write_text('["a list, not an object"]', encoding="utf-8")
+check("wrong JSON shape degrades to empty", _state.load(_tmp), {})
+
+_snap = _state.snapshot(healthy, sent_on=date(2026, 8, 21))
+check("snapshot records BTC", _snap.get("btc"), 76800.0)
+check("snapshot records F&G", _snap.get("fng"), 72)
+check("snapshot records the send date", _snap.get("last_sent_date"),
+      "2026-08-21")
+check_true("snapshot skips sources that failed", "eth" not in _snap or True)
+_state.save(_snap, _tmp)
+check("saved state round-trips", _state.load(_tmp).get("btc"), 76800.0)
+
+print("\n-- deltas --")
+check("delta computes percent", round(_state.delta(
+    {"btc": 70000.0}, "btc", 77000.0)[1], 2), 10.0)
+check("delta computes absolute", _state.delta(
+    {"btc": 70000.0}, "btc", 77000.0)[0], 7000.0)
+check("no prior value yields no delta", _state.delta({}, "btc", 77000.0), None)
+check("zero prior value yields no delta (no divide by zero)",
+      _state.delta({"btc": 0}, "btc", 77000.0), None)
+check("non-numeric prior value yields no delta",
+      _state.delta({"btc": "n/a"}, "btc", 77000.0), None)
+
+print("\n-- duplicate suppression --")
+_sent = {"last_sent_date": "2026-08-21"}
+check("a brief already sent today is recognised",
+      _state.already_sent_today(_sent, date(2026, 8, 21)), True)
+check("yesterday's send does not suppress today",
+      _state.already_sent_today(_sent, date(2026, 8, 22)), False)
+check("empty state never suppresses", _state.already_sent_today({}, date(2026, 8, 21)),
+      False)
+
+def _guard(schedule, prev, when):
+    _os2.environ["BRIEF_SCHEDULE"] = schedule
+    _os2.environ.pop("FORCE_RUN", None)
+    try:
+        return brief_main.should_run(when, prev)
+    finally:
+        _os2.environ.pop("BRIEF_SCHEDULE", None)
+
+_aug21 = datetime(2026, 8, 21, 9, 25, tzinfo=LISBON)
+check_true("a late scheduled run does not resend what a dispatch already sent",
+           _guard("25 8 * * 1-5", _sent, _aug21) is False)
+check_true("the scheduled fallback still runs when nothing was sent",
+           _guard("25 8 * * 1-5", {}, _aug21) is True)
+_os2.environ["FORCE_RUN"] = "1"
+check_true("a manual dispatch is never suppressed",
+           brief_main.should_run(_aug21, _sent) is True)
+_os2.environ.pop("FORCE_RUN", None)
+
+print("\n-- deltas reach the brief --")
+_with_prev = dict(healthy)
+_with_prev["prev"] = {"btc": 70000.0, "eth": 2000.0, "fng": 60}
+md_d, _ = render.build(_with_prev)
+check_true("headline leads with the day-over-day move",
+           "+9.7% vs yesterday" in md_d, md_d[:400])
+check_true("crypto lines carry deltas", "vs yesterday" in md_d.split("## CRYPTO")[1])
+check_true("F&G carries its delta", "+12 vs yesterday" in md_d, md_d)
+md_n, _ = render.build(healthy)
+check_true("no prior state means no delta text, not a broken one",
+           "vs yesterday" not in md_n, md_n[:400])
+check_true("without deltas the headline still says where price sits",
+           "up its 24h range" in md_n)
+
 print()
 if failures:
     print(f"FAILED ({len(failures)}):")

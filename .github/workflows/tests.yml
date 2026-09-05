@@ -2,6 +2,10 @@ name: Tests
 
 on:
   push:
+    # The brief commits state/latest.json after every send. Running the suite
+    # for a data-only commit is pure noise.
+    paths-ignore:
+      - 'state/**'
   pull_request:
 
 jobs:
