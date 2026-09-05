@@ -27,150 +27,88 @@ BROWSER = {
 }
 
 FR = "https://www.federalregister.gov/api/v1/documents.json"
-# The default response omits effective_on entirely, which is the only field
-# that makes a document forward-looking. It has to be asked for by name.
-FIELDS = ("&fields[]=title&fields[]=type&fields[]=effective_on"
-          "&fields[]=publication_date&fields[]=agencies&fields[]=html_url"
-          "&fields[]=comments_close_on")
 
-CANDIDATES = [
-    # Round 5: pin the exact queries the policy-calendar fetcher will use.
-    # Round 4 proved the API answers; it did not prove it answers usefully.
-    ("fr/presdocu-future-effective",
-     f"{FR}?per_page=20&order=effective_date{FIELDS}"
-     "&conditions[type][]=PRESDOCU"
-     "&conditions[effective_date][gte]=2026-09-06"),
-    ("fr/trade-terms-future-effective",
-     f"{FR}?per_page=20&order=effective_date{FIELDS}"
-     "&conditions[effective_date][gte]=2026-09-06"
-     "&conditions[term]=tariff OR sanctions OR \"export control\" OR quota"),
-    ("fr/comments-closing",
-     f"{FR}?per_page=10&order=newest{FIELDS}"
-     "&conditions[comments_close_on][gte]=2026-09-06"
-     "&conditions[term]=tariff OR sanctions"),
-    ("fr/presdocu-recent-30d",
-     f"{FR}?per_page=20&order=newest{FIELDS}"
-     "&conditions[type][]=PRESDOCU"
-     "&conditions[publication_date][gte]=2026-08-06"),
-    ("fr/tariff-recent",
-     f"{FR}?per_page=10&order=newest{FIELDS}"
-     "&conditions[term]=tariff"
-     "&conditions[publication_date][gte]=2026-08-01"),
-]
+# Round 6. Rounds 4-5 settled the structured question: the Federal Register
+# never populates effective_on for presidential documents (0 of 21), and
+# comments_close_on is not a filterable condition (HTTP 400). So the forward
+# dates that matter - "duties apply to goods entered on or after 14 October" -
+# exist only inside the prose of the document.
+#
+# This round asks whether they can be pulled out of that prose reliably enough
+# to print in a brief. It fetches the raw text of recent presidential documents
+# and every calendar date in them, with the words around each one, so the
+# classifier is written against real sentences instead of imagined ones.
 
-# Print every record's headline fields, not just the first one: the question
-# these queries answer is "how much of this is signal", and one record cannot
-# say.
-TABLE_KEYS = ("effective_on", "comments_close_on", "publication_date", "type",
-              "title")
+RECENT = (f"{FR}?per_page=40&order=newest"
+          "&fields[]=title&fields[]=publication_date&fields[]=document_number"
+          "&fields[]=raw_text_url&fields[]=html_url&fields[]=type"
+          "&conditions[type][]=PRESDOCU"
+          "&conditions[publication_date][gte]=2026-07-01")
 
-DEEP = True   # dump full structure for these, not just a one-line summary
+# Market-relevant is a judgement, and this is the judgement: things that move
+# prices are trade barriers, sanctions, export controls, energy and emergency
+# powers. Renamings of lakes and national awareness months are not.
+MARKET_WORDS = (
+    "tariff", "duty", "duties", "import", "export", "trade", "sanction",
+    "embargo", "quota", "steel", "aluminum", "semiconductor", "chip",
+    "critical mineral", "energy", "oil", "emergency", "china", "section 232",
+    "section 301", "currency", "crypto", "digital asset",
+)
+
+MONTHS = ("January|February|March|April|May|June|July|August|September|"
+          "October|November|December")
+DATE_RX = rf"(?:{MONTHS})\s+\d{{1,2}},\s+20\d{{2}}"
+
+# Words that turn a date in the text into a date worth counting down to.
+CUES = ("effective", "on or after", "beginning", "commencing", "shall take",
+        "expire", "terminate", "no later than", "until", "through",
+        "entered for consumption", "withdrawn from warehouse")
 
 
-# Substrings worth surfacing when a page turns out to be an app shell: they
-# point at the data the page itself loads.
-DATA_HINTS = (".csv", ".json", "/api/", "__NEXT_DATA__", "sosovalue",
-              "farside", "netflow", "net_flow", "totalNetInflow")
-
-
-def hunt(body: str) -> list[str]:
-    """Candidate data URLs and markers embedded in an app-shell page."""
-    import re
-    found = []
-    for m in re.finditer(r'["\'(]([^"\'()\s]{4,160}?\.(?:csv|json))["\')]', body,
-                         re.I):
-        found.append(m.group(1))
-    for m in re.finditer(r'["\'(](/api/[^"\'()\s]{2,120})["\')]', body, re.I):
-        found.append(m.group(1))
-    seen, out = set(), []
-    for f in found:
-        if f not in seen:
-            seen.add(f)
-            out.append(f)
-    return out[:15]
-
-
-def describe(body: str, ctype: str) -> str:
-    """A few lines that say what shape the payload is."""
-    if "json" in ctype.lower():
-        try:
-            data = json.loads(body)
-        except json.JSONDecodeError:
-            return "  declared JSON but did not parse"
-        if isinstance(data, list):
-            head = data[0] if data else None
-            return (f"  JSON array, {len(data)} items\n"
-                    f"  first item keys: "
-                    f"{sorted(head) if isinstance(head, dict) else type(head).__name__}")
-        if isinstance(data, dict):
-            return f"  JSON object, keys: {sorted(data)[:20]}"
-        return f"  JSON {type(data).__name__}"
-
-    lower = body.lower()
-    hints = []
-    if "<table" in lower:
-        hints.append(f"{lower.count('<table')} <table>")
-    for marker in ("application/json", "__next_data__", "window.__", ".csv"):
-        if marker in lower:
-            hints.append(f"contains {marker!r}")
-    return f"  HTML/text{'; ' + ', '.join(hints) if hints else ''}"
+def relevant(title: str) -> bool:
+    low = title.lower()
+    return any(w in low for w in MARKET_WORDS)
 
 
 def main() -> int:
-    print(f"Probing {len(CANDIDATES)} candidates from an Actions runner\n")
-    verdicts = []
-    for name, url in CANDIDATES:
-        print(f"--- {name}\n    {url}")
-        try:
-            r = requests.get(url, headers=BROWSER, timeout=TIMEOUT)
-        except Exception as exc:  # noqa: BLE001
-            print(f"  FAILED {type(exc).__name__}: "
-                  f"{' '.join(str(exc).split())[:120]}\n")
-            verdicts.append((name, "unreachable"))
+    import re
+    print("Round 6: can effective dates be read out of the prose?\n")
+    r = requests.get(RECENT, headers=BROWSER, timeout=TIMEOUT)
+    print(f"index: HTTP {r.status_code}")
+    if not r.ok:
+        return 1
+    docs = r.json().get("results") or []
+    hits = [d for d in docs if relevant(d.get("title") or "")]
+    print(f"{len(docs)} presidential documents since 01 Jul; "
+          f"{len(hits)} look market-relevant\n")
+
+    for d in hits:
+        print(f"--- {d['publication_date']} · {d['title'][:95]}")
+        print(f"    {d.get('html_url')}")
+        url = d.get("raw_text_url")
+        if not url:
+            print("    no raw_text_url\n")
             continue
-
-        ctype = r.headers.get("content-type", "?")
-        print(f"  HTTP {r.status_code} · {ctype} · {len(r.content):,} bytes")
-        if r.ok:
-            print(describe(r.text, ctype))
-            if DEEP and "json" in ctype.lower():
-                try:
-                    data = json.loads(r.text)
-                except json.JSONDecodeError:
-                    data = None
-                if isinstance(data, dict) and isinstance(data.get("results"),
-                                                         list):
-                    print(f"  count={data.get('count')} "
-                          f"returned={len(data['results'])}")
-                    for rec in data["results"]:
-                        bits = []
-                        for k in TABLE_KEYS:
-                            v = rec.get(k)
-                            if k == "title" and v:
-                                v = " ".join(str(v).split())[:90]
-                            bits.append(f"{k}={v}")
-                        ag = [a.get("name") for a in (rec.get("agencies") or [])
-                              if isinstance(a, dict)]
-                        print(f"    - {' · '.join(bits)}"
-                              f"{' · agencies=' + str(ag[:2]) if ag else ''}")
-            if "json" not in ctype.lower():
-                urls = hunt(r.text)
-                if urls:
-                    print("  embedded data references:")
-                    for u in urls:
-                        print(f"    {u}")
-                present = [h for h in DATA_HINTS if h.lower() in r.text.lower()]
-                if present:
-                    print(f"  markers present: {present}")
-            print(f"  head: {' '.join(r.text[:200].split())}")
-            verdicts.append((name, f"OK {r.status_code}"))
-        else:
-            verdicts.append((name, f"HTTP {r.status_code}"))
+        try:
+            txt = requests.get(url, headers=BROWSER, timeout=TIMEOUT).text
+        except Exception as exc:  # noqa: BLE001
+            print(f"    raw text FAILED {type(exc).__name__}\n")
+            continue
+        flat = " ".join(txt.split())
+        print(f"    {len(flat):,} chars")
+        seen = set()
+        for m in re.finditer(DATE_RX, flat):
+            before = flat[max(0, m.start() - 130):m.start()].lower()
+            cue = [c for c in CUES if c in before]
+            key = (m.group(0), tuple(cue))
+            if key in seen:
+                continue
+            seen.add(key)
+            mark = "CUE" if cue else "   "
+            print(f"    [{mark}] {m.group(0)}  <=  ...{flat[max(0, m.start()-110):m.start()]}")
+            if cue:
+                print(f"            cues: {cue}")
         print()
-
-    print("=" * 60)
-    for name, verdict in verdicts:
-        print(f"{verdict:<16} {name}")
     return 0
 
 
