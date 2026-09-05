@@ -1,0 +1,39 @@
+# WATCHLIST — dated events the Federal Register cannot know about.
+#
+# The brief counts down to every line here, every morning, until the date
+# passes. Then it disappears on its own; there is nothing to clean up.
+#
+# ONE EVENT PER LINE, five fields separated by | :
+#
+#   date | tag | what happens | source link | date you last checked it
+#   ----   ---   ------------   -----------   ------------------------
+#   YYYY-MM-DD                  optional      optional but read the note
+#
+# Example:
+#   2026-09-29 | tariff | Pharma tariff takes effect | https://x.com/y | 2026-09-05
+#
+# Tags are free text and only used for grouping. Useful ones: tariff, fed,
+# geopolitics, election, court, energy, crypto, earnings.
+#
+# ABOUT THE LAST FIELD. An entry nobody has re-checked in 75 days gets marked
+# "unconfirmed" in the brief rather than trusted. That is deliberate: dates
+# announced by press conference move all the time, and a stale line that looks
+# confident is how a wrong date ends up in front of a position. When you
+# confirm an entry still stands, change that date to today.
+#
+# Lines starting with # are ignored. Blank lines are ignored. A malformed line
+# is skipped and reported at the bottom of the brief, so nothing fails
+# silently.
+
+# ---- Fed ------------------------------------------------------------------
+# Decision day of each two-day meeting. 19:00 LIS statement, 19:30 presser.
+# SEP = Summary of Economic Projections, i.e. the dot plot.
+2026-09-16 | fed | FOMC decision + SEP / dot plot (19:00 LIS statement, 19:30 presser) | https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm | 2026-09-05
+2026-10-28 | fed | FOMC decision, no SEP | https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm | 2026-09-05
+2026-12-09 | fed | FOMC decision + SEP / dot plot | https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm | 2026-09-05
+
+# ---- Trade ----------------------------------------------------------------
+# Section 232 pharmaceutical proclamation of 2 Apr 2026 set a staggered start:
+# 31 Jul 2026 for the 17 companies in Annex III, 29 Sep 2026 for everyone
+# else. Second leg is the one still ahead.
+2026-09-29 | tariff | Section 232 pharmaceutical tariff (100%) takes effect for importers NOT named in Annex III | https://www.federalregister.gov/documents/search?conditions%5Bterm%5D=pharmaceutical+section+232 | 2026-09-05

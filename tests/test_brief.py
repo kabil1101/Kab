@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import render  # noqa: E402
 import sources  # noqa: E402
+import watchlist  # noqa: E402
 
 LISBON = ZoneInfo("Europe/Lisbon")
 ET = ZoneInfo("America/New_York")
@@ -440,6 +441,152 @@ check_true("negative funding is flagged", "\u26a0" in _fund(-0.0002))
 check_true("ordinary funding is not flagged", "\u26a0" not in _fund(0.0001))
 check_true("missing funding does not render a zero",
            "funding —" in _fund(None), _fund(None))
+
+
+print("\n-- policy radar: reading effective dates out of proclamation prose --")
+# Verbatim shapes taken from real documents the probe pulled off a runner.
+_PROSE = (
+    "In Proclamation 9704 of March 8, 2018, the President adjusted imports. "
+    "The national emergency declared in Executive Order 14105 of August 9, "
+    "2023, must continue in effect beyond August 9, 2026. The rates of duty "
+    "shall apply with respect to goods entered for consumption, or withdrawn "
+    "from warehouse for consumption, on or after 12:01 a.m. eastern time on "
+    "October 14, 2026. The suspension shall expire on December 1, 2026."
+)
+_hits = dict(sources._extract_dates(_PROSE, date(2026, 9, 5)))
+check("tariff effective date is found", date(2026, 10, 14) in _hits, True)
+check("labelled effective", _hits.get(date(2026, 10, 14)), "effective")
+check("expiry is found and labelled", _hits.get(date(2026, 12, 1)), "expires")
+check_true("citation to a prior order is not a date to trade",
+           date(2023, 8, 9) not in _hits, str(sorted(_hits)))
+check_true("a signing date with no cue is ignored",
+           date(2018, 3, 8) not in _hits, str(sorted(_hits)))
+check("nothing already past survives",
+      [d for d in _hits if d < date(2026, 9, 5)], [])
+
+# The continuation notice date has a cue-free context and sits in the past by
+# the reader's clock; both filters must agree it is noise.
+check_true("continuation boilerplate does not become an event",
+           date(2026, 8, 9) not in _hits, str(sorted(_hits)))
+
+print("\n-- policy radar: relevance filter --")
+check("a tariff proclamation is relevant",
+      sources._fr_relevant("Adjusting Imports of Polysilicon Into the "
+                           "United States"), True)
+check("renaming a lake is not",
+      sources._fr_relevant("Honoring the American History of the Great Lakes "
+                           "and Renaming Lake Ontario"), False)
+check("routine trade-remedy paperwork is filtered out",
+      sources._fr_relevant("Brass Rod From Brazil: Preliminary Results of "
+                           "Antidumping Duty Administrative Review"), False)
+
+print("\n-- watchlist parsing --")
+_WL = """
+# a comment
+2026-09-29 | tariff | Pharma tariff takes effect | https://x.test/a | 2026-09-05
+
+2026-10-28 | fed | FOMC decision
+not-a-date | fed | broken line | | 
+2026-11-01 | trade
+2026-12-01 | x |    | https://y.test | 2026-09-05
+"""
+_p = watchlist.parse(_WL)
+check("good lines parse", len(_p["events"]), 2)
+check("bad lines are reported", len(_p["problems"]), 3)
+check("optional fields default to None", _p["events"][1]["url"], None)
+check("events come out sorted", [e["date"] for e in _p["events"]],
+      [date(2026, 9, 29), date(2026, 10, 28)])
+check_true("a malformed line names its line number",
+           any("line 6" in m for m in _p["problems"]), str(_p["problems"]))
+check_true("an entry with no event text is rejected, not printed blank",
+           any("line 8" in m for m in _p["problems"]), str(_p["problems"]))
+
+_today = date(2026, 9, 5)
+check("a recently confirmed entry is trusted",
+      watchlist.is_stale({"verified": date(2026, 9, 1)}, _today), False)
+check("an old confirmation is stale",
+      watchlist.is_stale({"verified": date(2026, 5, 1)}, _today), True)
+check("a never-confirmed entry is stale",
+      watchlist.is_stale({"verified": None}, _today), True)
+
+print("\n-- AHEAD section: countdown, ordering, provenance --")
+def _radar_ctx(events=(), wl_events=(), ok=True, error=None, problems=()):
+    c = dict(healthy)
+    c["now"] = datetime(2026, 9, 5, 9, 30, tzinfo=LISBON)
+    c["policy_radar"] = {
+        "ok": ok, "error": error,
+        "data": {"events": list(events), "texts_scanned": 7,
+                 "partial": None, "source": "Federal Register"} if ok else None}
+    c["watchlist"] = {"events": list(wl_events), "problems": list(problems)}
+    return c
+
+_fr_evt = {"date": date(2026, 10, 14), "kind": "presidential",
+           "label": "effective", "url": "https://fr.test/doc",
+           "signed": "2026-09-01",
+           "title": "Adjusting Imports of Semiconductors Into the United States"}
+_wl_evt = {"date": date(2026, 9, 8), "tag": "fed", "kind": "curated",
+           "url": None, "verified": date(2026, 9, 4),
+           "title": "FOMC decision + SEP"}
+_ahead = render.build(_radar_ctx([_fr_evt], [_wl_evt]))[0] \
+    .split("## AHEAD")[1].split("\n## ")[0]
+check_true("near event counts down in days", "T-3" in _ahead, _ahead)
+check_true("far event counts down too", "T-39" in _ahead, _ahead)
+check_true("nearest is grouped as this week", "This week" in _ahead, _ahead)
+check_true("far one is grouped later", "Later" in _ahead, _ahead)
+check_true("the primary source is linked", "https://fr.test/doc" in _ahead,
+           _ahead)
+check_true("how much was read is stated",
+           "Scanned 7 presidential documents" in _ahead, _ahead)
+
+_today_evt = dict(_wl_evt, date=date(2026, 9, 5))
+_md_today = render.build(_radar_ctx([], [_today_evt]))[0]
+check_true("a date landing today says TODAY, not T-0",
+           "TODAY" in _md_today.split("## AHEAD")[1], _md_today[:400])
+check_true("and it also reaches the risk windows",
+           "TODAY" in _md_today.split("## RISK WINDOWS")[1],
+           _md_today.split("## RISK WINDOWS")[1][:400])
+
+_stale_evt = dict(_wl_evt, verified=date(2026, 1, 1))
+_st = render.build(_radar_ctx([], [_stale_evt]))[0].split("## AHEAD")[1]
+check_true("an unconfirmed entry says so", "unconfirmed since" in _st, _st)
+
+_empty = render.build(_radar_ctx([], []))[0].split("## AHEAD")[1]
+check_true("an empty radar says nothing is dated, not nothing is coming",
+           "Nothing dated" in _empty, _empty)
+_down = render.build(_radar_ctx(ok=False, error="HTTP 503"))[0] \
+    .split("## AHEAD")[1]
+check_true("a failed fetch is never rendered as all-clear",
+           "unavailable" in _down and "HTTP 503" in _down, _down)
+check_true("an empty section is distinguishable from a failed one",
+           "Nothing dated" not in _down, _down)
+
+_bad = render.build(_radar_ctx([], [], problems=["line 4: bad date"]))[0]
+check_true("a malformed watchlist line surfaces in the brief",
+           "line 4: bad date" in _bad, _bad.split("## AHEAD")[1])
+
+print("\n-- AHEAD: the fetched leg wins a duplicate --")
+_dup_fr = dict(_fr_evt, date=date(2026, 9, 8),
+               title="FOMC decision + SEP and other things")
+_dup = render.radar_events(_radar_ctx([_dup_fr], [_wl_evt]), date(2026, 9, 5))
+check("the same date and title collapses to one entry", len(_dup), 1)
+check("and the primary-source copy is the one kept",
+      _dup[0]["origin"], "Federal Register")
+
+print("\n-- AHEAD: horizon and past dates --")
+_far = dict(_wl_evt, date=date(2028, 1, 1), title="Something in 2028")
+_past = dict(_wl_evt, date=date(2026, 8, 1), title="Already happened")
+_kept = render.radar_events(_radar_ctx([], [_far, _past, _wl_evt]),
+                            date(2026, 9, 5))
+check("beyond the horizon is dropped, past is dropped", len(_kept), 1)
+check("the one kept is the near one", _kept[0]["date"], date(2026, 9, 8))
+
+print("\n-- subject line carries a policy date only when it is close --")
+_subj = render.subject(_radar_ctx([], [_wl_evt]))
+check_true("a date three days out reaches the subject",
+           "T-3" in _subj, _subj)
+_subj_far = render.subject(_radar_ctx([_fr_evt], []))
+check_true("one 39 days out does not crowd it",
+           "T-39" not in _subj_far, _subj_far)
 
 
 print()

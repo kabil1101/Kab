@@ -64,6 +64,57 @@ delivering a second, staler copy.
 Setup, and the measured evidence about what the trigger's token can and cannot
 do, is in **[docs/trigger-setup.md](docs/trigger-setup.md)**.
 
+## The AHEAD section
+
+A countdown to dated policy and geopolitical events, repeated every morning
+until each date passes, then dropped automatically. It has two legs, because
+no single free source covers both halves.
+
+**The fetched leg — Federal Register.** Probed from a runner before a line was
+written, and the probe killed the obvious design twice:
+
+- `effective_on` is populated for **0 of 21** recent presidential documents.
+  The structured field is empty for exactly the documents that move markets.
+- `conditions[comments_close_on]` is **not a filterable condition** (HTTP 400).
+
+So a proclamation's effective date has to be read out of its prose, where it
+turns out to be near-boilerplate:
+
+> …goods entered for consumption, or withdrawn from warehouse for consumption,
+> **on or after** 12:01 a.m. eastern time **on August 19, 2026**.
+
+`sources._extract_dates` accepts a date only when a cue phrase precedes it
+*and* the date is still in the future. That second condition does most of the
+work: every citation to a prior order ("Executive Order 14105 of August 9,
+2023") points backwards, so it drops out even when the wording is ambiguous.
+Rules and notices, which *do* carry `effective_on`, get a second, cheaper pass
+with no text fetch.
+
+This leg cannot predict an unscheduled announcement — nothing free can. What
+it catches is the large class of actions signed on one day that bite on a
+later one.
+
+**The curated leg — `data/watchlist.txt`.** Summits, court terms, deadlines
+announced in a speech: real dates that no register knows about. One event per
+line, pipe-separated, editable in GitHub's web editor:
+
+```
+2026-09-29 | tariff | Section 232 pharma tariff takes effect | https://… | 2026-09-05
+date         tag      what happens                             source       last checked
+```
+
+The last field is the point. An entry nobody has re-checked in 75 days is
+printed as **unconfirmed** rather than trusted, because a stale line that looks
+confident is how a wrong date ends up in front of a position. Malformed lines
+are skipped and reported at the bottom of the brief, never silently dropped.
+
+Events within 7 days are grouped as *This week*; a date landing today or
+tomorrow also appears under RISK WINDOWS, and one within 7 days reaches the
+subject line as `T-3 …`.
+
+The section reports dates. It does not say what to do about them — that
+constraint is the same one that applies to the rest of the brief.
+
 ## Recipient lock
 
 The destination is a module constant in `scripts/main.py`, not configuration.
@@ -81,6 +132,7 @@ not an instruction, and it is ignored.
 | Sentiment | alternative.me Fear & Greed | Today plus the 7-day-ago reading for direction. Attribution required by their terms and emitted in the brief. |
 | ETF flows | TFTC (BTC only) | Open JSON, CC BY 4.0. Flags a sign flip after 3+ consecutive sessions one way. Carries the dataset's own `updatedThrough` date. |
 | Derivatives | Deribit perpetuals | Funding and open interest, one venue, labelled as such. |
+| Policy radar | Federal Register + `data/watchlist.txt` | Dated policy actions still ahead. Effective dates read out of proclamation prose; see below. |
 | Options | Deribit public REST | `get_book_summary_by_currency` gives open interest per instrument; the job aggregates to strike and computes max pain and top put/call OI for the nearest expiry and the nearest monthly. No API key needed. This replaces the JS-only statistics page. |
 | Cross-asset | Yahoo Finance chart API | DXY, US 10Y, gold, WTI, VIX, S&P and Nasdaq futures. |
 | Market structure | CoinGecko `/api/v3/global` | Total market cap, BTC and ETH dominance. |
@@ -157,6 +209,8 @@ scripts/sources.py                   one adapter per data source
 scripts/render.py                    markdown + HTML, unavailability handling
 scripts/main.py                      run guard, orchestration, SMTP
 scripts/state.py                     day-over-day memory, duplicate guard
+scripts/watchlist.py                 the curated half of the policy radar
+data/watchlist.txt                   dated events you maintain by hand
 scripts/probe.py                     manual source-reachability probe
 tests/test_brief.py                  offline suite, no network
 state/latest.json                    yesterday's figures, committed by the run

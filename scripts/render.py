@@ -10,10 +10,12 @@ Formatting rules that matter:
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import state
+import watchlist
 
 LISBON = ZoneInfo("Europe/Lisbon")
 UTC = timezone.utc
@@ -122,6 +124,19 @@ def subject(ctx) -> str:
                 title = title[:27] + "\u2026"
             parts.append(f"{title} {_hhmm(pick['dt_lis'])}")
 
+    # A policy date inside a week is the one thing worth seeing without
+    # opening the mail, because it is the only item here that needs acting on
+    # before the day it lands. Further out it is not news yet and would just
+    # crowd the line.
+    upcoming = radar_events(ctx, now.date())
+    if upcoming:
+        days = (upcoming[0]["date"] - now.date()).days
+        if days <= 7:
+            label = upcoming[0]["title"]
+            if len(label) > 30:
+                label = label[:29].rstrip() + "\u2026"
+            parts.append(f"{_tminus(days)} {label}")
+
     return " \u00b7 ".join(parts)
 
 
@@ -207,6 +222,57 @@ def build(ctx) -> tuple[str, str]:
             md.append(f"- {note}")
             html.append(f"<ul><li>{_hb(note)}</li></ul>")
         md.append("")
+
+    # ---- AHEAD ---------------------------------------------------------
+    # Deliberately above CRYPTO: the point of this section is to be seen every
+    # morning for weeks before the date, not to be found by scrolling.
+    radar = radar_events(ctx, today)
+    md.append("## AHEAD — POLICY & GEOPOLITICS\n")
+    html.append(_h_section("Ahead — Policy &amp; Geopolitics"))
+    pr = ctx.get("policy_radar")
+    if radar:
+        for name, rows in _radar_groups(radar, today):
+            md.append(f"**{name}**\n")
+            html.append(f"<p><strong>{_esc(name)}</strong></p>")
+            items = []
+            for days, e in rows:
+                line = _radar_text(days, e)
+                md.append(f"- {line}"
+                          + (f"  \n  {e['url']}" if e.get("url") else ""))
+                link = (f" <a href='{_esc(e['url'])}'>source</a>"
+                        if e.get("url") else "")
+                items.append(_hb(line) + link)
+            html.append("<ul>" + "".join(f"<li>{i}</li>" for i in items)
+                        + "</ul>")
+            md.append("")
+    else:
+        # An empty radar is a real state - most weeks nothing new has been
+        # signed with a future date - but it must not read as "nothing is
+        # coming" when the fetch simply failed.
+        if pr and not pr["ok"]:
+            note = f"Policy radar unavailable — {pr['error']}"
+        else:
+            note = (f"Nothing dated in the next {RADAR_HORIZON_DAYS} days from "
+                    f"either the Federal Register or the watchlist.")
+        md.append(f"- {note}\n")
+        html.append(f"<ul><li>{_hb(note)}</li></ul>")
+
+    # Say how much was actually read, so an empty section can be told apart
+    # from a section that never looked.
+    if pr and pr["ok"]:
+        d = pr["data"]
+        prov = (f"Scanned {d['texts_scanned']} presidential documents "
+                f"(last 90 days) plus rules with a future effective date "
+                f"· {d['source']}")
+        if d.get("partial"):
+            prov += f" · partial: {d['partial']}"
+        md.append(f"*{prov}*\n")
+        html.append(f"<p class='muted'><em>{_esc(prov)}</em></p>")
+    wl_problems = (ctx.get("watchlist") or {}).get("problems") or []
+    if wl_problems:
+        bad = "watchlist.txt: " + "; ".join(wl_problems[:4])
+        md.append(f"*{bad}*\n")
+        html.append(f"<p class='muted'><em>{_esc(bad)}</em></p>")
 
     # ---- CRYPTO --------------------------------------------------------
     md.append("## CRYPTO\n")
@@ -468,6 +534,104 @@ def _setup_bullets(ctx):
     return out[:3] or ["Primary sources degraded this run — see sections below."]
 
 
+# How far ahead the radar looks. Beyond about four months a date is not
+# something to prepare for, it is trivia, and a section nobody reads is worse
+# than one that does not exist.
+RADAR_HORIZON_DAYS = 130
+
+
+def radar_events(ctx, today):
+    """Every dated policy event still ahead, both legs merged, nearest first.
+
+    Two sources feed this. The Federal Register leg is fetched each run and
+    knows about actions already signed. The watchlist leg is hand-kept and
+    covers what no register can know - summits, announced deadlines, court
+    terms. They are merged here rather than printed separately because the
+    reader wants one ordered list of what is coming, not a lesson in where
+    each date was stored.
+    """
+    horizon = today + timedelta(days=RADAR_HORIZON_DAYS)
+    merged = []
+
+    r = ctx.get("policy_radar")
+    if r and r["ok"]:
+        for e in r["data"]["events"]:
+            merged.append({**e, "origin": "Federal Register", "stale": False})
+
+    wl = ctx.get("watchlist") or {"events": []}
+    for e in wl["events"]:
+        merged.append({**e, "origin": "watchlist",
+                       "label": e.get("tag") or "event",
+                       "stale": watchlist.is_stale(e, today)})
+
+    # A curated entry and a fetched one can describe the same action, and the
+    # hand-written one is usually the short form of the official title - "FOMC
+    # decision" against "FOMC decision + SEP and press conference". Comparing
+    # fixed-length prefixes misses exactly that case, so compare whether the
+    # shorter normalised title opens the longer one. Fetched entries are
+    # considered first, so a collision keeps the copy with a primary-source
+    # link and no staleness to track.
+    kept = []
+    for e in sorted(merged, key=lambda x: (x["date"],
+                                           1 if x["origin"] == "watchlist"
+                                           else 0)):
+        if not (today <= e["date"] <= horizon):
+            continue
+        name = _norm_title(e["title"])
+        if any(k["date"] == e["date"] and _same_event(name,
+                                                      _norm_title(k["title"]))
+               for k in kept):
+            continue
+        kept.append(e)
+    return sorted(kept, key=lambda e: (e["date"], e["title"]))
+
+
+def _norm_title(title: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (title or "").lower()).strip()
+
+
+def _same_event(a: str, b: str) -> bool:
+    """Whether two normalised titles on the same date name the same thing.
+
+    Deliberately conservative: below 15 characters a shared opening is as
+    likely to be coincidence as identity, and merging two genuinely different
+    events would hide one of them completely.
+    """
+    short, long_ = sorted((a, b), key=len)
+    return len(short) >= 15 and long_.startswith(short)
+
+
+def _tminus(days: int) -> str:
+    return "TODAY" if days == 0 else f"T-{days}"
+
+
+def _radar_groups(events, today):
+    """Split into the three horizons the reader actually acts on."""
+    buckets = [("This week", []), ("Next 30 days", []), ("Later", [])]
+    for e in events:
+        days = (e["date"] - today).days
+        idx = 0 if days <= 7 else (1 if days <= 30 else 2)
+        buckets[idx][1].append((days, e))
+    return [(name, rows) for name, rows in buckets if rows]
+
+
+def _radar_text(days, e) -> str:
+    """One event as a markdown line."""
+    title = e["title"]
+    if len(title) > 115:
+        title = title[:114].rstrip() + "\u2026"
+    head = f"**{_tminus(days)} \u00b7 {e['date']:%a %d %b}**"
+    bits = [f"{head} \u2014 {title}"]
+    label = e.get("label")
+    if label and label != "event":
+        bits.append(label)
+    if e["origin"] == "watchlist" and e.get("stale"):
+        seen = e.get("verified")
+        bits.append(f"\u26a0 unconfirmed since {seen:%d %b}" if seen
+                    else "\u26a0 never confirmed")
+    return " \u00b7 ".join(bits)
+
+
 def _risk_windows(ctx, today, now):
     """Windows still ahead of the reader, in order.
 
@@ -513,6 +677,19 @@ def _risk_windows(ctx, today, now):
                                f"(08:00 UTC)"))
         else:
             untimed.append(f"Next Deribit expiry {exp:%a %d %b} 09:00 LIS")
+
+    # A policy date that lands today or tomorrow belongs here as well as in
+    # AHEAD. Counting down to a date for six weeks and then not mentioning it
+    # among the day's risks on the morning it arrives would be the one failure
+    # this whole section exists to prevent.
+    for e in radar_events(ctx, today):
+        days = (e["date"] - today).days
+        if days > 1:
+            break
+        title = e["title"]
+        if len(title) > 95:
+            title = title[:94].rstrip() + "\u2026"
+        untimed.append(f"**{'TODAY' if days == 0 else 'Tomorrow'}** — {title}")
 
     ahead = sorted((dt, txt) for dt, txt in timed if dt > now)
     passed = len(timed) - len(ahead)

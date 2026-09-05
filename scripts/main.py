@@ -32,6 +32,7 @@ from zoneinfo import ZoneInfo
 import render
 import sources
 import state
+import watchlist
 
 LISBON = ZoneInfo("Europe/Lisbon")
 UTC = timezone.utc
@@ -64,6 +65,16 @@ def gather(now):
     ctx["options_btc"] = safe(sources.options, "BTC")
     ctx["cross_asset"] = safe(sources.cross_asset)
     ctx["global_mcap"] = safe(sources.coingecko_global)
+    ctx["policy_radar"] = safe(sources.policy_radar, now.date())
+    # Not wrapped in safe(): the watchlist reads a local file and already
+    # degrades to an empty list, so the only thing left to guard against is a
+    # bug in the parser itself.
+    try:
+        ctx["watchlist"] = watchlist.load()
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        ctx["watchlist"] = {"events": [],
+                            "problems": [f"unreadable ({type(exc).__name__})"]}
     return ctx
 
 
