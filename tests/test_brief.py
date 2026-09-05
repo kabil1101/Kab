@@ -479,6 +479,37 @@ check("renaming a lake is not",
 check("routine trade-remedy paperwork is filtered out",
       sources._fr_relevant("Brass Rod From Brazil: Preliminary Results of "
                            "Antidumping Duty Administrative Review"), False)
+check("an annual emergency renewal is filtered out",
+      sources._fr_relevant("Continuation of the National Emergency With "
+                           "Respect to Lebanon"), False)
+check("but a NEW emergency is not",
+      sources._fr_relevant("Declaring a National Emergency To Secure the "
+                           "United States Bulk-Power System"), True)
+
+# The all-agency pass reads thousands of rules a month, so it uses the tighter
+# word list. Each of these three reached the first live brief through the
+# broad list and had no business being there.
+print("\n-- policy radar: the all-agency pass uses a tighter list --")
+check("\"trade\" must not match \"Trademark\"",
+      sources._fr_relevant("International Trademark Classification Changes",
+                           narrow=True), False)
+check("a marine-mammal permit is not an oil event",
+      sources._fr_relevant("Taking and Importing Marine Mammals Incidental to "
+                           "Geophysical Surveys Related to Oil and Gas",
+                           narrow=True), False)
+check("a customs filing-system upgrade is not an export event",
+      sources._fr_relevant("Automated Commercial Environment (ACE) Electronic "
+                           "Export Manifest for Rail Cargo", narrow=True),
+      False)
+check("but a real export-control rule gets through",
+      sources._fr_relevant("Revisions to the Export Controls on Advanced "
+                           "Computing Items", narrow=True), True)
+check("and so does a duty change",
+      sources._fr_relevant("Imposing Additional Duties To Offset Canadian "
+                           "Discrimination", narrow=True), True)
+check("a plural still matches its singular",
+      sources._fr_relevant("Adjusting Imports of Polysilicon and Its "
+                           "Derivatives"), True)
 
 print("\n-- watchlist parsing --")
 _WL = """

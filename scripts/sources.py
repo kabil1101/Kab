@@ -528,13 +528,25 @@ _CITE_RX = re.compile(
 
 # Titles worth reading the text of. A presidential document about renaming a
 # lake is not a market event; one about duties, sanctions or export controls
-# is.
+# is. Presidential documents are few and already high-signal, so this tier can
+# afford to be broad.
 _MARKET_WORDS = (
     "tariff", "duty", "duties", "import", "export", "trade", "sanction",
     "embargo", "quota", "steel", "aluminum", "aluminium", "copper",
     "semiconductor", "chip", "polysilicon", "critical mineral", "energy",
     "petroleum", "oil", "emergency", "china", "section 232", "section 301",
-    "currency", "crypto", "digital asset", "tariff-rate",
+    "currency", "crypto", "digital asset",
+)
+
+# The second pass reads EVERY agency's rules, thousands a month, so the broad
+# tier is useless there - the first live run surfaced a marine-mammal permit
+# (matched "oil"), a customs filing-system upgrade ("export") and a trademark
+# classification notice ("trade" inside "Trademark"). These are the words that
+# only appear when something actually moves a price.
+_ACTION_WORDS = (
+    "tariff", "duty", "duties", "sanction", "embargo", "quota",
+    "export control", "export controls", "entity list",
+    "section 232", "section 301", "countermeasure",
 )
 
 # Trade-remedy paperwork matches the words above and is pure noise for a macro
@@ -545,14 +557,42 @@ _NOISE_WORDS = (
     "preliminary results", "final results", "postponement",
     "initiation of", "opportunity to request", "rescission",
     "sunset review", "combined notice of filings",
+    # Annual renewals of an existing national emergency. They match on
+    # "emergency" and there are a lot of them - Lebanon, Brazil, Mali and a
+    # dozen more each year - but they announce no new date, so every one of
+    # them would burn a text fetch out of the budget below and return nothing.
+    # A NEW emergency is a different document and still gets through.
+    "continuation of the national emergency",
+    "continuation of the exercise",
 )
 
 
-def _fr_relevant(title: str) -> bool:
+def _title_rx(words):
+    """Whole-word matcher, tolerant of a plural.
+
+    Substring matching put "International Trademark Classification Changes"
+    into the first live brief, because "trade" is inside "Trademark". Word
+    boundaries fix that; the optional plural is what keeps "Adjusting Imports
+    of Polysilicon" matching "import".
+    """
+    parts = [re.escape(w) if " " in w else rf"{re.escape(w)}(?:s|es)?"
+             for w in words]
+    return re.compile(r"\b(?:" + "|".join(parts) + r")\b", re.I)
+
+
+_MARKET_RX = _title_rx(_MARKET_WORDS)
+_ACTION_RX = _title_rx(_ACTION_WORDS)
+
+
+def _fr_relevant(title: str, *, narrow: bool = False) -> bool:
+    """Whether a document is worth the reader's attention.
+
+    `narrow` applies the tighter word list used for the all-agency pass.
+    """
     low = (title or "").lower()
     if any(n in low for n in _NOISE_WORDS):
         return False
-    return any(w in low for w in _MARKET_WORDS)
+    return bool((_ACTION_RX if narrow else _MARKET_RX).search(low))
 
 
 def _extract_dates(text: str, not_before: date):
@@ -590,7 +630,7 @@ def _extract_dates(text: str, not_before: date):
 
 
 def policy_radar(today: date, lookback_days: int = 90,
-                 horizon_days: int = 400, max_texts: int = 25) -> dict:
+                 horizon_days: int = 400, max_texts: int = 30) -> dict:
     """Dated US policy actions still ahead, from the Federal Register.
 
     Two passes, because the Register stores the two kinds of date differently:
@@ -656,7 +696,7 @@ def policy_radar(today: date, lookback_days: int = 90,
         })
         for doc in (data.get("results") or []):
             raw = doc.get("effective_on")
-            if not raw or not _fr_relevant(doc.get("title")):
+            if not raw or not _fr_relevant(doc.get("title"), narrow=True):
                 continue
             try:
                 when = date.fromisoformat(raw)
