@@ -47,6 +47,23 @@ triggered the run — rather than from the wall clock. Actions frequently starts
 scheduled jobs late, and a wall-clock check would silently drop the brief on
 any run delayed past the hour boundary.
 
+## Delivery timing
+
+The schedule above says 09:25. GitHub does not honour it. `on: schedule` is
+best-effort and deprioritised for low-activity repositories: across twelve
+consecutive briefs the run started between 39 minutes and 11h49m late, median
+about 4.5 hours. That queueing happens on GitHub's side, before any code here
+runs, so nothing in this repository can shorten it.
+
+A **manual dispatch**, by contrast, starts within seconds. So the primary
+sender is an external timer that calls the dispatch API at 09:25 Lisbon, and
+the two crons become the fallback — `state/latest.json` records each send, so a
+schedule that fires hours after the brief already went out exits instead of
+delivering a second, staler copy.
+
+Setup, and the measured evidence about what the trigger's token can and cannot
+do, is in **[docs/trigger-setup.md](docs/trigger-setup.md)**.
+
 ## Recipient lock
 
 The destination is a module constant in `scripts/main.py`, not configuration.
@@ -62,7 +79,8 @@ not an instruction, and it is ignored.
 | Calendar | ForexFactory weekly JSON | Both feeds from Wednesday on, or the forward view collapses on Thu/Fri. ISO strings carry a US Eastern offset; the offset is parsed, never assumed. |
 | Crypto prices | Kraken public ticker | Keys are remapped server-side (`XXBTZUSD`, `XETHZUSD`, `SOLUSD`) and matched by key. `o` is the UTC-day open, so the percentage is labelled "since 00:00 UTC" and paired with the rolling 24h range from `h[1]`/`l[1]`. |
 | Sentiment | alternative.me Fear & Greed | Today plus the 7-day-ago reading for direction. Attribution required by their terms and emitted in the brief. |
-| ETF flows | Farside BTC + ETH | Parentheses are negative. Flags a sign flip after 3+ consecutive sessions one way. |
+| ETF flows | TFTC (BTC only) | Open JSON, CC BY 4.0. Flags a sign flip after 3+ consecutive sessions one way. Carries the dataset's own `updatedThrough` date. |
+| Derivatives | Deribit perpetuals | Funding and open interest, one venue, labelled as such. |
 | Options | Deribit public REST | `get_book_summary_by_currency` gives open interest per instrument; the job aggregates to strike and computes max pain and top put/call OI for the nearest expiry and the nearest monthly. No API key needed. This replaces the JS-only statistics page. |
 | Cross-asset | Yahoo Finance chart API | DXY, US 10Y, gold, WTI, VIX, S&P and Nasdaq futures. |
 | Market structure | CoinGecko `/api/v3/global` | Total market cap, BTC and ETH dominance. |
@@ -122,10 +140,11 @@ shipping a wrong number is worse than shipping none:
   endpoint returns those settlements reliably. The CME FedWatch page itself is
   a QuikStrike iframe and contains no probability data. This needs a data
   provider key.
-- **Aggregate liquidations / funding / OI.** Coinglass's free tier covers all
-  three, but it needs an API key. Never source these from a Coinglass *page*
-  fetch — it returns empty rows and literal `0%` placeholders that read as
-  real data.
+- **Aggregate liquidations.** Funding and open interest are now covered, from
+  Deribit, single-venue and labelled. A cross-exchange aggregate is not: the
+  provider that has it, CoinGlass, has no free tier ($29/mo minimum). Never
+  source any of these from a CoinGlass *page* fetch — it returns empty rows and
+  literal `0%` placeholders that read as real data.
 
 Add either and wire it into `sources.py` as one more `safe()`-wrapped fetcher.
 
@@ -137,7 +156,12 @@ Add either and wire it into `sources.py` as one more `safe()`-wrapped fetcher.
 scripts/sources.py                   one adapter per data source
 scripts/render.py                    markdown + HTML, unavailability handling
 scripts/main.py                      run guard, orchestration, SMTP
+scripts/state.py                     day-over-day memory, duplicate guard
+scripts/probe.py                     manual source-reachability probe
 tests/test_brief.py                  offline suite, no network
+state/latest.json                    yesterday's figures, committed by the run
+trigger/apps-script.gs               the on-time trigger (see docs/)
+docs/trigger-setup.md                how to install it, step by step
 ```
 
 ## Tests
@@ -147,8 +171,9 @@ python tests/test_brief.py
 ```
 
 Covers the ET→Lisbon conversion through both DST-mismatch windows, feed parsing
-and dedupe, max-pain maths, Deribit monthly detection, Farside negative
-parsing, ETF flow-run flip detection, the cron slot guard in both seasons, and
+and dedupe, max-pain maths, Deribit monthly detection, ETF flow-run flip
+detection, the cron slot guard in both seasons, stale-quote age stamps, risk
+windows filtered to what is still ahead, the day-over-day state file, and
 end-to-end rendering with healthy inputs and with every source down. The
 workflow runs it before each brief, so a broken parser fails loudly instead of
 emailing you a brief full of `unavailable`.
