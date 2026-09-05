@@ -94,11 +94,6 @@ check("2026-08-28 is a monthly", sources._is_monthly(date(2026, 8, 28)), True)
 check("2026-08-21 is not", sources._is_monthly(date(2026, 8, 21)), False)
 check("2026-12-25 is a monthly", sources._is_monthly(date(2026, 12, 25)), True)
 
-print("\n-- Farside negative parsing --")
-check("parenthesised is negative", sources._money("(123.4)"), -123.4)
-check("comma thousands", sources._money("1,234.5"), 1234.5)
-check("dash is None", sources._money("-"), None)
-
 print("\n-- flow run direction --")
 flip = render._run_note([10.0, 20.0, 30.0, 40.0, -5.0])
 check_true("sign flip after 3+ sessions is flagged", "FLAG" in flip, flip)
@@ -122,7 +117,7 @@ now = datetime(2026, 8, 21, 9, 30, tzinfo=LISBON)
 healthy = {
     "now": now,
     "calendar": {"ok": True, "error": None,
-                 "data": {"events": parsed, "next_week_error": None,
+                 "data": {"events": parsed, "week_only": True,
                           "source": "ff"}},
     "crypto": {"ok": True, "error": None, "data": {"source": "kraken", "pairs": [
         {"symbol": "BTC", "last": 76800.0, "day_open": 75000.0,
@@ -138,8 +133,13 @@ healthy = {
         "latest_date": date(2026, 8, 20), "latest_total": 606.3,
         "recent": [{"date": date(2026, 8, 20), "total": 606.3,
                     "ibit": 503.0, "fbtc": 64.7, "etha": None}],
-        "source": "farside"}},
-    "flows_eth": {"ok": False, "error": "HTTP 503", "data": None},
+        "updated_through": "2026-08-20", "source": "TFTC (CC BY 4.0)"}},
+    "perp_btc": {"ok": True, "error": None, "data": {
+        "instrument": "BTC-PERPETUAL", "funding_8h": 0.00012,
+        "current_funding": 0.00009, "open_interest": 512345678.0,
+        "index_price": 76800.0, "volume_24h_usd": 1.78e8,
+        "source": "Deribit (single venue)"}},
+    "perp_eth": {"ok": False, "error": "HTTP 503", "data": None},
     "options_btc": {"ok": True, "error": None, "data": {
         "currency": "BTC", "underlying": 76800.0,
         "nearest": {"expiry": date(2026, 8, 21), "max_pain": 70000.0,
@@ -164,7 +164,7 @@ check_true("markdown has a title", md.startswith("# MARKET BRIEF"))
 check_true("BTC price rendered", "76,800" in md)
 check_true("pct labelled since 00:00 UTC", "since 00:00 UTC" in md)
 check_true("F&G 7-day delta shown", "+31" in md)
-check_true("failed sub-step reported", "flows_eth" in md and "Degraded" in md)
+check_true("failed sub-step reported", "perp_eth" in md and "Degraded" in md)
 check_true("max pain rendered", "70,000" in md)
 check_true("alternative.me attribution present", "alternative.me" in md)
 check_true("no literal markdown bold leaked into HTML", "**" not in html)
@@ -232,23 +232,16 @@ check("connection error named", sources._reason(_rq.ConnectionError()),
 check_true("error text stays short enough for an email body",
            len(sources._reason(_rq.ConnectionError("x" * 500))) < 40)
 
-print("\n-- forward feed: dead vs genuinely empty --")
-dead_fwd = dict(healthy)
-dead_fwd["calendar"] = {"ok": True, "error": None, "data": {
+print("\n-- forward view: week-only is stated, not left blank --")
+_wk = dict(healthy)
+_wk["calendar"] = {"ok": True, "error": None, "data": {
     "events": [e for e in parsed if e["dt_lis"].date() == today],
-    "next_week_error": "nfs.faireconomy.media: HTTP 403", "source": "ff"}}
-md3, _ = render.build(dead_fwd)
-check_true("dead forward feed is not reported as 'none scheduled'",
-           "None scheduled" not in md3, md3)
-check_true("dead forward feed names the failure", "HTTP 403" in md3)
-
-empty_fwd = dict(healthy)
-empty_fwd["calendar"] = {"ok": True, "error": None, "data": {
-    "events": [e for e in parsed if e["dt_lis"].date() == today],
-    "next_week_error": None, "source": "ff"}}
-md4, _ = render.build(empty_fwd)
-check_true("genuinely empty forward feed still says none scheduled",
-           "None scheduled" in md4)
+    "week_only": True, "source": "ff"}}
+md3, _ = render.build(_wk)
+check_true("an exhausted forward view is explained, not shown empty",
+           "publishes only the current week" in md3, md3)
+check_true("it does not claim a broken feed",
+           "unavailable" not in md3.split("Next 5 sessions")[1][:300].lower(), md3)
 
 print("\n-- app password whitespace tolerance --")
 _os.environ["GMAIL_USER"] = "  kabil.dh@gmail.com  "
@@ -418,6 +411,36 @@ check_true("no prior state means no delta text, not a broken one",
            "vs yesterday" not in md_n, md_n[:400])
 check_true("without deltas the headline still says where price sits",
            "up its 24h range" in md_n)
+
+print("\n-- flows and derivatives rendering --")
+md_f, _ = render.build(healthy)
+_flows = md_f.split("## FLOWS")[1].split("##")[0]
+check_true("flows print the latest total", "+$606.3m" in _flows, _flows)
+check_true("flows name IBIT and FBTC", "IBIT" in _flows and "FBTC" in _flows)
+check_true("flows state dataset freshness", "through 2026-08-20" in _flows, _flows)
+check_true("CC BY attribution is carried", "TFTC" in _flows, _flows)
+
+_der = md_f.split("## DERIVATIVES")[1].split("##")[0]
+check_true("funding is rendered as a percent per 8h", "%/8h" in _der, _der)
+check_true("funding sign is explicit", "+0.0120%/8h" in _der, _der)
+check_true("open interest is rendered", "OI 512,345,678" in _der, _der)
+check_true("single-venue is labelled, not passed off as aggregate",
+           "single venue" in _der, _der)
+check_true("a failed perp degrades to unavailable, not a fake zero",
+           "ETH perp" in _der and "unavailable" in _der, _der)
+
+print("\n-- funding flags the levels the brief has always called out --")
+def _fund(rate):
+    c = dict(healthy)
+    c["perp_btc"] = {"ok": True, "error": None, "data": dict(
+        healthy["perp_btc"]["data"], funding_8h=rate)}
+    return render.build(c)[0].split("## DERIVATIVES")[1].split("##")[0]
+check_true("elevated funding is flagged", "\u26a0" in _fund(0.0007), _fund(0.0007))
+check_true("negative funding is flagged", "\u26a0" in _fund(-0.0002))
+check_true("ordinary funding is not flagged", "\u26a0" not in _fund(0.0001))
+check_true("missing funding does not render a zero",
+           "funding —" in _fund(None), _fund(None))
+
 
 print()
 if failures:

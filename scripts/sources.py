@@ -31,11 +31,18 @@ LISBON = ZoneInfo("Europe/Lisbon")
 UTC = timezone.utc
 
 FF_THIS_WEEK = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-FF_NEXT_WEEK = "https://nfs.faireconomy.media/ff_calendar_nextweek.json"
+# ForexFactory publishes only the current week. `ff_calendar_nextweek.json`
+# was requested for weeks and 404s every time - a probe against a runner
+# confirmed it, and it appears never to have existed. The forward view is
+# therefore limited to the remainder of this week, which the brief states.
 KRAKEN_TICKER = "https://api.kraken.com/0/public/Ticker?pair=XBTUSD,ETHUSD,SOLUSD"
 FNG = "https://api.alternative.me/fng/?limit=8"
-FARSIDE_BTC = "https://farside.co.uk/btc/"
-FARSIDE_ETH = "https://farside.co.uk/eth/"
+# Farside 403s datacenter IPs regardless of headers - re-confirmed by probe.
+# TFTC republishes the same underlying data (SoSoValue) as open JSON under
+# CC BY 4.0, with a per-fund breakdown and an `updatedThrough` freshness
+# field Farside never gave us. Attribution is a licence condition.
+TFTC_BTC_FLOWS = "https://www.tftc.io/bitcoin-etf-flows/data.json"
+DERIBIT_TICKER = "https://www.deribit.com/api/v2/public/ticker"
 DERIBIT_BOOK = "https://www.deribit.com/api/v2/public/get_book_summary_by_currency"
 COINGECKO_GLOBAL = "https://api.coingecko.com/api/v3/global"
 YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
@@ -146,24 +153,11 @@ def calendar():
     this_count = len(events)
     today = datetime.now(LISBON).date()
 
-    next_error = None
-    next_count = 0
-    if today.weekday() >= 2:  # Wed or later: this-week feed ends Friday
-        try:
-            nxt = _parse_ff(_json(FF_NEXT_WEEK), seen)
-            next_count = len(nxt)
-            events += nxt
-        except Exception as exc:  # noqa: BLE001
-            # Never swallow this. A silent failure here makes the forward
-            # view read as "nothing scheduled" instead of "feed is down".
-            next_error = _reason(exc)
-
+    # No next-week fetch: ForexFactory publishes only the current week.
     events.sort(key=lambda e: e["dt_lis"])
 
     impacts = Counter(e["impact"] for e in events)
-    print(f"  calendar: {this_count} this-week + {next_count} next-week events; "
-          f"impacts={dict(impacts)}"
-          + (f"; next-week FAILED: {next_error}" if next_error else ""),
+    print(f"  calendar: {this_count} events this week; impacts={dict(impacts)}",
           file=sys.stderr)
 
     if os.environ.get("BRIEF_DEBUG"):
@@ -174,7 +168,10 @@ def calendar():
 
     return {
         "events": events,
-        "next_week_error": next_error,
+        # Kept for the renderer's benefit: the forward view genuinely stops at
+        # the end of this week, and saying so beats an empty section that
+        # reads as "nothing scheduled".
+        "week_only": True,
         "source": "ForexFactory (nfs.faireconomy.media)",
     }
 
@@ -242,91 +239,78 @@ def fear_greed():
 
 # ------------------------------------------------------------------- flows
 
-_NUM = re.compile(r"^\(?-?[\d,]+\.?\d*\)?$")
+def etf_flows_btc():
+    """US spot Bitcoin ETF daily net flows, from TFTC's open dataset.
 
+    Farside was the original source and 403s datacenter IPs regardless of
+    headers. TFTC republishes the same underlying SoSoValue data as open JSON
+    under CC BY 4.0, with a per-fund breakdown and an `updatedThrough` field
+    that lets the brief say how fresh the figures actually are.
 
-def _money(cell: str):
-    """Farside prints negatives in parentheses."""
-    c = cell.strip().replace(",", "")
-    if c in ("", "-", "–"):
-        return None
-    neg = c.startswith("(") and c.endswith(")")
-    c = c.strip("()")
-    try:
-        v = float(c)
-    except ValueError:
-        return None
-    return -v if neg else v
+    Amounts arrive in whole USD and are converted to US$m, the unit the brief
+    has always printed.
+    """
+    data = _json(TFTC_BTC_FLOWS)
+    days = data.get("days") or []
+    if not days:
+        raise RuntimeError("dataset carried no days")
 
-
-def _farside(url: str):
-    from bs4 import BeautifulSoup
-
-    html = _get(url, headers=BROWSER_HEADERS).text
-    soup = BeautifulSoup(html, "html.parser")
-    table = soup.find("table")
-    if table is None:
-        raise RuntimeError("no table found")
-
-    rows = []
-    header = []
-    for tr in table.find_all("tr"):
-        cells = [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
-        if not cells:
-            continue
-        if not header and any(c.upper() in ("IBIT", "FBTC", "ETHA") for c in cells):
-            header = [c.strip() for c in cells]
-            continue
-        # A data row starts with a parseable date.
-        try:
-            d = datetime.strptime(cells[0], "%d %b %Y").date()
-        except ValueError:
-            continue
-        rows.append({"date": d, "cells": cells})
-
+    rows = [d for d in days if d.get("netFlowUsd") is not None]
     if not rows:
-        raise RuntimeError("no data rows parsed")
-    rows.sort(key=lambda r: r["date"])
+        raise RuntimeError("no day carried a net flow")
+    rows.sort(key=lambda d: d["date"])
 
-    def col(row, name):
-        if not header:
-            return None
-        try:
-            i = [h.upper() for h in header].index(name.upper())
-        except ValueError:
-            return None
-        return _money(row["cells"][i]) if i < len(row["cells"]) else None
+    def to_m(v):
+        return None if v is None else v / 1e6
 
-    def total(row):
-        v = col(row, "Total")
-        if v is None:                      # fall back to the last numeric cell
-            for c in reversed(row["cells"][1:]):
-                v = _money(c)
-                if v is not None:
-                    break
-        return v
+    recent = []
+    for d in rows[-6:]:
+        per = d.get("perEtfUsd") or {}
+        recent.append({
+            "date": date.fromisoformat(d["date"]),
+            "total": to_m(d["netFlowUsd"]),
+            "ibit": to_m(per.get("IBIT")),
+            "fbtc": to_m(per.get("FBTC")),
+            "etha": None,
+        })
 
-    recent = rows[-6:]
     return {
-        "header": header,
-        "latest_date": rows[-1]["date"],
-        "latest_total": total(rows[-1]),
-        "recent": [
-            {"date": r["date"], "total": total(r),
-             "ibit": col(r, "IBIT"), "fbtc": col(r, "FBTC"),
-             "etha": col(r, "ETHA")}
-            for r in recent
-        ],
-        "source": "Farside Investors",
+        "latest_date": recent[-1]["date"],
+        "latest_total": recent[-1]["total"],
+        "recent": recent,
+        "updated_through": data.get("updatedThrough"),
+        # CC BY 4.0 requires attribution, and the brief credits its sources
+        # anyway.
+        "source": data.get("attribution") or "TFTC (CC BY 4.0)",
     }
 
 
-def etf_flows_btc():
-    return _farside(FARSIDE_BTC)
+def perp_stats(currency: str = "BTC"):
+    """Funding and open interest for the perpetual, from Deribit.
 
+    Binance was the obvious venue and returns HTTP 451 to US-hosted runners,
+    so it cannot serve this job at all. Deribit is already reached
+    successfully by the options fetcher, and a single ticker call carries both
+    figures. This is one venue, not an aggregate across exchanges, and the
+    brief labels it that way - an aggregate would need a paid provider.
+    """
+    inst = f"{currency}-PERPETUAL"
+    r = _json(DERIBIT_TICKER, params={"instrument_name": inst})
+    res = r.get("result")
+    if not res:
+        raise RuntimeError(f"no result for {inst}")
 
-def etf_flows_eth():
-    return _farside(FARSIDE_ETH)
+    stats = res.get("stats") or {}
+    return {
+        "instrument": inst,
+        # funding_8h is a rate, e.g. 0.0001 = 0.01% per 8h.
+        "funding_8h": res.get("funding_8h"),
+        "current_funding": res.get("current_funding"),
+        "open_interest": res.get("open_interest"),
+        "index_price": res.get("index_price"),
+        "volume_24h_usd": stats.get("volume_usd"),
+        "source": "Deribit (single venue)",
+    }
 
 
 # ----------------------------------------------------------------- options

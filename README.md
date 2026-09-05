@@ -70,24 +70,32 @@ not an instruction, and it is ignored.
 A failed step never aborts the brief. It prints `unavailable` with the reason
 and the run continues.
 
-## Known upstream limits
+## Sources, and what the probes settled
 
-Established by live runs, not assumed:
+`scripts/probe.py` (Probe Sources workflow, manual only) checks candidates
+from an actual runner before any fetcher is written. It settled several things
+that documentation could not:
 
-- **`ff_calendar_nextweek.json` returns HTTP 404.** The this-week feed is
-  healthy (99 events on the run that established this), but the next-week URL
-  is dead upstream. The consequence is that on Thursday and Friday the
-  "next 5 sessions" view loses next week's events. The brief says so
-  explicitly rather than printing "none scheduled", which would read as an
-  all-clear. If you find the correct URL, it is one constant in
-  `sources.py`.
-- **Farside returns HTTP 403 to GitHub Actions runners.** Tried with a plain
-  agent, a browser user agent, and a full set of `Sec-Fetch` navigation
-  headers; all three refused, which makes this IP-level blocking of
-  datacenter ranges rather than a header problem. Both ETF flow sections
-  therefore report unavailable on the cloud run. The fetcher is left in
-  place because it works from a residential IP. A different flows source, or
-  a proxy, is the real fix.
+- **Farside 403s datacenter IPs** regardless of headers. Replaced by **TFTC's
+  open dataset** (`tftc.io/bitcoin-etf-flows/data.json`, CC BY 4.0), which
+  republishes the same SoSoValue data with a per-fund breakdown and an
+  `updatedThrough` field Farside never provided. Attribution is a licence
+  condition and appears in the brief.
+- **Binance returns HTTP 451** to US-hosted runners, so it cannot serve this
+  job at all. Funding and open interest come from **Deribit** instead, which
+  the options fetcher already reaches. This is one venue, not a cross-exchange
+  aggregate, and the brief says so — an aggregate needs a paid provider.
+- **`ff_calendar_nextweek.json` returns 404 and appears never to have
+  existed.** ForexFactory publishes only the current week. The brief had been
+  calling this a broken feed for weeks; it now states the real limitation,
+  which is that the forward view stops at the end of the current week.
+- **CoinGlass has no free tier** ($29/mo minimum), so aggregate liquidations
+  remain out of scope.
+
+Still open: ETH ETF flows (TFTC's dataset is Bitcoin-only), Fed-path odds (no
+free source — the CME page carries no probabilities and deriving from Fed
+Funds futures needs contract-level settlement data), and AAII sentiment
+(reachable from a runner, not yet parsed).
 
 ## Cost constraint
 

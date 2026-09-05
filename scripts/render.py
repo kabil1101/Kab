@@ -197,9 +197,12 @@ def build(ctx) -> tuple[str, str]:
             # Distinguish an empty forward view from a dead feed. Printing
             # "none scheduled" when the fetch failed is the worst outcome:
             # it reads as an all-clear.
-            err = cal["data"].get("next_week_error")
-            note = (f"Forward feed unavailable — {err}. Next week's High-impact "
-                    f"events are NOT covered by this brief." if err
+            # ForexFactory publishes only the current week, so late in the
+            # week the forward view genuinely runs out. Saying that beats an
+            # empty section, which reads as "nothing scheduled".
+            note = ("No further High-impact events this week. ForexFactory "
+                    "publishes only the current week, so next week is not "
+                    "covered." if cal["data"].get("week_only")
                     else "None scheduled in the forward feed.")
             md.append(f"- {note}")
             html.append(f"<ul><li>{_hb(note)}</li></ul>")
@@ -247,21 +250,51 @@ def build(ctx) -> tuple[str, str]:
     # ---- FLOWS ---------------------------------------------------------
     md.append("## FLOWS\n")
     html.append(_h_section("Flows"))
-    for label, key in (("BTC ETF", "flows_btc"), ("ETH ETF", "flows_eth")):
-        s = ctx[key]
-        if not s["ok"]:
-            line = f"**{label}:** unavailable — {s['error']}"
+    fb = ctx["flows_btc"]
+    if not fb["ok"]:
+        line = f"**BTC ETF:** unavailable — {fb['error']}"
+    else:
+        d = fb["data"]
+        run = [r["total"] for r in d["recent"] if r["total"] is not None]
+        line = (f"**BTC ETF** {d['latest_date']:%d %b}: {_money(d['latest_total'])} "
+                f"total · {_run_note(run)}")
+        ibit, fbtc = d["recent"][-1].get("ibit"), d["recent"][-1].get("fbtc")
+        if ibit is not None or fbtc is not None:
+            line += f" · IBIT {_money(ibit)} · FBTC {_money(fbtc)}"
+        if d.get("updated_through"):
+            line += f" · dataset through {d['updated_through']}"
+        line += f" · via {d['source']}"
+    md.append(f"- {line}")
+    html.append(f"<p>{_hb(line)}</p>")
+    md.append("")
+
+    # ---- DERIVATIVES ---------------------------------------------------
+    md.append("## DERIVATIVES\n")
+    html.append(_h_section("Derivatives"))
+    dlines = []
+    for label, key in (("BTC", "perp_btc"), ("ETH", "perp_eth")):
+        p_ = ctx.get(key)
+        if p_ is None:
+            continue
+        if not p_["ok"]:
+            dlines.append(f"**{label} perp:** unavailable — {p_['error']}")
+            continue
+        d = p_["data"]
+        f8 = d.get("funding_8h")
+        # funding_8h is a rate: 0.0001 is 0.01% per 8h. Flag the levels the
+        # brief has always called out.
+        if f8 is None:
+            fund = "funding —"
         else:
-            d = s["data"]
-            run = [r["total"] for r in d["recent"] if r["total"] is not None]
-            line = (f"**{label}** {d['latest_date'].strftime('%d %b')}: "
-                    f"{_money(d['latest_total'])} total · {_run_note(run)}")
-            ibit = d["recent"][-1].get("ibit")
-            fbtc = d["recent"][-1].get("fbtc")
-            if ibit is not None or fbtc is not None:
-                line += f" · IBIT {_money(ibit)} · FBTC {_money(fbtc)}"
-        md.append(f"- {line}")
-        html.append(f"<p>{_hb(line)}</p>")
+            pct = f8 * 100
+            flag = " ⚠" if (pct > 0.05 or pct < 0) else ""
+            fund = f"funding {pct:+.4f}%/8h{flag}"
+        oi = d.get("open_interest")
+        oi_txt = f"OI {oi:,.0f}" if oi is not None else "OI —"
+        dlines.append(f"**{label} perp** {fund} · {oi_txt} · {d['source']}")
+    for l in dlines:
+        md.append(f"- {l}")
+    html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in dlines) + "</ul>")
     md.append("")
 
     # ---- SENTIMENT -----------------------------------------------------
