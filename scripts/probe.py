@@ -27,25 +27,18 @@ BROWSER = {
 }
 
 CANDIDATES = [
-    # Round 1 established: Farside 403s, Binance 451s (geo-blocked from
-    # US-hosted runners), ByKaranteli and TFTC return HTML with embedded JSON,
-    # AAII responds, and ff_calendar_nextweek.json is a 404 - that URL never
-    # existed. Round 2 chases the payloads.
-
-    # Deribit replaces Binance for derivatives: already reached successfully
-    # by the options fetcher, and one ticker call carries both funding and OI.
-    ("deriv/deribit-perp",
+    # Round 2 found the data behind the app shells. Round 3 reads their shape
+    # so the fetchers are written against evidence, not assumption.
+    ("etf/bykaranteli-json",
+     "https://bykaranteli.com/api/v1/public/datasets/etf-flows.json"),
+    ("etf/tftc-json", "https://www.tftc.io/bitcoin-etf-flows/data.json"),
+    ("deriv/deribit-btc-perp",
      "https://www.deribit.com/api/v2/public/ticker"
      "?instrument_name=BTC-PERPETUAL"),
-    ("deriv/deribit-eth-perp",
-     "https://www.deribit.com/api/v2/public/ticker"
-     "?instrument_name=ETH-PERPETUAL"),
-
-    # ETF flows: find the data behind the page.
-    ("etf/bykaranteli", "https://bykaranteli.com/etf"),
-    ("etf/tftc", "https://www.tftc.io/bitcoin-etf-flows"),
-    ("aaii/survey", "https://www.aaii.com/sentimentsurvey"),
 ]
+
+DEEP = True   # dump full structure for these, not just a one-line summary
+
 
 # Substrings worth surfacing when a page turns out to be an app shell: they
 # point at the data the page itself loads.
@@ -113,6 +106,31 @@ def main() -> int:
         print(f"  HTTP {r.status_code} · {ctype} · {len(r.content):,} bytes")
         if r.ok:
             print(describe(r.text, ctype))
+            if DEEP and "json" in ctype.lower():
+                try:
+                    data = json.loads(r.text)
+                except json.JSONDecodeError:
+                    data = None
+                if data is not None:
+                    node, path = data, ""
+                    # Walk into the first list of records we find and show one.
+                    for _ in range(4):
+                        if isinstance(node, dict):
+                            print(f"  {path or '<root>'} keys: {sorted(node)}")
+                            nxt = next((k for k, v in node.items()
+                                        if isinstance(v, (list, dict))), None)
+                            if nxt is None:
+                                break
+                            path, node = f"{path}.{nxt}", node[nxt]
+                        elif isinstance(node, list):
+                            print(f"  {path or '<root>'}: list of {len(node)}")
+                            if node and isinstance(node[0], dict):
+                                print(f"    record keys: {sorted(node[0])}")
+                                print(f"    first: "
+                                      f"{json.dumps(node[0])[:400]}")
+                            break
+                        else:
+                            break
             if "json" not in ctype.lower():
                 urls = hunt(r.text)
                 if urls:
