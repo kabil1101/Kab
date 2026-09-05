@@ -275,6 +275,76 @@ finally:
     _os.environ.pop("GMAIL_USER", None)
     _os.environ.pop("GMAIL_APP_PASSWORD", None)
 
+print("\n-- as-of stamps: a stale quote must not look live --")
+_fri_close = datetime(2026, 8, 21, 21, 59, tzinfo=LISBON)
+_mon = datetime(2026, 8, 24, 9, 30, tzinfo=LISBON)
+same = render._as_of_stamp(datetime(2026, 8, 21, 9, 0, tzinfo=LISBON), now)
+check_true("same-day quote shows a bare time", same == " (as of 09:00 LIS)", same)
+stale = render._as_of_stamp(_fri_close, _mon)
+check_true("stale quote carries its date", "Fri 21 Aug" in stale, stale)
+check_true("stale quote states its age", "d old" in stale or "h old" in stale, stale)
+check_true("no as_of yields no stamp", render._as_of_stamp(None, now) == "")
+
+_stale_ctx = dict(healthy)
+_stale_ctx["now"] = _mon
+_stale_ctx["cross_asset"] = {"ok": True, "error": None, "data": {
+    "quotes": {"DXY": {"last": 99.16, "pct_change": -0.27, "as_of": _fri_close}},
+    "errors": {}, "source": "yahoo"}}
+md_s, _ = render.build(_stale_ctx)
+check_true("Friday's close is not printed as though it were today",
+           "Fri 21 Aug" in md_s, md_s)
+
+print("\n-- risk windows: only what is still ahead --")
+# The 28 Aug failure: built 21:14, still listing the 14:30 open and 21:00 close.
+_late = dict(healthy)
+_late["now"] = datetime(2026, 8, 21, 21, 14, tzinfo=LISBON)
+md_l, _ = render.build(_late)
+_rw = md_l.split("## RISK WINDOWS (LIS)")[1]
+check_true("passed NYSE open is dropped", "NYSE cash open" not in _rw, _rw)
+check_true("passed NYSE close is dropped", "NYSE cash close" not in _rw, _rw)
+check_true("the reader is told windows passed rather than shown nothing",
+           "passed" in _rw.lower(), _rw)
+
+_early = dict(healthy)
+_early["now"] = datetime(2026, 8, 21, 6, 0, tzinfo=LISBON)
+_rw_e = render.build(_early)[0].split("## RISK WINDOWS (LIS)")[1]
+check_true("future NYSE open is kept", "NYSE cash open" in _rw_e)
+check_true("windows are ordered by time",
+           _rw_e.index("14:30") < _rw_e.index("21:00"), _rw_e)
+
+print("\n-- weekends have no cash session --")
+_sat = dict(healthy)
+_sat["now"] = datetime(2026, 8, 22, 13, 0, tzinfo=LISBON)   # Saturday
+_sat["calendar"] = {"ok": True, "error": None,
+                    "data": {"events": [], "next_week_error": None, "source": "ff"}}
+_rw_s = render.build(_sat)[0].split("## RISK WINDOWS (LIS)")[1]
+check_true("no NYSE open on a Saturday", "NYSE cash open" not in _rw_s, _rw_s)
+check_true("no NYSE close on a Saturday", "NYSE cash close" not in _rw_s, _rw_s)
+check_true("closure is stated, not left blank", "closed" in _rw_s.lower(), _rw_s)
+
+print("\n-- headline says where price sits, not just that it is flat --")
+check_true("range position is computed",
+           abs(render._range_pos(healthy["crypto"]["data"]["pairs"][0]) - 49.8) < 1.0,
+           render._range_pos(healthy["crypto"]["data"]["pairs"][0]))
+check_true("degenerate range does not divide by zero",
+           render._range_pos({"last": 5.0, "low_24h": 5.0, "high_24h": 5.0}) is None)
+md_h, _ = render.build(healthy)
+check_true("headline carries range position", "up its 24h range" in md_h, md_h[:400])
+check_true("headline keeps the correctly-labelled UTC window",
+           "since 00:00 UTC" in md_h)
+
+print("\n-- subject line carries signal --")
+subj = render.subject(healthy)
+check_true("prefix the Mode Check matches is preserved",
+           subj.startswith("Market Brief - "), subj)
+check_true("subject names the BTC level", "BTC 76.8k" in subj, subj)
+check_true("subject carries the day's USD event", "PMI" in subj, subj)
+check_true("subject stays short enough to read in a list", len(subj) < 90, subj)
+subj_blind = render.subject(dead)
+check_true("subject degrades to the date when nothing was fetched",
+           subj_blind.startswith("Market Brief - ") and "BTC" not in subj_blind,
+           subj_blind)
+
 print()
 if failures:
     print(f"FAILED ({len(failures)}):")

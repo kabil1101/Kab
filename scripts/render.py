@@ -10,10 +10,11 @@ Formatting rules that matter:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 LISBON = ZoneInfo("Europe/Lisbon")
+UTC = timezone.utc
 
 LOW_IMPACT_KEEP = ("inventories", "crude oil", "natural gas", "speaks",
                    "bond auction", "auction")
@@ -60,6 +61,66 @@ def select_forward(events, today, sessions=5):
     wanted = set(days)
     return [e for e in events
             if e["dt_lis"].date() in wanted and e["impact"].lower() == "high"]
+
+
+def _as_of_stamp(as_of, now):
+    """Timestamp a quote, and never show a bare time for a stale one.
+
+    A time with no date reads as current. Friday's close rendered as
+    "(as of 21:59 LIS)" is character-for-character what a live quote looks
+    like, so on a Monday the reader has no way to tell it is three days old.
+    Anything not from today carries its date and its age in words.
+    """
+    if not as_of:
+        return ""
+    if as_of.date() == now.date():
+        return f" (as of {_hhmm(as_of)} LIS)"
+    age = now - as_of
+    hours = int(age.total_seconds() // 3600)
+    age_txt = f"{hours}h old" if hours < 48 else f"{age.days}d old"
+    return f" (as of {as_of:%a %d %b} {_hhmm(as_of)} LIS — {age_txt})"
+
+
+def _range_pos(pair):
+    """Where the last price sits in the 24h range, 0 = low, 100 = high."""
+    lo, hi = pair.get("low_24h"), pair.get("high_24h")
+    if lo is None or hi is None or hi <= lo:
+        return None
+    return (pair["last"] - lo) / (hi - lo) * 100.0
+
+
+def subject(ctx) -> str:
+    """Subject line that says whether the brief is worth opening.
+
+    The inbox list previously showed only a date, which carries no signal at
+    all. Everything here comes from data already fetched; nothing new is
+    requested for it. The `Market Brief - ` prefix is load-bearing - the
+    chat-side Mode Check matches on it - so it stays exactly as it was.
+    """
+    now = ctx["now"]
+    parts = [f"Market Brief - {now:%-d %b}"]
+
+    c = ctx.get("crypto")
+    if c and c["ok"]:
+        btc = next((p for p in c["data"]["pairs"] if p["symbol"] == "BTC"), None)
+        if btc:
+            parts.append(f"BTC {btc['last'] / 1000:.1f}k "
+                         f"{btc['pct_since_utc_midnight']:+.1f}%")
+
+    cal = ctx.get("calendar")
+    if cal and cal["ok"]:
+        todays = select_today(cal["data"]["events"], now.date())
+        top = [e for e in todays
+               if e["impact"].lower() == "high" and e["country"] == "USD"]
+        ahead = [e for e in top if e["dt_lis"] > now]
+        pick = ahead[0] if ahead else (top[0] if top else None)
+        if pick:
+            title = pick["title"]
+            if len(title) > 28:
+                title = title[:27] + "\u2026"
+            parts.append(f"{title} {_hhmm(pick['dt_lis'])}")
+
+    return " \u00b7 ".join(parts)
 
 
 def _money(v, unit="$"):
@@ -239,7 +300,7 @@ def build(ctx) -> tuple[str, str]:
         lines = []
         for label, q in ca["data"]["quotes"].items():
             chg = f"{q['pct_change']:+.2f}%" if q["pct_change"] is not None else "—"
-            stamp = f" (as of {_hhmm(q['as_of'])} LIS)" if q["as_of"] else ""
+            stamp = _as_of_stamp(q["as_of"], now)
             lines.append(f"**{label}** {q['last']:,.2f} · {chg}{stamp}")
         for l in lines:
             md.append(f"- {l}")
@@ -257,7 +318,7 @@ def build(ctx) -> tuple[str, str]:
         html.append(f"<p>{_hb(line)}</p>")
 
     # ---- RISK WINDOWS --------------------------------------------------
-    windows = _risk_windows(ctx, today)
+    windows = _risk_windows(ctx, today, now)
     md.append("## RISK WINDOWS (LIS)\n")
     html.append(_h_section("Risk Windows (LIS)"))
     for w in windows:
@@ -325,10 +386,18 @@ def _setup_bullets(ctx):
     if c["ok"]:
         btc = next((p for p in c["data"]["pairs"] if p["symbol"] == "BTC"), None)
         if btc:
+            # "% since 00:00 UTC" alone is a poor lead: early in the UTC day
+            # it is near zero by construction, which reads as a quiet market
+            # even when the 24h range says otherwise. Where price sits in that
+            # range says more, and both are computable from the same ticker.
+            # A true 24h change needs a 24h-ago price Kraken's ticker does not
+            # carry; that arrives with the day-over-day state file.
+            pos = _range_pos(btc)
+            where = f", {pos:.0f}% up its 24h range" if pos is not None else ""
             out.append(
-                f"BTC ${btc['last']:,.0f}, {btc['pct_since_utc_midnight']:+.2f}% "
-                f"since 00:00 UTC, 24h range "
-                f"${btc['low_24h']:,.0f}–${btc['high_24h']:,.0f}."
+                f"BTC ${btc['last']:,.0f}{where} "
+                f"(${btc['low_24h']:,.0f}–${btc['high_24h']:,.0f}), "
+                f"{btc['pct_since_utc_midnight']:+.2f}% since 00:00 UTC."
             )
     cal = ctx["calendar"]
     if cal["ok"]:
@@ -353,29 +422,65 @@ def _setup_bullets(ctx):
     return out[:3] or ["Primary sources degraded this run — see sections below."]
 
 
-def _risk_windows(ctx, today):
-    w = []
+def _risk_windows(ctx, today, now):
+    """Windows still ahead of the reader, in order.
+
+    Two rules the earlier version broke. A window that has already passed is
+    not a risk window - the 28 Aug brief was built at 21:14 and still listed
+    the 14:30 open and the 21:00 close as things to watch. And on a day the
+    cash market never opens, an open and a close are not events at all.
+    """
+    timed, untimed = [], []
+
     cal = ctx["calendar"]
     if cal["ok"]:
-        todays = select_today(cal["data"]["events"], today)
-        for e in todays:
+        for e in select_today(cal["data"]["events"], today):
             if e["impact"].lower() == "high" or _is_cb_speaker(e["title"]):
-                w.append(f"**{_hhmm(e['dt_lis'])}** — {e['country']} {e['title']}")
-    # NYSE cash open, recomputed rather than assumed: the ET/Lisbon gap is not
-    # constant across the two DST-mismatch windows in March and October.
-    ny = ZoneInfo("America/New_York")
-    open_et = datetime.combine(today, datetime.min.time(), tzinfo=ny).replace(hour=9, minute=30)
-    w.append(f"**{_hhmm(open_et.astimezone(LISBON))}** — NYSE cash open (09:30 ET)")
-    close_et = open_et.replace(hour=16, minute=0)
-    w.append(f"**{_hhmm(close_et.astimezone(LISBON))}** — NYSE cash close (16:00 ET)")
+                timed.append((e["dt_lis"],
+                              f"**{_hhmm(e['dt_lis'])}** — {e['country']} "
+                              f"{e['title']}"))
+
+    # Weekend: the cash session does not exist, so neither do its windows.
+    # Exchange holidays are NOT detected - that needs a holiday calendar we
+    # do not have, so a holiday still shows an open and a close.
+    weekend = today.weekday() >= 5
+    if not weekend:
+        # Recomputed, not assumed: the ET/Lisbon gap is not constant across
+        # the two DST-mismatch windows in March and October.
+        ny = ZoneInfo("America/New_York")
+        open_et = datetime.combine(
+            today, datetime.min.time(), tzinfo=ny).replace(hour=9, minute=30)
+        close_et = open_et.replace(hour=16, minute=0)
+        for dt_et, label in ((open_et, "NYSE cash open (09:30 ET)"),
+                             (close_et, "NYSE cash close (16:00 ET)")):
+            lis = dt_et.astimezone(LISBON)
+            timed.append((lis, f"**{_hhmm(lis)}** — {label}"))
+
     o = ctx.get("options_btc")
     if o and o["ok"]:
         exp = o["data"]["nearest"]["expiry"]
         if exp == today:
-            w.append("**09:00** — Deribit expiry settles (08:00 UTC)")
+            settle = datetime.combine(
+                today, datetime.min.time(), tzinfo=UTC).replace(hour=8)
+            lis = settle.astimezone(LISBON)
+            timed.append((lis, f"**{_hhmm(lis)}** — Deribit expiry settles "
+                               f"(08:00 UTC)"))
         else:
-            w.append(f"Next Deribit expiry {exp.strftime('%a %d %b')} 09:00 LIS")
-    return w
+            untimed.append(f"Next Deribit expiry {exp:%a %d %b} 09:00 LIS")
+
+    ahead = sorted((dt, txt) for dt, txt in timed if dt > now)
+    passed = len(timed) - len(ahead)
+
+    out = [txt for _, txt in ahead]
+    if weekend:
+        out.append("Cash equity markets closed today — no session windows.")
+    if not ahead and not weekend:
+        out.append(f"No windows left today; {passed} already passed at "
+                   f"{_hhmm(now)} LIS.")
+    elif passed:
+        out.append(f"({passed} earlier window{'s' if passed > 1 else ''} "
+                   f"already passed.)")
+    return out + untimed
 
 
 # ------------------------------------------------------------------- HTML

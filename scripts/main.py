@@ -165,7 +165,7 @@ def main() -> int:
         print("SKIP_EMAIL set - not sending.", file=sys.stderr)
         return 0
 
-    subject = f"Market Brief - {now:%d %B %Y}"
+    subject = render.subject(ctx)
     sys.stdout.flush()   # keep the failure below the brief, not buried above it
     try:
         send_email(subject, markdown, html)
