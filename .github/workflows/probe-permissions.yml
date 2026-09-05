@@ -1,0 +1,94 @@
+name: Probe Dispatch Permissions
+
+# Manual only. Answers one question with evidence instead of hearsay: what is
+# the NARROWEST token permission that can trigger the brief?
+#
+# The answer decides how dangerous the external trigger's token is. If the
+# endpoint demands `Contents: write`, the holder can push to scripts/main.py,
+# which runs with GMAIL_APP_PASSWORD in its environment — so the token would be
+# worth as much as the Gmail password itself. If `Actions: write` is enough,
+# the token can only start and cancel runs, which is a far smaller thing.
+#
+# Method: three jobs, three different GITHUB_TOKEN permission sets, each
+# POSTing to the dispatch endpoint. A 403 carries `X-Accepted-GitHub-
+# Permissions`, which names exactly what the endpoint wanted; a 204 means that
+# permission set was sufficient. skip_email keeps a dispatch that does succeed
+# from mailing anything.
+#
+# Caveat: GitHub suppresses runs triggered by GITHUB_TOKEN, so a 204 here may
+# start no run at all. That is fine — the status code is the whole experiment,
+# and a real fine-grained PAT is not subject to that guard.
+on:
+  workflow_dispatch:
+
+env:
+  ENDPOINT: /repos/${{ github.repository }}/actions/workflows/market-brief.yml/dispatches
+
+jobs:
+  none:
+    name: "no permissions"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: POST dispatches
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          code=$(curl -sS -o body.txt -D headers.txt -w '%{http_code}' \
+            -X POST "https://api.github.com${ENDPOINT}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d '{"ref":"${{ github.ref_name }}","inputs":{"skip_email":"true"}}')
+          echo "HTTP ${code}"
+          grep -i '^x-accepted-github-permissions' headers.txt || \
+            echo "(no X-Accepted-GitHub-Permissions header)"
+          head -c 400 body.txt; echo
+
+  actions_write:
+    name: "actions: write"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: POST dispatches
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          code=$(curl -sS -o body.txt -D headers.txt -w '%{http_code}' \
+            -X POST "https://api.github.com${ENDPOINT}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d '{"ref":"${{ github.ref_name }}","inputs":{"skip_email":"true"}}')
+          echo "HTTP ${code}"
+          grep -i '^x-accepted-github-permissions' headers.txt || \
+            echo "(no X-Accepted-GitHub-Permissions header)"
+          head -c 400 body.txt; echo
+
+  contents_write:
+    name: "contents: write"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: POST dispatches
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -u
+          code=$(curl -sS -o body.txt -D headers.txt -w '%{http_code}' \
+            -X POST "https://api.github.com${ENDPOINT}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d '{"ref":"${{ github.ref_name }}","inputs":{"skip_email":"true"}}')
+          echo "HTTP ${code}"
+          grep -i '^x-accepted-github-permissions' headers.txt || \
+            echo "(no X-Accepted-GitHub-Permissions header)"
+          head -c 400 body.txt; echo
