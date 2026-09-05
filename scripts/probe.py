@@ -27,32 +27,47 @@ BROWSER = {
 }
 
 CANDIDATES = [
-    # --- gap 1: ETF flows. Farside has 403'd every run for 12 days. ---------
-    ("etf/farside-control", "https://farside.co.uk/btc/"),
+    # Round 1 established: Farside 403s, Binance 451s (geo-blocked from
+    # US-hosted runners), ByKaranteli and TFTC return HTML with embedded JSON,
+    # AAII responds, and ff_calendar_nextweek.json is a 404 - that URL never
+    # existed. Round 2 chases the payloads.
+
+    # Deribit replaces Binance for derivatives: already reached successfully
+    # by the options fetcher, and one ticker call carries both funding and OI.
+    ("deriv/deribit-perp",
+     "https://www.deribit.com/api/v2/public/ticker"
+     "?instrument_name=BTC-PERPETUAL"),
+    ("deriv/deribit-eth-perp",
+     "https://www.deribit.com/api/v2/public/ticker"
+     "?instrument_name=ETH-PERPETUAL"),
+
+    # ETF flows: find the data behind the page.
     ("etf/bykaranteli", "https://bykaranteli.com/etf"),
     ("etf/tftc", "https://www.tftc.io/bitcoin-etf-flows"),
-
-    # --- gap 2: derivatives. CoinGlass has no free tier; Binance's futures
-    # market-data endpoints are public and keyless. ------------------------
-    ("deriv/binance-funding",
-     "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"),
-    ("deriv/binance-oi",
-     "https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT"),
-    ("deriv/binance-oi-hist",
-     "https://fapi.binance.com/futures/data/openInterestHist"
-     "?symbol=BTCUSDT&period=1d&limit=2"),
-
-    # --- gap 3: AAII sentiment. Never tested from a runner. ----------------
     ("aaii/survey", "https://www.aaii.com/sentimentsurvey"),
-
-    # --- control: a feed we know works, to prove the probe itself is sane --
-    ("control/forexfactory-thisweek",
-     "https://nfs.faireconomy.media/ff_calendar_thisweek.json"),
-    # And the URL the brief has been calling a "broken feed" - research says
-    # ForexFactory never published a next-week variant at all.
-    ("control/forexfactory-nextweek",
-     "https://nfs.faireconomy.media/ff_calendar_nextweek.json"),
 ]
+
+# Substrings worth surfacing when a page turns out to be an app shell: they
+# point at the data the page itself loads.
+DATA_HINTS = (".csv", ".json", "/api/", "__NEXT_DATA__", "sosovalue",
+              "farside", "netflow", "net_flow", "totalNetInflow")
+
+
+def hunt(body: str) -> list[str]:
+    """Candidate data URLs and markers embedded in an app-shell page."""
+    import re
+    found = []
+    for m in re.finditer(r'["\'(]([^"\'()\s]{4,160}?\.(?:csv|json))["\')]', body,
+                         re.I):
+        found.append(m.group(1))
+    for m in re.finditer(r'["\'(](/api/[^"\'()\s]{2,120})["\')]', body, re.I):
+        found.append(m.group(1))
+    seen, out = set(), []
+    for f in found:
+        if f not in seen:
+            seen.add(f)
+            out.append(f)
+    return out[:15]
 
 
 def describe(body: str, ctype: str) -> str:
@@ -98,7 +113,16 @@ def main() -> int:
         print(f"  HTTP {r.status_code} · {ctype} · {len(r.content):,} bytes")
         if r.ok:
             print(describe(r.text, ctype))
-            print(f"  head: {' '.join(r.text[:220].split())}")
+            if "json" not in ctype.lower():
+                urls = hunt(r.text)
+                if urls:
+                    print("  embedded data references:")
+                    for u in urls:
+                        print(f"    {u}")
+                present = [h for h in DATA_HINTS if h.lower() in r.text.lower()]
+                if present:
+                    print(f"  markers present: {present}")
+            print(f"  head: {' '.join(r.text[:200].split())}")
             verdicts.append((name, f"OK {r.status_code}"))
         else:
             verdicts.append((name, f"HTTP {r.status_code}"))
