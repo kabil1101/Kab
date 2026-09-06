@@ -26,23 +26,31 @@ BROWSER = {
     "Accept-Language": "en-GB,en;q=0.9",
 }
 
+FD = ("https://api.fiscaldata.treasury.gov/services/api/fiscal_service"
+      "/v1/accounting/od/buybacks_operations")
+
 CANDIDATES = [
-    # Round 7. Kabil follows two people and one operation: Fed Chair Warsh,
-    # Treasury Secretary Bessent, and Treasury bond buybacks. Question is
-    # whether any of that is available as a feed rather than a press page.
-    ("fed/press-all", "https://www.federalreserve.gov/feeds/press_all.xml"),
+    # Round 8 closes the two gaps round 7 left.
+    #
+    # 1. The buyback dataset answered, but sorted ascending - the first rows
+    #    were from March 2000. The question that matters is whether it carries
+    #    operations that have been ANNOUNCED but not yet run, because that is
+    #    the only part Kabil can position ahead of.
+    ("buybacks/newest-first", f"{FD}?sort=-operation_date&page[size]=6"),
+    ("buybacks/future-only",
+     f"{FD}?sort=operation_date&page[size]=6"
+     "&filter=operation_date:gte:2026-09-01"),
+    # 2. Treasury has no RSS at the documented path (404). Try the shapes a
+    #    Drupal site usually exposes before giving up and saying so.
+    ("treasury/feed-1", "https://home.treasury.gov/news/press-releases/feed"),
+    ("treasury/feed-2", "https://home.treasury.gov/rss.xml"),
+    ("treasury/feed-3", "https://home.treasury.gov/news/featured-stories/feed"),
+    # Speech feed item shape, to confirm the "Speaker, Title" convention the
+    # testimony feed showed.
     ("fed/speeches", "https://www.federalreserve.gov/feeds/speeches.xml"),
-    ("fed/press-monetary",
-     "https://www.federalreserve.gov/feeds/press_monetary.xml"),
-    ("fed/testimony", "https://www.federalreserve.gov/feeds/testimony.xml"),
-    ("treasury/press-rss", "https://home.treasury.gov/rss/press.xml"),
-    ("treasury/news-index", "https://home.treasury.gov/news/press-releases"),
-    ("treasurydirect/announced",
-     "https://www.treasurydirect.gov/TA_WS/securities/announced?format=json&pagesize=5"),
-    ("treasurydirect/buyback-upcoming",
-     "https://www.treasurydirect.gov/TA_WS/buybacks/announced?format=json"),
-    ("fiscaldata/buybacks",
-     "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/buybacks_operations?page[size]=3"),
+    # Auction calendar: which fields say when the next bond auction is.
+    ("treasurydirect/upcoming-auctions",
+     "https://www.treasurydirect.gov/TA_WS/securities/upcoming?format=json"),
 ]
 
 # RSS item fields worth seeing to know whether a feed is usable.
