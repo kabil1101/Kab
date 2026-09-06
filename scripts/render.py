@@ -274,6 +274,32 @@ def build(ctx) -> tuple[str, str]:
         md.append(f"*{bad}*\n")
         html.append(f"<p class='muted'><em>{_esc(bad)}</em></p>")
 
+    # ---- POLICY DESK ---------------------------------------------------
+    # Warsh and Bessent, the two people whose decisions Kabil trades around.
+    # Warsh is tracked by name off the Fed's own feeds. Bessent has no feed at
+    # all - Treasury publishes none - so he is tracked through the operations
+    # he controls: buybacks and the coupon calendar.
+    fed_lines, ops_lines, desk_notes = _policy_desk(ctx, today)
+    md.append("## POLICY DESK\n")
+    html.append(_h_section("Policy Desk"))
+    for label, lines in (("Fed \u00b7 Warsh & FOMC", fed_lines),
+                         ("Treasury \u00b7 buybacks & supply", ops_lines)):
+        if not lines:
+            continue
+        md.append(f"**{label}**\n")
+        html.append(f"<p><strong>{_hb(label)}</strong></p>")
+        for l in lines:
+            md.append(f"- {l}")
+        html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in lines)
+                    + "</ul>")
+        md.append("")
+    note = ("Treasury publishes no press feed, so the secretary is tracked "
+            "through operations rather than remarks.")
+    if desk_notes:
+        note += " " + " ".join(desk_notes)
+    md.append(f"*{note}*\n")
+    html.append(f"<p class='muted'><em>{_esc(note)}</em></p>")
+
     # ---- CRYPTO --------------------------------------------------------
     md.append("## CRYPTO\n")
     html.append(_h_section("Crypto"))
@@ -538,6 +564,69 @@ def _setup_bullets(ctx):
 # something to prepare for, it is trivia, and a section nobody reads is worse
 # than one that does not exist.
 RADAR_HORIZON_DAYS = 130
+
+
+def _bn(v):
+    """Par amounts arrive in dollars and are always in the billions."""
+    return "\u2014" if v is None else f"${v / 1e9:,.1f}bn"
+
+
+def _policy_desk(ctx, today):
+    """The two people and one operation Kabil follows, as printable lines.
+
+    Returns (fed_lines, ops_lines, notes). Split so the renderer can tell a
+    quiet week from a broken feed: an empty list and a failed fetch must not
+    produce the same output.
+    """
+    fed_lines, ops_lines, notes = [], [], []
+
+    off = ctx.get("fed_officials")
+    if off and off["ok"]:
+        d = off["data"]
+        for i in d["items"][:5]:
+            who = i["speaker"]
+            title = i["title"]
+            if len(title) > 88:
+                title = title[:87].rstrip() + "\u2026"
+            fed_lines.append(
+                f"**{who}** {i['date']:%d %b} \u00b7 {title} \u00b7 {i['kind']}")
+        if not d["items"]:
+            fed_lines.append(
+                f"No {' / '.join(d['watching'])} remarks or FOMC releases in "
+                f"the last {d['lookback_days']} days.")
+        if d.get("partial"):
+            notes.append(f"Fed feeds partial: {d['partial']}")
+    elif off:
+        fed_lines.append(f"Fed feeds unavailable \u2014 {off['error']}")
+
+    ops = ctx.get("treasury_ops")
+    if ops and ops["ok"]:
+        d = ops["data"]
+        for b in d["buybacks"][:2]:
+            bits = [f"**Buyback {b['date']:%d %b}**",
+                    f"{_bn(b['accepted'])} accepted of {_bn(b['offered'])} offered"]
+            if b.get("bucket"):
+                bits.append(str(b["bucket"]))
+            if b.get("settles"):
+                bits.append(f"settled {b['settles']:%d %b}")
+            ops_lines.append(" \u00b7 ".join(bits))
+        if not d["buybacks"]:
+            ops_lines.append("No buyback operations returned.")
+
+        if d["auctions"]:
+            nxt = ", ".join(
+                f"{a['date']:%a %d %b} {a['term']} {a['security_type']}"
+                f"{' reopening' if a['reopening'] else ''}"
+                for a in d["auctions"])
+            ops_lines.append(f"**Next coupon auctions** \u00b7 {nxt}")
+        else:
+            ops_lines.append("No coupon auctions scheduled in the feed.")
+        if d.get("partial"):
+            notes.append(f"Treasury partial: {d['partial']}")
+    elif ops:
+        ops_lines.append(f"Treasury operations unavailable \u2014 {ops['error']}")
+
+    return fed_lines, ops_lines, notes
 
 
 def radar_events(ctx, today):

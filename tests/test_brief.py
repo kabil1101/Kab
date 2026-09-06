@@ -178,7 +178,8 @@ check_true("NYSE open converted to 14:30 LIS", "14:30" in md, md)
 print("\n-- end-to-end render: every source down --")
 dead = {"now": now}
 for k in ("calendar", "crypto", "fear_greed", "flows_btc", "flows_eth",
-          "options_btc", "cross_asset", "global_mcap"):
+          "options_btc", "cross_asset", "global_mcap", "policy_radar",
+          "fed_officials", "treasury_ops"):
     dead[k] = {"ok": False, "error": "EGRESS_BLOCKED", "data": None}
 md2, html2 = render.build(dead)
 check_true("degraded brief still renders", md2.startswith("# MARKET BRIEF"))
@@ -618,6 +619,86 @@ check_true("a date three days out reaches the subject",
 _subj_far = render.subject(_radar_ctx([_fr_evt], []))
 check_true("one 39 days out does not crowd it",
            "T-39" not in _subj_far, _subj_far)
+
+
+print("\n-- Fed feeds: CDATA values and RFC 822 dates --")
+# Verbatim shape from the live feed, BOM and all. The first probe printed
+# empty dates here because a tag-stripping regex eats <![CDATA[...]]> whole.
+_FEED = (b"\xef\xbb\xbf<?xml version='1.0' encoding='utf-8' ?>"
+         b"<rss version='2.0'><channel><title>FRB</title>"
+         b"<item><title>Warsh, In Our Time</title>"
+         b"<link><![CDATA[https://fed.test/warsh.htm]]></link>"
+         b"<pubDate><![CDATA[Tue, 25 Aug 2026 18:00:00 GMT]]></pubDate>"
+         b"</item>"
+         b"<item><title>Waller, The Economic Outlook</title>"
+         b"<link><![CDATA[https://fed.test/waller.htm]]></link>"
+         b"<pubDate><![CDATA[Wed, 02 Sep 2026 14:00:00 GMT]]></pubDate>"
+         b"</item></channel></rss>")
+_parsed = sources._rss_items(_FEED)
+check("both items parse", len(_parsed), 2)
+check("a CDATA title comes through", _parsed[0][0], "Warsh, In Our Time")
+check("a CDATA link comes through", _parsed[0][1], "https://fed.test/warsh.htm")
+check("an RFC 822 date parses to the right day",
+      _parsed[0][2].date(), date(2026, 8, 25))
+check_true("a leading BOM does not break the parse", len(_parsed) == 2)
+
+print("\n-- POLICY DESK --")
+def _desk_ctx(fed=None, ops=None):
+    c = dict(healthy)
+    c["now"] = datetime(2026, 9, 6, 9, 30, tzinfo=LISBON)
+    c["policy_radar"] = {"ok": True, "error": None,
+                         "data": {"events": [], "texts_scanned": 3,
+                                  "partial": None,
+                                  "source": "Federal Register"}}
+    c["watchlist"] = {"events": [], "problems": []}
+    c["fed_officials"] = fed
+    c["treasury_ops"] = ops
+    return c
+
+_FED_OK = {"ok": True, "error": None, "data": {
+    "items": [{"date": date(2026, 9, 4), "kind": "speech", "speaker": "Warsh",
+               "title": "In Our Time", "url": "https://fed.test/w"},
+              {"date": date(2026, 8, 29), "kind": "FOMC", "speaker": "FOMC",
+               "title": "Federal Reserve issues FOMC statement",
+               "url": "https://fed.test/f"}],
+    "watching": ["Warsh"], "lookback_days": 21, "partial": None,
+    "source": "Federal Reserve RSS"}}
+_OPS_OK = {"ok": True, "error": None, "data": {
+    "buybacks": [{"date": date(2026, 9, 3), "settles": date(2026, 9, 4),
+                  "security_type": "Nominal", "bucket": "10 to 20 years",
+                  "offered": 4.0e9, "accepted": 2.5e9}],
+    "auctions": [{"date": date(2026, 9, 9), "term": "10-Year",
+                  "security_type": "Note", "reopening": True}],
+    "partial": None, "source": "Treasury"}}
+
+_desk = render.build(_desk_ctx(_FED_OK, _OPS_OK))[0] \
+    .split("## POLICY DESK")[1].split("\n## ")[0]
+check_true("Warsh is named", "Warsh" in _desk, _desk)
+check_true("an FOMC release is carried even with no speaker",
+           "FOMC statement" in _desk, _desk)
+check_true("the buyback prints accepted against offered",
+           "$2.5bn accepted of $4.0bn offered" in _desk, _desk)
+check_true("the maturity bucket is kept", "10 to 20 years" in _desk, _desk)
+check_true("the next coupon auction is dated",
+           "Wed 09 Sep 10-Year Note reopening" in _desk, _desk)
+check_true("Treasury's missing feed is stated, not hidden",
+           "no press feed" in _desk, _desk)
+
+_quiet = dict(_FED_OK)
+_quiet["data"] = dict(_FED_OK["data"], items=[])
+_dq = render.build(_desk_ctx(_quiet, _OPS_OK))[0].split("## POLICY DESK")[1]
+check_true("a quiet fortnight says so explicitly",
+           "No Warsh remarks or FOMC releases in the last 21 days" in _dq, _dq)
+
+_dead = {"ok": False, "error": "HTTP 503", "data": None}
+_dd = render.build(_desk_ctx(_dead, _dead))[0].split("## POLICY DESK")[1]
+check_true("a broken feed is never rendered as a quiet week",
+           "unavailable" in _dd and "HTTP 503" in _dd, _dd)
+check_true("and is distinguishable from silence",
+           "No Warsh remarks" not in _dd, _dd)
+
+check("par amounts render in billions", render._bn(2.5e9), "$2.5bn")
+check("a missing amount does not become zero", render._bn(None), "\u2014")
 
 
 print()

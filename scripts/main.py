@@ -66,6 +66,8 @@ def gather(now):
     ctx["cross_asset"] = safe(sources.cross_asset)
     ctx["global_mcap"] = safe(sources.coingecko_global)
     ctx["policy_radar"] = safe(sources.policy_radar, now.date())
+    ctx["fed_officials"] = safe(sources.fed_officials, now.date())
+    ctx["treasury_ops"] = safe(sources.treasury_ops, now.date())
     # Not wrapped in safe(): the watchlist reads a local file and already
     # degrades to an empty list, so the only thing left to guard against is a
     # bug in the parser itself.

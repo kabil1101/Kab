@@ -733,3 +733,189 @@ def policy_radar(today: date, lookback_days: int = 90,
     return {"events": unique, "texts_scanned": scanned,
             "partial": "; ".join(notes) or None,
             "source": "Federal Register"}
+
+
+# ------------------------------------------------------- policy desk: people
+
+# Probed round 7-9. Three things came out of it that shaped this code:
+#   - Fed feed item titles are "Speaker, Subject" - "Warsh, In Our Time" -
+#     so filtering by person needs nothing cleverer than a split on the comma.
+#   - Every value is wrapped in CDATA, which is why the first probe printed
+#     empty dates: a naive tag-stripping regex eats <![CDATA[...]]> whole.
+#     ElementTree handles it, so this parses XML as XML.
+#   - Treasury publishes NO usable press feed. home.treasury.gov/rss.xml
+#     answers 200 but carries careers pages and SSBCI FAQs; the documented
+#     /rss/press.xml and the Drupal /feed paths all 404. So the Treasury
+#     secretary is tracked through his ACTIONS - buybacks, auctions, refunding
+#     - rather than his remarks, and the brief says so rather than scraping a
+#     minified HTML page that would break silently.
+
+FED_FEEDS = (
+    ("speech", "https://www.federalreserve.gov/feeds/speeches.xml"),
+    ("testimony", "https://www.federalreserve.gov/feeds/testimony.xml"),
+    ("FOMC", "https://www.federalreserve.gov/feeds/press_monetary.xml"),
+)
+
+# Surnames to track by name. The monetary-policy feed is included wholesale
+# regardless, because an FOMC statement has no speaker and matters anyway.
+FED_WATCH = ("Warsh",)
+
+
+def _rss_items(raw: bytes):
+    """(title, url, published) per item. Raises on a feed that is not XML."""
+    import xml.etree.ElementTree as ET
+    from email.utils import parsedate_to_datetime
+
+    # A UTF-8 BOM ahead of the declaration makes ElementTree reject the whole
+    # document. The Fed serves one.
+    root = ET.fromstring(raw.lstrip(b"\xef\xbb\xbf"))
+    out = []
+    for item in root.iter("item"):
+        title = (item.findtext("title") or "").strip()
+        if not title:
+            continue
+        when = None
+        raw_date = (item.findtext("pubDate") or "").strip()
+        if raw_date:
+            try:
+                when = parsedate_to_datetime(raw_date)
+            except (TypeError, ValueError):
+                when = None
+        out.append((" ".join(title.split()),
+                    (item.findtext("link") or "").strip() or None,
+                    when))
+    return out
+
+
+def fed_officials(today: date, lookback_days: int = 21,
+                  watch=FED_WATCH) -> dict:
+    """Recent remarks and monetary-policy releases from the Fed's own feeds."""
+    cutoff = today - timedelta(days=lookback_days)
+    items, notes = [], []
+    for kind, url in FED_FEEDS:
+        try:
+            raw = _get(url).content
+            parsed = _rss_items(raw)
+        except Exception as exc:  # noqa: BLE001 - one feed, not the section
+            notes.append(f"{kind}: {_reason(exc)}")
+            continue
+        for title, link, when in parsed:
+            if when is None or when.date() < cutoff:
+                continue
+            speaker, _, subject = title.partition(", ")
+            if kind == "FOMC":
+                # No speaker on a committee release, and all of them count.
+                speaker, subject = "FOMC", title
+            elif not any(w.lower() == speaker.lower() for w in watch):
+                continue
+            items.append({
+                "date": when.date(),
+                "kind": kind,
+                "speaker": speaker,
+                "title": subject or title,
+                "url": link,
+            })
+
+    if notes and not items:
+        raise RuntimeError("; ".join(notes))
+
+    items.sort(key=lambda i: i["date"], reverse=True)
+    return {"items": items, "watching": list(watch),
+            "lookback_days": lookback_days,
+            "partial": "; ".join(notes) or None,
+            "source": "Federal Reserve RSS"}
+
+
+# --------------------------------------------------- policy desk: operations
+
+FISCAL_BUYBACKS = ("https://api.fiscaldata.treasury.gov/services/api"
+                   "/fiscal_service/v1/accounting/od/buybacks_operations")
+TD_UPCOMING = "https://www.treasurydirect.gov/TA_WS/securities/upcoming"
+
+# Bills are rolled weekly and tell a macro reader nothing. Coupons are where
+# duration supply actually lands.
+COUPON_TYPES = ("Note", "Bond", "TIPS", "FRN")
+
+
+def _td_date(raw):
+    """TreasuryDirect stamps '2026-09-10T00:00:00'. Date part only."""
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(str(raw)[:10])
+    except ValueError:
+        return None
+
+
+def treasury_ops(today: date, buyback_limit: int = 4,
+                 auction_limit: int = 4) -> dict:
+    """Bond buyback operations and the upcoming coupon auction calendar.
+
+    Note what is NOT here: a forward buyback schedule. The Fiscal Data set was
+    queried for operations dated on or after today and returned only the one
+    that had already run, so it carries results and not announcements. The
+    brief therefore reports the last operation and its size, and does not
+    pretend to know the next one.
+    """
+    buybacks, auctions, notes = [], [], []
+
+    try:
+        data = _json(FISCAL_BUYBACKS, params={
+            "sort": "-operation_date",
+            "page[size]": buyback_limit,
+            "fields": ("operation_date,settlement_date,security_type,"
+                       "maturity_bucket,total_par_amt_offered,"
+                       "total_par_amt_accepted,nbr_issues_accepted"),
+        })
+        for row in (data.get("data") or []):
+            when = _td_date(row.get("operation_date"))
+            if when is None:
+                continue
+
+            def _amt(key):
+                try:
+                    return float(row.get(key))
+                except (TypeError, ValueError):
+                    return None
+
+            buybacks.append({
+                "date": when,
+                "settles": _td_date(row.get("settlement_date")),
+                "security_type": row.get("security_type") or None,
+                "bucket": row.get("maturity_bucket") or None,
+                "offered": _amt("total_par_amt_offered"),
+                "accepted": _amt("total_par_amt_accepted"),
+            })
+    except Exception as exc:  # noqa: BLE001
+        notes.append(f"buybacks: {_reason(exc)}")
+
+    try:
+        rows = _json(TD_UPCOMING, params={"format": "json"})
+        seen = set()
+        for row in rows if isinstance(rows, list) else []:
+            if (row.get("securityType") or "") not in COUPON_TYPES:
+                continue
+            when = _td_date(row.get("auctionDate"))
+            if when is None or when < today:
+                continue
+            key = (when, row.get("securityTerm"), row.get("securityType"))
+            if key in seen:
+                continue
+            seen.add(key)
+            auctions.append({
+                "date": when,
+                "term": row.get("securityTerm") or "?",
+                "security_type": row.get("securityType"),
+                "reopening": str(row.get("reopening") or "").lower() == "yes",
+            })
+        auctions.sort(key=lambda a: (a["date"], a["term"]))
+        auctions = auctions[:auction_limit]
+    except Exception as exc:  # noqa: BLE001
+        notes.append(f"auctions: {_reason(exc)}")
+
+    if notes and not buybacks and not auctions:
+        raise RuntimeError("; ".join(notes))
+
+    return {"buybacks": buybacks, "auctions": auctions,
+            "partial": "; ".join(notes) or None,
+            "source": "Treasury Fiscal Data + TreasuryDirect"}

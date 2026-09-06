@@ -37,3 +37,11 @@
 # 31 Jul 2026 for the 17 companies in Annex III, 29 Sep 2026 for everyone
 # else. Second leg is the one still ahead.
 2026-09-29 | tariff | Section 232 pharmaceutical tariff (100%) takes effect for importers NOT named in Annex III | https://www.federalregister.gov/documents/search?conditions%5Bterm%5D=pharmaceutical+section+232 | 2026-09-05
+
+# ---- Treasury / Bessent ---------------------------------------------------
+# Treasury publishes no press feed, so the quarterly refunding is the one
+# Bessent event that has to be carried by hand. The date below is the
+# conventional first-Wednesday-of-the-quarter-month slot, NOT a published
+# announcement - the event text says so, and it should be confirmed against
+# treasury.gov before anyone leans on it.
+2026-11-04 | refunding | Treasury quarterly refunding statement — issuance sizes and any buyback changes (conventional schedule, CONFIRM on treasury.gov) | https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding | 2026-09-06

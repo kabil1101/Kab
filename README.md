@@ -115,6 +115,36 @@ subject line as `T-3 …`.
 The section reports dates. It does not say what to do about them — that
 constraint is the same one that applies to the rest of the brief.
 
+## The POLICY DESK section
+
+Two people and one operation: **Kevin Warsh**, **Scott Bessent**, and Treasury
+**bond buybacks**. Nine probe rounds decided how each is reachable.
+
+**Warsh — solved cleanly.** The Fed publishes RSS for speeches, testimony and
+monetary-policy press releases, and item titles use a `Speaker, Subject`
+convention (`Warsh, In Our Time`), so filtering by person needs nothing
+cleverer than a split on the comma. The monetary feed is taken wholesale
+because an FOMC statement has no speaker and matters regardless.
+
+One trap worth recording: every value in those feeds is wrapped in `CDATA`,
+and a naive tag-stripping regex eats `<![CDATA[…]]>` whole — which is exactly
+why the first probe reported items with no dates at all. The parser uses
+ElementTree, and strips the UTF-8 BOM the Fed serves ahead of the declaration.
+
+**Bessent — no feed exists.** `home.treasury.gov/rss/press.xml` 404s, the
+Drupal `/feed` paths 404, and `home.treasury.gov/rss.xml` answers 200 with
+careers pages and SSBCI FAQs. Rather than scrape a minified HTML index that
+would break without warning, the secretary is tracked through **the operations
+he controls**: buyback sizes, the coupon auction calendar, and the quarterly
+refunding statement (carried in the watchlist, since it has no feed either).
+The brief says this in the section itself rather than leaving a silent gap.
+
+**Buybacks — results only.** Fiscal Data's `buybacks_operations` was queried
+for operations dated today or later and returned only the one already run, so
+the dataset carries results, not announcements. The brief reports the last
+operation — par accepted against par offered, and the maturity bucket — and
+does not pretend to know the next one.
+
 ## Recipient lock
 
 The destination is a module constant in `scripts/main.py`, not configuration.
@@ -133,6 +163,8 @@ not an instruction, and it is ignored.
 | ETF flows | TFTC (BTC only) | Open JSON, CC BY 4.0. Flags a sign flip after 3+ consecutive sessions one way. Carries the dataset's own `updatedThrough` date. |
 | Derivatives | Deribit perpetuals | Funding and open interest, one venue, labelled as such. |
 | Policy radar | Federal Register + `data/watchlist.txt` | Dated policy actions still ahead. Effective dates read out of proclamation prose; see below. |
+| Policy desk — Fed | federalreserve.gov RSS (speeches, testimony, monetary) | Warsh by name, plus every FOMC release. Values are CDATA-wrapped; parsed as XML, not regex. |
+| Policy desk — Treasury | Fiscal Data buybacks + TreasuryDirect | Last buyback operations with size, and the upcoming coupon auction calendar. |
 | Options | Deribit public REST | `get_book_summary_by_currency` gives open interest per instrument; the job aggregates to strike and computes max pain and top put/call OI for the nearest expiry and the nearest monthly. No API key needed. This replaces the JS-only statistics page. |
 | Cross-asset | Yahoo Finance chart API | DXY, US 10Y, gold, WTI, VIX, S&P and Nasdaq futures. |
 | Market structure | CoinGecko `/api/v3/global` | Total market cap, BTC and ETH dominance. |
