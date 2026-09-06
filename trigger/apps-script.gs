@@ -45,7 +45,27 @@ function sendBrief() {
     console.log('Weekend in Lisbon — no brief. The workflow is weekdays-only.');
     return;
   }
+  dispatch();
+}
 
+/**
+ * Same thing, minus the weekend check. This exists so the setup can be proved
+ * on the day it is done rather than on the next working day: someone who
+ * installs this on a Sunday would otherwise see "Weekend in Lisbon" and have
+ * no way to tell a correct install from a broken token.
+ *
+ * Run it by hand whenever you want a brief now. The daily trigger never calls
+ * it, so it cannot cause a weekend delivery on its own.
+ */
+function testNow() {
+  dispatch();
+  console.log('If a brief lands in the next few minutes, the setup is done.');
+}
+
+/**
+ * The actual call. Throws with GitHub's own words on anything but success.
+ */
+function dispatch() {
   const token = PropertiesService.getScriptProperties()
       .getProperty('GITHUB_TOKEN');
   if (!token) {
@@ -80,9 +100,10 @@ function sendBrief() {
         res.getContentText().slice(0, 300) +
         ' (wanted: ' + res.getHeaders()['x-accepted-github-permissions'] + ')');
   }
-  console.log('Brief dispatched ' + Utilities.formatDate(now, TZ, 'HH:mm') +
-              ' LIS.');
+  console.log('Brief dispatched ' +
+              Utilities.formatDate(new Date(), TZ, 'HH:mm') + ' LIS.');
 }
+
 
 /**
  * Run this once, by hand, to install the daily trigger. Safe to re-run: it

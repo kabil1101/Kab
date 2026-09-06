@@ -109,7 +109,10 @@ your Google account and nowhere else — it is never written into the code.
 
 ## Part 5 — Prove it works (about 3 minutes)
 
-1. In the toolbar there is a function dropdown. Choose **`sendBrief`**.
+1. In the toolbar there is a function dropdown. Choose **`testNow`**.
+   Not `sendBrief` — that one refuses to run at weekends, so on a Saturday or
+   Sunday it would log "Weekend in Lisbon" and you would have no way to tell a
+   correct setup from a broken token. `testNow` skips only that check.
 2. Click **Run**.
 3. Google asks for authorisation the first time:
    **Review permissions** → choose `kabil.dh@gmail.com` → the screen says
@@ -126,9 +129,8 @@ your Google account and nowhere else — it is never written into the code.
 **Checkpoint.** The email arrives. Note that this is a real brief, so if
 today's already came, you now have two — that is only true for this one test.
 
-*If you run this on a Saturday or Sunday the log says "Weekend in Lisbon — no
-brief" and dispatches nothing. That is correct: the brief is weekdays-only.
-Test on a weekday.*
+`testNow` is yours to run by hand any time you want a brief immediately. The
+daily trigger never calls it, so it cannot cause a weekend delivery on its own.
 
 ## Part 6 — Install the daily trigger (1 minute)
 
