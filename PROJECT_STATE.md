@@ -7,8 +7,8 @@
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete and live-verified · 🔴 Delivery timing unsolved |
-| **Last updated** | 2026-09-06 |
-| **Revision** | 1 |
+| **Last updated** | 2026-09-07 |
+| **Revision** | 2 |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -64,16 +64,42 @@ person for one quarter of an hour.**
 
 | Metric | Value | Confidence |
 |---|---|---|
-| Consecutive scheduled briefs that arrived late | 12 of 12 | 📄 REPORTED (Actions run history, sessions 1–4) |
+| Consecutive scheduled briefs that arrived late | **13 of 13** (was: 12 of 12) | ✅ CONFIRMED for the 13th (2026-09-07, §2.1a) |
 | Best | 39 min late | 📄 REPORTED |
 | Median | ~4.5 h late | 📄 REPORTED |
 | Worst | 11 h 49 m late | 📄 REPORTED |
-| Manual dispatch latency | seconds | ✅ CONFIRMED (every dispatch this session) |
+| Manual dispatch latency | seconds | ✅ CONFIRMED (every dispatch, sessions 6–8, incl. 2026-09-07) |
 | Target | 09:25 Europe/Lisbon | — |
 | **Delivered-vs-target over a full week with the fix installed** | ❓ UNKNOWN | **the measurement that decides whether this is solved** |
 
 The 39-minute figure is the trap: the schedule was near-punctual on its first
 two days and then degraded. **One good morning proves nothing.**
+
+### §2.1a Monday 2026-09-07 — the failure observed directly
+
+Kabil reported no brief. Checked rather than assumed:
+
+| Fact | Value |
+|---|---|
+| Target | 08:25 UTC (09:25 Lisbon) |
+| Checked at | 10:22 UTC (11:22 Lisbon) — **1h57m past target** |
+| Scheduled runs started today | **none** |
+| Workflow state | `active` — not disabled |
+| Last run of any kind | 2026-09-06 16:46 UTC (a push-triggered test) |
+| Last scheduled run ever | 2026-09-04 13:36 UTC — **4h11m late** |
+| Prior three weekdays' scheduled starts | 12:47, 13:36 (4 Sep) · 12:53, 13:39 (3 Sep) · 13:44 (2 Sep) UTC — both cron slots firing, one exiting via the slot guard as designed |
+| Resolution | dispatched manually at 10:22 UTC; delivered in ~2 min |
+
+✅ CONFIRMED: nothing in this repository failed. The workflow is enabled, the
+code is unchanged since a successful run, and the cron entry is correct. GitHub
+simply had not started the job two hours after its scheduled time — the same
+behaviour measured across the previous twelve briefs, on a day when it happened
+to be visible because someone was waiting for it.
+
+**This is the first time the failure was observed live rather than
+reconstructed from timestamps afterwards.** It is also the clearest possible
+statement of §1: the content was correct and ready at 09:25; nobody had asked
+GitHub to run it.
 
 ### §2.2 Token permission for the external trigger — measured, not assumed
 
@@ -328,6 +354,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 5 | 2026-09-05 | Gap analysis, then Phases 1, 3, 4: stale-quote stamps, risk-window filtering, day-over-day state, ETF flows via TFTC after Farside 403s, derivatives via Deribit after Binance 451s |
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
+| 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
 
 ---
 
@@ -350,6 +377,30 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 2 · 2026-09-07 · The scheduler failure, observed live
+**Sections touched:** §2.1, §2.1a (new), §10
+**Type:** DATA
+**Evidence:** GitHub Actions API, 2026-09-07 10:22 UTC — zero scheduled runs
+for `market-brief.yml` today; workflow `state: active`; last scheduled run
+33878985519 at 2026-09-04 13:36 UTC. Kabil, this session.
+
+| Field | Was | Now |
+|---|---|---|
+| Consecutive scheduled briefs late | 12 of 12 (📄 REPORTED) | 13 of 13, the 13th ✅ CONFIRMED |
+| Direct observation of the failure | none — all latency reconstructed from timestamps after the fact | §2.1a, checked while it was happening |
+| Manual dispatch latency | ✅ CONFIRMED sessions 6–7 | ✅ CONFIRMED again 2026-09-07, ~2 min to inbox |
+
+**Why:** The first time the delay was caught in the act rather than measured
+afterwards, and the first time it cost Kabil an actual morning. That deserves
+a dated row rather than being folded into a median.
+**Impact on prior conclusions:** None are invalidated — this is the predicted
+behaviour, not a surprise. It strengthens §1 and §5: the diagnosis was right,
+and the fix has been sitting uninstalled for two days.
+**Not changed, deliberately:** the crons stay registered and §4 D5 stands. A
+scheduler that is four hours late still beats no fallback at all, and once the
+trigger is installed `last_sent_date` makes the late run exit silently — which
+is exactly what will happen with today's run when it eventually starts.
 
 ## rev 1 · 2026-09-06 · Origin
 **Sections touched:** all
