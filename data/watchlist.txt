@@ -45,3 +45,12 @@
 # announcement - the event text says so, and it should be confirmed against
 # treasury.gov before anyone leans on it.
 2026-11-04 | refunding | Treasury quarterly refunding statement — issuance sizes and any buyback changes (conventional schedule, CONFIRM on treasury.gov) | https://home.treasury.gov/policy-issues/financing-the-government/quarterly-refunding | 2026-09-06
+
+# ---- Housekeeping ---------------------------------------------------------
+# The brief counts down to its own maintenance. When this lands, the Apps
+# Script trigger stops working and the brief silently reverts to arriving
+# hours late. Renewal: GitHub → Settings → Developer settings → fine-grained
+# tokens → regenerate (Expiration must be a PRESET, never Custom; Actions must
+# be Read and write) → paste into Apps Script → Project Settings → Script
+# Properties → GITHUB_TOKEN.
+2026-11-07 | admin | GitHub trigger token expires — renew it or the brief stops arriving on time (see docs/trigger-setup.md) | https://github.com/settings/personal-access-tokens | 2026-09-08

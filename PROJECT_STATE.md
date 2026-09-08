@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete and live-verified · 🔴 Delivery timing unsolved |
-| **Last updated** | 2026-09-07 |
-| **Revision** | 2 |
+| **Status** | 🟢 Content complete · 🟢 **On-time trigger installed 2026-09-08** · 🟡 Awaiting one week of delivered-vs-target |
+| **Last updated** | 2026-09-08 |
+| **Revision** | 3 |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -36,17 +36,20 @@ operations, crypto, ETF flows, derivatives, sentiment, macro and risk windows.
 Nine sections, all live-verified in a real run, all degrading to a named
 `unavailable` rather than a fabricated number.
 
-**The diagnosis.** Everything that was ever wrong with the *content* has been
-fixed and tested. What has never been fixed is *when it arrives*: across twelve
-consecutive briefs the scheduled run started between 39 minutes and 11h49m
-late, median about 4.5 hours. That delay is GitHub's scheduler queueing the job
-before any of this code executes, so no amount of work inside the repository
-can shorten it. The fix — an external timer that calls the dispatch API, which
-starts within seconds — has been written, documented and committed since
-2026-09-05 and is **not installed**, because installing it requires fifteen
-minutes of Kabil's clicking that has not happened yet.
-**This is a delivery problem, not a content problem, and it is blocked on one
-person for one quarter of an hour.**
+**The diagnosis.** *(was, rev 1–2: "a delivery problem, not a content problem,
+blocked on one person for one quarter of an hour" — that block cleared on
+2026-09-08.)* Everything that was ever wrong with the content was fixed and
+tested; what had never been fixed was when it arrived, because GitHub's
+scheduler queued the job for a median of 4.5 hours before any of this code ran.
+The external trigger that bypasses that is now **installed and proven end to
+end**: Google Apps Script dispatched at 13:27 Lisbon, GitHub accepted it, and
+run #44 completed 15 seconds later (§2.1b).
+
+The project therefore moves from building to **measuring**. Fourteen briefs of
+history say a scheduler can look fine for two days and then degrade, so a
+single punctual morning proves nothing. **This is now a measurement problem,
+not a delivery problem, and it is blocked on nothing but the passage of five
+weekday mornings.**
 
 ---
 
@@ -70,7 +73,7 @@ person for one quarter of an hour.**
 | Worst | 11 h 49 m late | 📄 REPORTED |
 | Manual dispatch latency | seconds | ✅ CONFIRMED (every dispatch, sessions 6–8, incl. 2026-09-07) |
 | Target | 09:25 Europe/Lisbon | — |
-| **Delivered-vs-target over a full week with the fix installed** | ❓ UNKNOWN | **the measurement that decides whether this is solved** |
+| **Delivered-vs-target over a full week with the fix installed** | ❓ UNKNOWN — **measurable from 2026-09-09** (was: not measurable, no trigger) | **the measurement that decides whether this is solved** |
 
 The 39-minute figure is the trap: the schedule was near-punctual on its first
 two days and then degraded. **One good morning proves nothing.**
@@ -100,6 +103,33 @@ to be visible because someone was waiting for it.
 reconstructed from timestamps afterwards.** It is also the clearest possible
 statement of §1: the content was correct and ready at 09:25; nobody had asked
 GitHub to run it.
+
+### §2.1b Trigger installed — 2026-09-08
+
+| Fact | Evidence |
+|---|---|
+| Apps Script `testNow` log | `Brief dispatched 13:27 LIS.` |
+| GitHub side | run #44, `2026-09-08T12:27:42Z`, `workflow_dispatch`, success |
+| Latency, Google click → run complete | **~15 seconds** (vs. a 4.5h median for the schedule) |
+| Daily trigger | one time-based trigger, `sendBrief`, day timer 9–10am, project timezone Europe/Lisbon |
+| Token | fine-grained, `Actions: write` + `Metadata: read`, repo `kabil1101/Kab` only, expires **2026-11-07** |
+
+✅ CONFIRMED end to end. Every link in the chain — Google's timer, the token,
+the dispatch endpoint, the workflow, the email — has now run in production.
+
+### §2.1c The duplicate guard, proven in production — 2026-09-07
+
+The brief was sent manually at 10:22 UTC. GitHub's scheduled run finally
+started at 15:07 UTC, 6h42m late, and printed:
+
+```
+A brief for 2026-09-07 was already sent; this scheduled run is a duplicate. Exiting.
+```
+
+✅ CONFIRMED: `state.already_sent_today` works against a real late run. This is
+the mechanism that stops the crons delivering a second, staler copy every
+afternoon now that the trigger sends first. It was written on 2026-09-05 on the
+theory that it would be needed; two days later it was.
 
 ### §2.2 Token permission for the external trigger — measured, not assumed
 
@@ -178,13 +208,23 @@ rounds, and every single one changed a design decision rather than confirming
 one. Sources wired without a probe (Farside, Binance, the next-week calendar)
 are exactly the ones that failed in production. *Evidence: §12.2.*
 
-**§3.9 — Positive: degradation is honest throughout.** Every fetcher raises
+**§3.9 — GitHub's own token UI has two silent traps.** Both cost hours.
+(a) Setting **Expiration to "Custom"** with a typed date makes *Generate token*
+do nothing at all — the rejection renders at the top of the form, off-screen for
+anyone scrolled to the button. Switching to a preset (60/90 days) generates
+immediately. (b) When the form rebuilds after that change, the **Actions
+permission is silently dropped**, producing a token that reads fine and cannot
+dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
+caught only because the token was tested with a real dispatch call before the
+Google setup began.* **Test a credential before building on it.**
+
+**§3.10 — Positive: degradation is honest throughout.** Every fetcher raises
 rather than returning a placeholder, every section prints `unavailable —
 <reason>`, and an empty result is rendered differently from a failed fetch.
 The brief has never printed a fabricated number. *Evidence: the "every source
 down" test; the CoinGlass `0%` placeholder trap, avoided by quarantine.*
 
-**§3.10 — Positive: Kabil rejects paid options consistently.** Zero-cost was
+**§3.11 — Positive: Kabil rejects paid options consistently.** Zero-cost was
 stated once and has held through every subsequent decision, including reverting
 a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 
@@ -200,7 +240,7 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 | D4 | Every number comes from something fetched this run; unavailable is a correct outcome | ✅ Locked |
 | D5 | Two cron slots (`25 8` / `25 9` UTC), job decides which owns today from the cron expression, not the wall clock | ✅ Locked |
 | D6 | Quarantine list — never fetch or cite: `deribit.com/statistics/*`, `optioncharts.io`, CME FedWatch, `coinglass.com`, `theblock.co/data`, `coinalyze.net` | ✅ Locked |
-| D7 | Google Apps Script as the external trigger, not cron-job.org | ✅ Accepted — **not installed** |
+| D7 | Google Apps Script as the external trigger, not cron-job.org | ✅ **Locked — installed and proven 2026-09-08** (was: Accepted, not installed) |
 | D8 | ~~The trigger token needs `Contents: write` and is therefore equivalent to the Gmail app password, so a third-party scheduler is unsafe~~ | ❌ **RETRACTED 2026-09-05.** Measured: the endpoint wants `Actions: write` and *refuses* `Contents: write` (§2.2). The claim came from community reports, not evidence. D7 still stands, but on convenience grounds — no new account — not security ones. cron-job.org was excluded on a false premise |
 | D9 | No LLM analysis layer. Built, then reverted, to hold D2 | ✅ Accepted — consequence: the brief reports data, it does not interpret it |
 | D10 | Curated watchlist is pipe-delimited plain text, not YAML — indentation must not be able to break it | ✅ Locked |
@@ -213,11 +253,16 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 ## §5 · OPEN QUESTIONS
 
 ### Blocking / high value
-- ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: install the Apps Script trigger.**
-  ~15 minutes, walkthrough written at `docs/trigger-setup.md`. Until this is
-  done the brief is a lunchtime brief. Everything else in this file is
-  secondary to it.
-- ⏳ Measure delivered-vs-target across a full week afterwards (§2.1).
+- ✅ **CLOSED 2026-09-08: install the Apps Script trigger.** Open since
+  2026-09-05, the highest-value item for four days. Done, proven (§2.1b).
+- ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean weekday mornings.**
+  Read the `built HH:MM LIS` line each day and compare against 09:25. Nothing
+  else in this file matters until that number exists. The old schedule was ~40
+  minutes late on its first two days before degrading to eleven hours, so one
+  good morning is not evidence.
+- ⏳ **2026-11-07 — the trigger token expires.** The brief silently stops
+  arriving on time when it does. Added to `data/watchlist.txt` so the brief
+  counts down to it; Apps Script also emails Kabil when a trigger throws.
 
 ### Mechanics
 - ⏳ FOMC dates in the watchlist (16 Sep, 28 Oct, 9 Dec) came from secondary
@@ -355,6 +400,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 9 | 2026-09-08 | **Trigger installed and proven (§2.1b).** Four failed token attempts first, from two silent GitHub UI traps (§3.9) — the second caught only because the token was dispatch-tested before the Google setup. Duplicate guard confirmed working in production against yesterday's 6h42m-late run (§2.1c). The project's blocking item since 2026-09-05 is closed |
 
 ---
 
@@ -377,6 +423,35 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 3 · 2026-09-08 · The trigger is installed. Phase changes.
+**Sections touched:** header, §1, §2.1, §2.1b (new), §2.1c (new), §3.9 (new),
+§4 D7, §5, §10
+**Type:** DATA + DECISION
+**Evidence:** Apps Script execution log `Brief dispatched 13:27 LIS.`; GitHub
+run #44 `2026-09-08T12:27:42Z` workflow_dispatch success; Apps Script Triggers
+page showing one time-based `sendBrief` trigger; scheduled run #42 job log
+`A brief for 2026-09-07 was already sent; this scheduled run is a duplicate.`
+
+| Field | Was | Now |
+|---|---|---|
+| Status | 🔴 Delivery timing unsolved | 🟢 Trigger installed · 🟡 awaiting measurement |
+| §1 problem class | "a delivery problem… blocked on one person for one quarter of an hour" | "a measurement problem… blocked on nothing but five weekday mornings" |
+| D7 | ✅ Accepted — not installed | ✅ Locked — installed and proven |
+| Highest-value open item | install the trigger | five clean weekday mornings |
+| Duplicate guard | written on theory (2026-09-05) | ✅ CONFIRMED in production (2026-09-07) |
+
+**Why:** The item that had headed §5 since this file existed is done, and
+leaving it there would misdirect the next session to work that no longer needs
+doing.
+**Impact on prior conclusions:** None invalidated. §1's diagnosis is vindicated
+rather than overturned — the delay was GitHub's scheduler, and bypassing it
+took the brief from 4.5 hours late to 15 seconds.
+**Not changed, deliberately:** §2.1 still reads ❓ UNKNOWN for delivered-vs-
+target. One dispatch at 13:27 on a Tuesday is not a week of 09:25 mornings, and
+writing "solved" now would be exactly the error §9 warns about. The crons also
+stay registered (D5 stands) — §2.1c just proved they cost nothing when the
+trigger wins the race.
 
 ## rev 2 · 2026-09-07 · The scheduler failure, observed live
 **Sections touched:** §2.1, §2.1a (new), §10
