@@ -831,33 +831,107 @@ def fed_officials(today: date, lookback_days: int = 21,
 FISCAL_BUYBACKS = ("https://api.fiscaldata.treasury.gov/services/api"
                    "/fiscal_service/v1/accounting/od/buybacks_operations")
 TD_UPCOMING = "https://www.treasurydirect.gov/TA_WS/securities/upcoming"
+# The preliminary announcement, by year and filename. Only needed when the
+# operations table has not yet filled in the cap - the table is the primary
+# source and this is the belt-and-braces path.
+TD_PREANRE = ("https://www.treasurydirect.gov/instit/annceresult/press"
+              "/preanre/{year}/{name}")
 
 # Bills are rolled weekly and tell a macro reader nothing. Coupons are where
 # duration supply actually lands.
 COUPON_TYPES = ("Note", "Bond", "TIPS", "FRN")
 
+# An announced operation this many times the recent norm is a policy signal,
+# not a routine roll. Treasury tripling the long-end cap on 9 Sep 2026 is the
+# case this exists for.
+STEP_UP_MULTIPLE = 1.5
 
-def _td_date(raw):
-    """TreasuryDirect stamps '2026-09-10T00:00:00'. Date part only."""
-    if not raw:
+
+def _fd_val(v):
+    """Fiscal Data returns the STRING "null" for a missing value, not JSON null.
+
+    Anything comparing that to None sees a truthy string and carries on, which
+    is how an announced operation reached a brief as "— accepted of — offered".
+    """
+    if v is None:
+        return None
+    t = str(v).strip()
+    return None if t in ("", "null", "None") else t
+
+
+def _fd_amt(v):
+    t = _fd_val(v)
+    if t is None:
         return None
     try:
-        return date.fromisoformat(str(raw)[:10])
+        return float(t)
     except ValueError:
         return None
 
 
-def treasury_ops(today: date, buyback_limit: int = 4,
+def _et_to_lisbon(day: date, clock: str):
+    """'01:40 PM' on an operation date -> an aware Lisbon datetime.
+
+    The field is labelled EST year-round but carries local Eastern time, so the
+    zone does the DST work rather than a fixed offset.
+    """
+    t = _fd_val(clock)
+    if t is None:
+        return None
+    for fmt in ("%I:%M %p", "%H:%M"):
+        try:
+            parsed = datetime.strptime(t, fmt).time()
+        except ValueError:
+            continue
+        et = datetime.combine(day, parsed,
+                              tzinfo=ZoneInfo("America/New_York"))
+        return et.astimezone(LISBON)
+    return None
+
+
+def _buyback_cap_from_xml(row) -> float | None:
+    """Announced cap out of the preliminary announcement XML.
+
+    Fallback only. `max_par_amt_redeemed` in the operations table normally
+    carries it; this exists because the cap is the whole point of the line and
+    losing it to one null field would repeat the 10 Sep miss.
+    """
+    import xml.etree.ElementTree as ET
+
+    name = _fd_val(row.get("preliminary_ann_xml"))
+    day = _td_date(row.get("operation_date"))
+    if not name or day is None:
+        return None
+    try:
+        raw = _get(TD_PREANRE.format(year=day.year, name=name), tries=2).content
+        root = ET.fromstring(raw.lstrip(b"\xef\xbb\xbf"))
+    except Exception:  # noqa: BLE001 - one document, not the section
+        return None
+    txt = (root.findtext("maxParAmountRedeemed") or "").strip()
+    try:
+        return float(txt)
+    except ValueError:
+        return None
+
+
+def treasury_ops(today: date, buyback_limit: int = 6,
                  auction_limit: int = 4) -> dict:
     """Bond buyback operations and the upcoming coupon auction calendar.
 
-    Note what is NOT here: a forward buyback schedule. The Fiscal Data set was
-    queried for operations dated on or after today and returned only the one
-    that had already run, so it carries results and not announcements. The
-    brief therefore reports the last operation and its size, and does not
-    pretend to know the next one.
+    Operations are split into ANNOUNCED (published, not yet executed) and
+    COMPLETED, because they are different news. An announced one carries a cap
+    and a time and is the thing to position around; a completed one carries a
+    result.
+
+    Correcting an earlier claim in this module's history: the dataset DOES
+    carry announced operations. A probe on 6 Sep filtered for operations dated
+    today-or-later, got a single row, and concluded the set holds results only.
+    It got one row because nothing further had been announced yet. On 10 Sep
+    Treasury's $6bn long-end operation was sitting in the table, and the brief
+    printed it as "— accepted of — offered" because the cap was never
+    requested and "null" arrives as a string.
     """
-    buybacks, auctions, notes = [], [], []
+    announced, completed, auctions, notes = [], [], [], []
 
     try:
         data = _json(FISCAL_BUYBACKS, params={
@@ -865,29 +939,48 @@ def treasury_ops(today: date, buyback_limit: int = 4,
             "page[size]": buyback_limit,
             "fields": ("operation_date,settlement_date,security_type,"
                        "maturity_bucket,total_par_amt_offered,"
-                       "total_par_amt_accepted,nbr_issues_accepted"),
+                       "total_par_amt_accepted,nbr_issues_accepted,"
+                       "max_par_amt_redeemed,nbr_issues_eligible,"
+                       "operation_start_time_est,operation_close_time_est,"
+                       "preliminary_ann_xml,final_ann_xml"),
         })
         for row in (data.get("data") or []):
             when = _td_date(row.get("operation_date"))
             if when is None:
                 continue
-
-            def _amt(key):
-                try:
-                    return float(row.get(key))
-                except (TypeError, ValueError):
-                    return None
-
-            buybacks.append({
+            entry = {
                 "date": when,
                 "settles": _td_date(row.get("settlement_date")),
-                "security_type": row.get("security_type") or None,
-                "bucket": row.get("maturity_bucket") or None,
-                "offered": _amt("total_par_amt_offered"),
-                "accepted": _amt("total_par_amt_accepted"),
-            })
+                "security_type": _fd_val(row.get("security_type")),
+                "bucket": _fd_val(row.get("maturity_bucket")),
+                "offered": _fd_amt(row.get("total_par_amt_offered")),
+                "accepted": _fd_amt(row.get("total_par_amt_accepted")),
+                "cap": _fd_amt(row.get("max_par_amt_redeemed")),
+                "eligible": _fd_val(row.get("nbr_issues_eligible")),
+                "opens": _et_to_lisbon(when,
+                                       row.get("operation_start_time_est")),
+                "closes": _et_to_lisbon(when,
+                                        row.get("operation_close_time_est")),
+            }
+            # A final announcement is what makes an operation history. Absent
+            # it, the operation is still ahead however its date reads.
+            if _fd_val(row.get("final_ann_xml")) is None:
+                if entry["cap"] is None:
+                    entry["cap"] = _buyback_cap_from_xml(row)
+                announced.append(entry)
+            else:
+                completed.append(entry)
     except Exception as exc:  # noqa: BLE001
         notes.append(f"buybacks: {_reason(exc)}")
+
+    # Is an announced cap a step up on the recent norm? Median rather than
+    # mean, so one earlier outlier cannot hide the next one.
+    caps = sorted(c["cap"] for c in completed if c.get("cap"))
+    norm = caps[len(caps) // 2] if caps else None
+    for a in announced:
+        a["norm"] = norm
+        a["step_up"] = bool(
+            norm and a.get("cap") and a["cap"] >= norm * STEP_UP_MULTIPLE)
 
     try:
         rows = _json(TD_UPCOMING, params={"format": "json"})
@@ -913,9 +1006,10 @@ def treasury_ops(today: date, buyback_limit: int = 4,
     except Exception as exc:  # noqa: BLE001
         notes.append(f"auctions: {_reason(exc)}")
 
-    if notes and not buybacks and not auctions:
+    if notes and not announced and not completed and not auctions:
         raise RuntimeError("; ".join(notes))
 
-    return {"buybacks": buybacks, "auctions": auctions,
+    return {"announced": announced, "completed": completed,
+            "auctions": auctions,
             "partial": "; ".join(notes) or None,
             "source": "Treasury Fiscal Data + TreasuryDirect"}

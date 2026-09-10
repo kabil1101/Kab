@@ -602,16 +602,44 @@ def _policy_desk(ctx, today):
     ops = ctx.get("treasury_ops")
     if ops and ops["ok"]:
         d = ops["data"]
-        for b in d["buybacks"][:2]:
+
+        # Announced operations lead, and are worded as forthcoming. The 10 Sep
+        # miss was not a missing number - it was a $6bn operation typeset
+        # exactly like a finished one, under blank amounts it had not yet
+        # earned. Anything still ahead now says so in its first two words.
+        for a in d.get("announced", []):
+            days = (a["date"] - today).days
+            when = ("TODAY" if days == 0 else
+                    "TOMORROW" if days == 1 else
+                    f"{a['date']:%a %d %b}")
+            bits = [f"**\u26a0 ANNOUNCED \u2014 buyback {when}**"]
+            if a.get("opens") and a.get("closes"):
+                bits.append(f"{_hhmm(a['opens'])}\u2013{_hhmm(a['closes'])} LIS")
+            bits.append(f"up to {_bn(a.get('cap'))}"
+                        if a.get("cap") else "size not yet published")
+            if a.get("bucket"):
+                bits.append(str(a["bucket"]))
+            if a.get("settles"):
+                bits.append(f"settles {a['settles']:%d %b}")
+            line = " \u00b7 ".join(bits)
+            if a.get("step_up") and a.get("norm"):
+                line += (f" \u2014 **{a['cap'] / a['norm']:.1f}\u00d7 the recent "
+                         f"norm of {_bn(a['norm'])}**")
+            ops_lines.append(line)
+
+        for b in d.get("completed", [])[:2]:
             bits = [f"**Buyback {b['date']:%d %b}**",
                     f"{_bn(b['accepted'])} accepted of {_bn(b['offered'])} offered"]
+            if b.get("cap"):
+                bits.append(f"cap {_bn(b['cap'])}")
             if b.get("bucket"):
                 bits.append(str(b["bucket"]))
-            if b.get("settles"):
-                bits.append(f"settled {b['settles']:%d %b}")
             ops_lines.append(" \u00b7 ".join(bits))
-        if not d["buybacks"]:
+
+        if not d.get("announced") and not d.get("completed"):
             ops_lines.append("No buyback operations returned.")
+        elif not d.get("announced"):
+            ops_lines.append("No buyback operation currently announced.")
 
         if d["auctions"]:
             nxt = ", ".join(
@@ -766,6 +794,19 @@ def _risk_windows(ctx, today, now):
                                f"(08:00 UTC)"))
         else:
             untimed.append(f"Next Deribit expiry {exp:%a %d %b} 09:00 LIS")
+
+    # A buyback running today is a timed event with a known window, so it
+    # belongs among the day's windows and not only in POLICY DESK.
+    ops = ctx.get("treasury_ops")
+    if ops and ops["ok"]:
+        for a in ops["data"].get("announced", []):
+            if a["date"] != today or not a.get("opens"):
+                continue
+            size = f"up to {_bn(a['cap'])}" if a.get("cap") else "size TBD"
+            label = (f"**{_hhmm(a['opens'])}** \u2014 Treasury buyback "
+                     f"operation, {size}"
+                     f"{', ' + str(a['bucket']) if a.get('bucket') else ''}")
+            timed.append((a["opens"], label))
 
     # A policy date that lands today or tomorrow belongs here as well as in
     # AHEAD. Counting down to a date for six weeks and then not mentioning it

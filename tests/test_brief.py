@@ -664,9 +664,10 @@ _FED_OK = {"ok": True, "error": None, "data": {
     "watching": ["Warsh"], "lookback_days": 21, "partial": None,
     "source": "Federal Reserve RSS"}}
 _OPS_OK = {"ok": True, "error": None, "data": {
-    "buybacks": [{"date": date(2026, 9, 3), "settles": date(2026, 9, 4),
-                  "security_type": "Nominal", "bucket": "10 to 20 years",
-                  "offered": 4.0e9, "accepted": 2.5e9}],
+    "announced": [],
+    "completed": [{"date": date(2026, 9, 3), "settles": date(2026, 9, 4),
+                   "security_type": "Nominal", "bucket": "10 to 20 years",
+                   "offered": 4.0e9, "accepted": 2.5e9, "cap": 2.0e9}],
     "auctions": [{"date": date(2026, 9, 9), "term": "10-Year",
                   "security_type": "Note", "reopening": True}],
     "partial": None, "source": "Treasury"}}
@@ -699,6 +700,93 @@ check_true("and is distinguishable from silence",
 
 check("par amounts render in billions", render._bn(2.5e9), "$2.5bn")
 check("a missing amount does not become zero", render._bn(None), "\u2014")
+
+
+print("\n-- Fiscal Data returns the STRING 'null' --")
+# This is the bug that put "\u2014 accepted of \u2014 offered" in the 10 Sep brief:
+# every value arrives as a string, and a missing one arrives as "null", which
+# is truthy.
+check("the string 'null' is not a value", sources._fd_val("null"), None)
+check("an empty string is not a value", sources._fd_val(""), None)
+check("a real value survives", sources._fd_val("Nominal"), "Nominal")
+check("'null' does not become a number", sources._fd_amt("null"), None)
+check("a numeric string does", sources._fd_amt("6000000000"), 6.0e9)
+
+print("\n-- operation times convert from Eastern to Lisbon --")
+_lis = sources._et_to_lisbon(date(2026, 9, 10), "01:40 PM")
+check("13:40 ET on 10 Sep is 18:40 LIS", _lis.strftime("%H:%M"), "18:40")
+# January: US on EST, Portugal on WET - a 5h gap, not the summer 5h... the
+# point is that the zone decides, not a constant.
+_win = sources._et_to_lisbon(date(2026, 1, 14), "01:40 PM")
+check("and the gap is recomputed in winter", _win.strftime("%H:%M"), "18:40")
+check("a missing clock is not a time", sources._et_to_lisbon(date(2026, 9, 10), "null"), None)
+
+print("\n-- POLICY DESK: an announced buyback is not history --")
+_ANNOUNCED = {"ok": True, "error": None, "data": {
+    "announced": [{"date": date(2026, 9, 10), "settles": date(2026, 9, 11),
+                   "security_type": "Nominal", "bucket": "10Y to 20Y",
+                   "offered": None, "accepted": None, "cap": 6.0e9,
+                   "eligible": "40",
+                   "opens": datetime(2026, 9, 10, 18, 40, tzinfo=LISBON),
+                   "closes": datetime(2026, 9, 10, 19, 0, tzinfo=LISBON),
+                   "norm": 2.0e9, "step_up": True}],
+    "completed": [{"date": date(2026, 9, 9), "settles": date(2026, 9, 10),
+                   "security_type": "Nominal", "bucket": "1Mo to 2Y",
+                   "offered": 28.0e9, "accepted": 12.5e9, "cap": 2.0e9}],
+    "auctions": [], "partial": None, "source": "Treasury"}}
+
+def _ann_ctx():
+    c = _desk_ctx(_FED_OK, _ANNOUNCED)
+    c["now"] = datetime(2026, 9, 10, 9, 20, tzinfo=LISBON)
+    return c
+
+_md_ann = render.build(_ann_ctx())[0]
+_desk_ann = _md_ann.split("## POLICY DESK")[1].split("\n## ")[0]
+check_true("it is labelled announced, not printed as a past operation",
+           "ANNOUNCED" in _desk_ann, _desk_ann)
+check_true("a same-day operation says TODAY", "buyback TODAY" in _desk_ann,
+           _desk_ann)
+check_true("the cap is the headline number",
+           "up to $6.0bn" in _desk_ann, _desk_ann)
+check_true("the operation window is in Lisbon time",
+           "18:40\u201319:00 LIS" in _desk_ann, _desk_ann)
+check_true("a step up on the norm is called out",
+           "3.0\u00d7 the recent norm of $2.0bn" in _desk_ann, _desk_ann)
+check_true("blank amounts never appear on an announced operation",
+           "\u2014 accepted of \u2014 offered" not in _desk_ann, _desk_ann)
+check_true("a completed operation still reports its result",
+           "$12.5bn accepted of $28.0bn offered" in _desk_ann, _desk_ann)
+
+print("\n-- an operation running today reaches RISK WINDOWS --")
+_rw = _md_ann.split("## RISK WINDOWS")[1]
+check_true("it is listed as a timed window",
+           "Treasury buyback operation" in _rw, _rw)
+check_true("with its size", "up to $6.0bn" in _rw, _rw)
+check_true("and at the right hour", "**18:40**" in _rw, _rw)
+
+print("\n-- a routine operation is not dressed up as a step-up --")
+_ROUTINE = {"ok": True, "error": None, "data": dict(
+    _ANNOUNCED["data"],
+    announced=[dict(_ANNOUNCED["data"]["announced"][0],
+                    cap=2.0e9, step_up=False)])}
+_routine = render.build(_desk_ctx(_FED_OK, _ROUTINE))[0].split("## POLICY DESK")[1]
+check_true("no step-up claim", "the recent norm" not in _routine, _routine)
+check_true("but still flagged as announced", "ANNOUNCED" in _routine, _routine)
+
+print("\n-- an announced operation with no published size says so --")
+_NOSIZE = {"ok": True, "error": None, "data": dict(
+    _ANNOUNCED["data"],
+    announced=[dict(_ANNOUNCED["data"]["announced"][0],
+                    cap=None, step_up=False)])}
+_nosize = render.build(_desk_ctx(_FED_OK, _NOSIZE))[0].split("## POLICY DESK")[1]
+check_true("it does not invent a number",
+           "size not yet published" in _nosize, _nosize)
+check_true("and does not print a zero", "$0.0bn" not in _nosize, _nosize)
+
+print("\n-- nothing announced is stated, not left blank --")
+_none = render.build(_desk_ctx(_FED_OK, _OPS_OK))[0].split("## POLICY DESK")[1]
+check_true("says no operation is announced",
+           "No buyback operation currently announced" in _none, _none)
 
 
 print()
