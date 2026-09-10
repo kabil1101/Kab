@@ -7,8 +7,8 @@
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 **On-time trigger installed 2026-09-08** · 🟡 Awaiting one week of delivered-vs-target |
-| **Last updated** | 2026-09-08 |
-| **Revision** | 3 |
+| **Last updated** | 2026-09-10 |
+| **Revision** | 4 |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -131,6 +131,16 @@ the mechanism that stops the crons delivering a second, staler copy every
 afternoon now that the trigger sends first. It was written on 2026-09-05 on the
 theory that it would be needed; two days later it was.
 
+### §2.1d Delivery, days 1–3 with the trigger live
+
+| Day | Built | vs 09:25 target |
+|---|---|---|
+| Tue 2026-09-08 | — | trigger installed 13:27, not a scheduled morning |
+| Wed 2026-09-09 | on time (Kabil) | ✅ |
+| Thu 2026-09-10 | 09:20 LIS (run log 08:20 UTC) | ✅ **5 min early** |
+
+Two clean mornings of the five §5 asks for.
+
 ### §2.2 Token permission for the external trigger — measured, not assumed
 
 `.github/workflows/probe-permissions.yml`, run 33981684155, three jobs:
@@ -208,7 +218,38 @@ rounds, and every single one changed a design decision rather than confirming
 one. Sources wired without a probe (Farside, Binance, the next-week calendar)
 are exactly the ones that failed in production. *Evidence: §12.2.*
 
-**§3.9 — GitHub's own token UI has two silent traps.** Both cost hours.
+**§3.9 — A section can fail by formatting, not only by omission.** Kabil
+reported the brief said nothing about Treasury tripling long-end buybacks to
+$6bn. It had. The line was
+`Buyback 10 Sep · — accepted of — offered · 10Y to 20Y · settled 11 Sep`:
+the correct operation, on the correct date, typeset exactly like a finished
+one under blank amounts, reading as broken data rather than as the day's most
+consequential event. **Present-but-unreadable is a failure mode, and no test
+that checks "is the number there" will ever catch it.** *Evidence: run
+102797967158, 2026-09-10.*
+
+**§3.10 — Fiscal Data returns the STRING `"null"`, not JSON null.** Every
+comparison against `None` sees a truthy string and proceeds. This is the
+mechanism behind §3.9 — an operation with no result yet was never recognised
+as one that had not run. *Evidence: same run; `_fd_val` and its tests.*
+
+**§3.11 — Three tests can be green while the fetcher does not exist.** The
+suite fed `render.build` fixtures and never called `treasury_ops`, so deleting
+a helper it depended on produced a fully green run and a live
+`NameError`. Fetchers now get an offline end-to-end test with `_json` stubbed.
+*Evidence: run 102862384592 — "Treasury operations unavailable — buybacks:
+NameError; auctions: NameError", suite green.*
+
+**§3.12 — A true statistic about the wrong population is a wrong number.**
+The first fix printed "1.5× the recent norm of $4.0bn" for the $6bn
+announcement, because the median mixed long-end operations ($2bn caps) with
+short-end liquidity operations ($12.5bn caps). Arithmetically correct,
+materially false: it reported a tripling as a 50% bump. Norms are now computed
+within a maturity bucket and refused entirely below two same-bucket peers.
+*Evidence: dry-runs 102863173257 (wrong) → 102864401381 (`3.0× the $2.0bn norm
+for this maturity bucket`).*
+
+**§3.13 — GitHub's own token UI has two silent traps.** Both cost hours.
 (a) Setting **Expiration to "Custom"** with a typed date makes *Generate token*
 do nothing at all — the rejection renders at the top of the form, off-screen for
 anyone scrolled to the button. Switching to a preset (60/90 days) generates
@@ -218,13 +259,13 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
-**§3.10 — Positive: degradation is honest throughout.** Every fetcher raises
+**§3.14 — Positive: degradation is honest throughout.** Every fetcher raises
 rather than returning a placeholder, every section prints `unavailable —
 <reason>`, and an empty result is rendered differently from a failed fetch.
 The brief has never printed a fabricated number. *Evidence: the "every source
 down" test; the CoinGlass `0%` placeholder trap, avoided by quarantine.*
 
-**§3.11 — Positive: Kabil rejects paid options consistently.** Zero-cost was
+**§3.15 — Positive: Kabil rejects paid options consistently.** Zero-cost was
 stated once and has held through every subsequent decision, including reverting
 a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 
@@ -400,6 +441,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 10 | 2026-09-10 | Kabil: the $6bn buyback announcement was missing. It was not missing, it was unreadable (§3.9). Four defects behind one line: a wrong verdict in §12.2, a string `"null"`, an unrequested column, and a cross-population median. Announced operations now lead the section with cap, Lisbon window and a bucket-aware step-up flag, and appear in RISK WINDOWS. Two of the four were caught only by dry-running against live data |
 | 9 | 2026-09-08 | **Trigger installed and proven (§2.1b).** Four failed token attempts first, from two silent GitHub UI traps (§3.9) — the second caught only because the token was dispatch-tested before the Google setup. Duplicate guard confirmed working in production against yesterday's 6h42m-late run (§2.1c). The project's blocking item since 2026-09-05 is closed |
 
 ---
@@ -423,6 +465,34 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 4 · 2026-09-10 · A $6bn announcement that was present and unreadable
+**Sections touched:** §2.1d (new), §3.9–§3.13 (new, renumbered), §12.2, §12.4
+(new), §10
+**Type:** CORRECTION + DATA
+**Evidence:** brief run 102797967158 (the failing line); probe rounds 10–11;
+dry-runs 102862384592 (NameError), 102863173257 (wrong norm), 102864401381
+(correct); [Treasury sb0607](https://home.treasury.gov/news/press-releases/sb0607).
+
+| Field | Was | Now |
+|---|---|---|
+| Fiscal Data buybacks verdict | `S8` — "results only, no future-dated operations exist in the set" | `S0` — carries announced operations too. **The original claim was wrong** |
+| Basis of that verdict | one filtered query on 2026-09-06 returning one row | re-tested; the single row meant nothing further had been announced *that day* |
+| Announced operation rendering | identical to a completed one, blank amounts | leads the section, "⚠ ANNOUNCED — buyback TODAY", cap, Lisbon window, bucket-aware step-up |
+| Step-up comparison | median across all maturity buckets | median within the bucket, ≥2 peers required, else no claim |
+| Fetcher test coverage | none — fixtures only | `treasury_ops` run end to end with `_json` stubbed |
+
+**Why:** The one operation Kabil explicitly asked to track had its most
+significant change in months, and the brief rendered it as noise.
+**Impact on prior conclusions:** §12.2's buyback row is corrected, and §12.4
+adds the rule that produced the error — a negative verdict from a single
+observation is not a property of a dataset. Nothing else is affected; the
+Treasury-has-no-press-feed finding still stands and is unrelated.
+**Not changed, deliberately:** the press-release index is still not scraped.
+Round 10 found it server-rendered and therefore parseable, but the operations
+API now carries everything the announcement did — cap, window, maturity range
+— from a stable JSON endpoint. Adding a scraper for information already held
+would be new breakage for no new information.
 
 ## rev 3 · 2026-09-08 · The trigger is installed. Phase changes.
 **Sections touched:** header, §1, §2.1, §2.1b (new), §2.1c (new), §3.9 (new),
@@ -540,8 +610,9 @@ them before the trigger is installed would leave no delivery path at all.
 | TFTC ETF flows | `S0` | 🟢 LIVE | flows section; CC BY 4.0, attribution required |
 | Federal Register documents | `S0` `S4` `S8` | 🟢 LIVE | prose extraction; `effective_on` null 21/21; `comments_close_on` not filterable (400) |
 | Fed RSS (speech/testimony/monetary) | `S0` | 🟢 LIVE | POLICY DESK; CDATA-wrapped, BOM-prefixed |
-| Fiscal Data buybacks | `S0` `S8` | 🟢 LIVE | results only — no future-dated operations exist in the set |
+| Fiscal Data buybacks | `S0` | 🟢 LIVE | announced AND completed operations; caps in `max_par_amt_redeemed`; values arrive as strings incl. `"null"` **(was: `S8`, "results only — no future-dated operations exist in the set" — ❌ WRONG, see §11 rev 4)** |
 | TreasuryDirect upcoming | `S0` | 🟢 LIVE | coupon auction calendar |
+| TreasuryDirect preliminary announcement XML | `S0` | 🟢 LIVE | `/instit/annceresult/press/preanre/{year}/{BBPA_*.xml}` — carries `maxParAmountRedeemed`, `announcementDTM`, operation window. Fallback for the cap |
 | Farside ETF flows | `S1` | ⚫ EXCLUDED | 403 to datacenter IPs, three escalating header attempts |
 | Binance futures | `S1` | ⚫ EXCLUDED | HTTP 451 from US runners |
 | CoinGlass | `S2` | ⚫ EXCLUDED | no free tier, $29/mo |
@@ -566,14 +637,22 @@ them before the trigger is installed would leave no delivery path at all.
 excluded entry is worth as much as a live one: it is what stops the same dead
 API being rediscovered enthusiastically in six months.
 
-### §12.4 Kill criterion
+### §12.4 A verdict is a claim, and claims decay
+
+`S8` on the buyback set came from one query on one day and was recorded as a
+property of the dataset. It was a property of that morning. **A negative
+verdict drawn from a single observation gets re-tested before anything is
+built on it** — the positive ones already require a probe, and this is the
+same rule pointing the other way.
+
+### §12.5 Kill criterion
 
 A 🟢 LIVE source that renders `unavailable` in **three consecutive briefs** is
 demoted to 🟡 and re-probed before anything is rewritten against it. Farside sat
 at `unavailable` for twelve days before anyone checked why; that is the
 behaviour this criterion exists to prevent.
 
-### §12.5 The uncomfortable consequence
+### §12.6 The uncomfortable consequence
 
 The bar in §12.3 means a new section costs three to nine probe rounds before a
 line of fetcher is written, and each round is a commit, a dispatch and a log
@@ -582,7 +661,7 @@ It is also why the comfortable-work trap in §8 bites so hard: this process is
 genuinely satisfying and it is not the bottleneck. **The bottleneck is a Google
 consent screen.**
 
-### §12.6 Toward a complete system
+### §12.7 Toward a complete system
 
 ```
 1. Trigger installed              -> brief arrives on time          [BLOCKED ON KABIL]
