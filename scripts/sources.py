@@ -869,6 +869,17 @@ def _fd_amt(v):
         return None
 
 
+def _td_date(raw):
+    """TreasuryDirect stamps '2026-09-10T00:00:00'. Date part only."""
+    t = _fd_val(raw)
+    if t is None:
+        return None
+    try:
+        return date.fromisoformat(t[:10])
+    except ValueError:
+        return None
+
+
 def _et_to_lisbon(day: date, clock: str):
     """'01:40 PM' on an operation date -> an aware Lisbon datetime.
 

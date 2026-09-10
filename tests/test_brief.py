@@ -789,6 +789,61 @@ check_true("says no operation is announced",
            "No buyback operation currently announced" in _none, _none)
 
 
+print("\n-- treasury_ops runs end to end against canned API payloads --")
+# The fixture tests above all bypass the fetcher, which is how a NameError
+# from a deleted helper reached a live run with every test green. This one
+# exercises the real function with the network stubbed, using payload shapes
+# copied from the API - including Fiscal Data's string "null".
+_FD_ROWS = {"data": [
+    {"operation_date": "2026-09-10", "settlement_date": "2026-09-11",
+     "security_type": "Nominal", "maturity_bucket": "10Y to 20Y",
+     "total_par_amt_offered": "null", "total_par_amt_accepted": "null",
+     "nbr_issues_accepted": "null", "max_par_amt_redeemed": "6000000000",
+     "nbr_issues_eligible": "40", "operation_start_time_est": "01:40 PM",
+     "operation_close_time_est": "02:00 PM",
+     "preliminary_ann_xml": "BBPA_20260910174000.xml", "final_ann_xml": "null"},
+    {"operation_date": "2026-09-09", "settlement_date": "2026-09-10",
+     "security_type": "Nominal", "maturity_bucket": "1Mo to 2Y",
+     "total_par_amt_offered": "28000000000",
+     "total_par_amt_accepted": "12500000000", "nbr_issues_accepted": "12",
+     "max_par_amt_redeemed": "2000000000", "nbr_issues_eligible": "40",
+     "operation_start_time_est": "01:40 PM",
+     "operation_close_time_est": "02:00 PM",
+     "preliminary_ann_xml": "BBPA_20260909174000.xml",
+     "final_ann_xml": "BBA_20260909174000.xml"},
+]}
+_TD_ROWS = [
+    {"securityType": "Note", "securityTerm": "10-Year",
+     "auctionDate": "2026-09-17T00:00:00", "reopening": "Yes"},
+    {"securityType": "Bill", "securityTerm": "13-Week",
+     "auctionDate": "2026-09-11T00:00:00", "reopening": "No"},
+]
+
+_real_json = sources._json
+def _fake_json(url, **kw):
+    return _FD_ROWS if "buybacks_operations" in url else _TD_ROWS
+sources._json = _fake_json
+try:
+    _ops = sources.treasury_ops(date(2026, 9, 10))
+finally:
+    sources._json = _real_json
+
+check("the unrun operation is classified as announced", len(_ops["announced"]), 1)
+check("the finished one as completed", len(_ops["completed"]), 1)
+_a = _ops["announced"][0]
+check("the cap is read from max_par_amt_redeemed", _a["cap"], 6.0e9)
+check("a 'null' amount stays None, not 0.0", _a["accepted"], None)
+check("the operation window converts to Lisbon",
+      _a["opens"].strftime("%H:%M"), "18:40")
+check("the step-up is detected against the completed median",
+      _a["step_up"], True)
+check("bills are excluded from the auction calendar",
+      [a["term"] for a in _ops["auctions"]], ["10-Year"])
+check("a reopening is flagged", _ops["auctions"][0]["reopening"], True)
+check_true("nothing degraded", _ops.get("partial") is None,
+           str(_ops.get("partial")))
+
+
 print()
 if failures:
     print(f"FAILED ({len(failures)}):")
