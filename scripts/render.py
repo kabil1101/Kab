@@ -623,8 +623,13 @@ def _policy_desk(ctx, today):
                 bits.append(f"settles {a['settles']:%d %b}")
             line = " \u00b7 ".join(bits)
             if a.get("step_up") and a.get("norm"):
-                line += (f" \u2014 **{a['cap'] / a['norm']:.1f}\u00d7 the recent "
-                         f"norm of {_bn(a['norm'])}**")
+                # Name the bucket in the claim. "3.0x the norm" with no
+                # qualifier invites the reader to compare it against every
+                # other buyback line on the page, which is the mistake the
+                # comparison itself was just fixed for.
+                line += (f" \u2014 **{a['cap'] / a['norm']:.1f}\u00d7 the "
+                         f"{_bn(a['norm'])} norm for this maturity bucket** "
+                         f"(last {a.get('norm_n', 0)})")
             ops_lines.append(line)
 
         for b in d.get("completed", [])[:2]:

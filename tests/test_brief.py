@@ -729,7 +729,7 @@ _ANNOUNCED = {"ok": True, "error": None, "data": {
                    "eligible": "40",
                    "opens": datetime(2026, 9, 10, 18, 40, tzinfo=LISBON),
                    "closes": datetime(2026, 9, 10, 19, 0, tzinfo=LISBON),
-                   "norm": 2.0e9, "step_up": True}],
+                   "norm": 2.0e9, "norm_n": 3, "step_up": True}],
     "completed": [{"date": date(2026, 9, 9), "settles": date(2026, 9, 10),
                    "security_type": "Nominal", "bucket": "1Mo to 2Y",
                    "offered": 28.0e9, "accepted": 12.5e9, "cap": 2.0e9}],
@@ -751,7 +751,8 @@ check_true("the cap is the headline number",
 check_true("the operation window is in Lisbon time",
            "18:40\u201319:00 LIS" in _desk_ann, _desk_ann)
 check_true("a step up on the norm is called out",
-           "3.0\u00d7 the recent norm of $2.0bn" in _desk_ann, _desk_ann)
+           "3.0\u00d7 the $2.0bn norm for this maturity bucket" in _desk_ann,
+           _desk_ann)
 check_true("blank amounts never appear on an announced operation",
            "\u2014 accepted of \u2014 offered" not in _desk_ann, _desk_ann)
 check_true("a completed operation still reports its result",
@@ -835,13 +836,68 @@ check("the cap is read from max_par_amt_redeemed", _a["cap"], 6.0e9)
 check("a 'null' amount stays None, not 0.0", _a["accepted"], None)
 check("the operation window converts to Lisbon",
       _a["opens"].strftime("%H:%M"), "18:40")
-check("the step-up is detected against the completed median",
-      _a["step_up"], True)
+# The only completed row here is a short-end operation, so there is no
+# same-bucket history for this long-end announcement and no norm to claim.
+check("a cross-bucket comparison is refused", _a["norm"], None)
+check("so no step-up is asserted", _a["step_up"], False)
 check("bills are excluded from the auction calendar",
       [a["term"] for a in _ops["auctions"]], ["10-Year"])
 check("a reopening is flagged", _ops["auctions"][0]["reopening"], True)
 check_true("nothing degraded", _ops.get("partial") is None,
            str(_ops.get("partial")))
+
+
+print("\n-- step-up compares like with like, or says nothing --")
+def _ops_for(completed_rows, announced_bucket="10Y to 20Y", cap=6.0e9):
+    rows = {"data": [
+        {"operation_date": "2026-09-10", "settlement_date": "2026-09-11",
+         "security_type": "Nominal", "maturity_bucket": announced_bucket,
+         "total_par_amt_offered": "null", "total_par_amt_accepted": "null",
+         "nbr_issues_accepted": "null", "max_par_amt_redeemed": str(int(cap)),
+         "nbr_issues_eligible": "40", "operation_start_time_est": "01:40 PM",
+         "operation_close_time_est": "02:00 PM",
+         "preliminary_ann_xml": "x.xml", "final_ann_xml": "null"},
+    ] + completed_rows}
+    real = sources._json
+    sources._json = lambda url, **kw: rows if "buybacks" in url else []
+    try:
+        return sources.treasury_ops(date(2026, 9, 10))
+    finally:
+        sources._json = real
+
+def _done(bucket, cap, day):
+    return {"operation_date": day, "settlement_date": day,
+            "security_type": "Nominal", "maturity_bucket": bucket,
+            "total_par_amt_offered": "1", "total_par_amt_accepted": "1",
+            "nbr_issues_accepted": "1", "max_par_amt_redeemed": str(int(cap)),
+            "nbr_issues_eligible": "40", "operation_start_time_est": "01:40 PM",
+            "operation_close_time_est": "02:00 PM",
+            "preliminary_ann_xml": "x.xml", "final_ann_xml": "y.xml"}
+
+# The live case: two short-end operations at $12.5bn alongside long-end ones
+# at $2bn. Mixing them gave "1.5x the norm of $4.0bn" for a tripling.
+_mixed = _ops_for([
+    _done("1Mo to 2Y", 12.5e9, "2026-09-09"),
+    _done("1Mo to 2Y", 12.5e9, "2026-09-03"),
+    _done("10Y to 20Y", 2.0e9, "2026-08-25"),
+    _done("10Y to 20Y", 2.0e9, "2026-08-20"),
+])
+_ma = _mixed["announced"][0]
+check("short-end operations do not set the long-end norm", _ma["norm"], 2.0e9)
+check("so a tripling reads as a tripling", round(_ma["cap"] / _ma["norm"], 1), 3.0)
+check("and is flagged", _ma["step_up"], True)
+
+# No same-bucket history: make no claim rather than a cross-programme one.
+_lonely = _ops_for([_done("1Mo to 2Y", 12.5e9, "2026-09-09")])
+check("no same-bucket peers means no norm",
+      _lonely["announced"][0]["norm"], None)
+check("and therefore no step-up claim",
+      _lonely["announced"][0]["step_up"], False)
+
+# One peer is not a norm either.
+_one = _ops_for([_done("10Y to 20Y", 2.0e9, "2026-08-25")])
+check("a single peer is not enough to call a norm",
+      _one["announced"][0]["norm"], None)
 
 
 print()

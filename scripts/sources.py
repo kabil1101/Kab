@@ -841,9 +841,16 @@ TD_PREANRE = ("https://www.treasurydirect.gov/instit/annceresult/press"
 # duration supply actually lands.
 COUPON_TYPES = ("Note", "Bond", "TIPS", "FRN")
 
-# An announced operation this many times the recent norm is a policy signal,
-# not a routine roll. Treasury tripling the long-end cap on 9 Sep 2026 is the
-# case this exists for.
+# An announced operation this many times the recent norm for ITS OWN maturity
+# bucket is a policy signal, not a routine roll. Treasury tripling the long-end
+# cap on 9 Sep 2026 is the case this exists for.
+#
+# The bucket qualifier is load-bearing and was learned the hard way: comparing
+# the $6bn long-end announcement against a median that also contained $12.5bn
+# short-end liquidity operations produced "1.5x the recent norm of $4.0bn",
+# which is arithmetically true of a meaningless population and understates a
+# tripling. Buybacks in different maturity buckets are different programmes
+# and their sizes are not comparable.
 STEP_UP_MULTIPLE = 1.5
 
 
@@ -925,7 +932,7 @@ def _buyback_cap_from_xml(row) -> float | None:
         return None
 
 
-def treasury_ops(today: date, buyback_limit: int = 6,
+def treasury_ops(today: date, buyback_limit: int = 14,
                  auction_limit: int = 4) -> dict:
     """Bond buyback operations and the upcoming coupon auction calendar.
 
@@ -984,12 +991,17 @@ def treasury_ops(today: date, buyback_limit: int = 6,
     except Exception as exc:  # noqa: BLE001
         notes.append(f"buybacks: {_reason(exc)}")
 
-    # Is an announced cap a step up on the recent norm? Median rather than
-    # mean, so one earlier outlier cannot hide the next one.
-    caps = sorted(c["cap"] for c in completed if c.get("cap"))
-    norm = caps[len(caps) // 2] if caps else None
+    # Is an announced cap a step up? Compared only against completed operations
+    # in the SAME maturity bucket, and only when there are enough of them to
+    # call anything a norm. Median rather than mean, so one earlier outlier
+    # cannot hide the next one. No same-bucket history means no claim at all -
+    # silence beats a comparison across two different programmes.
     for a in announced:
+        peers = sorted(c["cap"] for c in completed
+                       if c.get("cap") and c.get("bucket") == a.get("bucket"))
+        norm = peers[len(peers) // 2] if len(peers) >= 2 else None
         a["norm"] = norm
+        a["norm_n"] = len(peers)
         a["step_up"] = bool(
             norm and a.get("cap") and a["cap"] >= norm * STEP_UP_MULTIPLE)
 
