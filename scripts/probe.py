@@ -33,20 +33,29 @@ BROWSER = {
 #      shape round 7 did not guess?
 #   3. Does Fiscal Data carry an announcements dataset alongside the
 #      operations one?
+# Round 11. The 9 Sep announcement WAS in the dataset and WAS in the brief -
+# as "Buyback 10 Sep · — accepted of — offered", which is worse than absent,
+# because it reads as broken data rather than as the most important line in
+# the section. total_par_amt_offered is null until the operation runs, so the
+# announced MAXIMUM ($6bn) is not in the operations table at all. It is in the
+# preliminary announcement, whose filename the table does give us:
+# BBPA_20260910174000.xml. This round hunts for that file's base URL.
+BBPA = "BBPA_20260910174000.xml"
 CANDIDATES = [
-    ("press/index", "https://home.treasury.gov/news/press-releases"),
-    ("press/index-p2", "https://home.treasury.gov/news/press-releases?page=1"),
-    ("press/the-release", "https://home.treasury.gov/news/press-releases/sb0607"),
-    ("td/buyback-1",
-     "https://www.treasurydirect.gov/TA_WS/buyback/announced?format=json"),
-    ("td/buyback-2",
-     "https://www.treasurydirect.gov/TA_WS/buybacks/upcoming?format=json"),
-    ("td/buyback-3",
-     "https://www.treasurydirect.gov/TA_WS/securities/buyback?format=json"),
-    ("fd/dataset-list",
-     "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/buybacks_security_details?page[size]=2&sort=-operation_date"),
-    ("fd/ops-newest",
-     "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/buybacks_operations?sort=-operation_date&page[size]=3"),
+    ("xml/td-root", f"https://www.treasurydirect.gov/xml/{BBPA}"),
+    ("xml/td-preanre",
+     f"https://www.treasurydirect.gov/instit/annceresult/press/preanre/2026/{BBPA}"),
+    ("xml/td-annceresult",
+     f"https://www.treasurydirect.gov/instit/annceresult/press/preanre/{BBPA}"),
+    ("xml/td-buyback-dir",
+     f"https://www.treasurydirect.gov/instit/annceresult/buyback/{BBPA}"),
+    ("xml/fiscaldata-files",
+     f"https://api.fiscaldata.treasury.gov/static-data/buybacks/{BBPA}"),
+    # Whatever the answer, confirm what the operations row actually carries
+    # for an announced-but-unrun operation, field by field.
+    ("fd/announced-row",
+     "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1"
+     "/accounting/od/buybacks_operations?sort=-operation_date&page[size]=2"),
 ]
 
 # Words that would prove a press index is server-rendered rather than a shell.
@@ -83,6 +92,8 @@ def main() -> int:
                     print(f"  {len(rows)} rows")
                     for rec in rows[:3]:
                         print(f"    {json.dumps(rec)[:300]}")
+        elif r.ok and name.startswith("xml/"):
+            print(f"  RAW:\n{' '.join(body[:1400].split())}")
         elif r.ok:
             hits = [p for p in PROOF if p in body]
             print(f"  server-rendered markers present: {hits or 'NONE'}")
