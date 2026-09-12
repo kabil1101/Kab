@@ -7,8 +7,8 @@
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 **On-time trigger installed 2026-09-08** · 🟡 Awaiting one week of delivered-vs-target |
-| **Last updated** | 2026-09-10 |
-| **Revision** | 4 |
+| **Last updated** | 2026-09-12 |
+| **Revision** | 5 |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -287,7 +287,7 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 | D10 | Curated watchlist is pipe-delimited plain text, not YAML — indentation must not be able to break it | ✅ Locked |
 | D11 | Watchlist entries carry a last-confirmed date; >75 days prints as `unconfirmed` | ✅ Locked |
 | D12 | Bessent tracked through operations (buybacks, auctions, refunding), not remarks, because Treasury publishes no usable feed — and the brief states the gap | ✅ Accepted |
-| D13 | ETH ETF flows, aggregate liquidations and Fed-path odds stay out of scope. No free source. Saying so beats a permanent "unavailable" | ✅ Accepted |
+| D13 | ~~ETH ETF flows, aggregate liquidations **and Fed-path odds** stay out of scope. No free source~~ | ⚠ **PARTLY RETRACTED 2026-09-12.** Fed-path odds *are* freely available — Kalshi lists the decision as binary contracts over a keyless API (§12.2). The claim rested on CME's FedWatch being a data-free iframe, which was true and irrelevant: that is CME's *rendering* of the odds, not the odds. ETH ETF flows and aggregate liquidations still stand, but were reasoned the same way and are now **unconfirmed rather than settled** |
 
 ---
 
@@ -441,6 +441,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 11 | 2026-09-12 | FED PATH added: target range and EFFR (NY Fed), priced odds for the next decision (Kalshi), CPI/core/PPI computed from the BLS index and held until superseded. **D13's Fed-path clause retracted** — the odds were never unavailable, only CME's rendering of them was (§12.4a). Expected-market-reaction deliberately not built, with a test asserting the section never forecasts |
 | 10 | 2026-09-10 | Kabil: the $6bn buyback announcement was missing. It was not missing, it was unreadable (§3.9). Four defects behind one line: a wrong verdict in §12.2, a string `"null"`, an unrequested column, and a cross-population median. Announced operations now lead the section with cap, Lisbon window and a bucket-aware step-up flag, and appear in RISK WINDOWS. Two of the four were caught only by dry-running against live data |
 | 9 | 2026-09-08 | **Trigger installed and proven (§2.1b).** Four failed token attempts first, from two silent GitHub UI traps (§3.9) — the second caught only because the token was dispatch-tested before the Google setup. Duplicate guard confirmed working in production against yesterday's 6h42m-late run (§2.1c). The project's blocking item since 2026-09-05 is closed |
 
@@ -465,6 +466,35 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 5 · 2026-09-12 · FED PATH, and a second wrong verdict retracted
+**Sections touched:** §4 D13, §12.2, §12.4a (new), §10
+**Type:** DECISION + CORRECTION + DATA
+**Evidence:** probe rounds 12–13; dry-run 103548387840 — `Target 3.50–3.75% ·
+EFFR 3.63%`, `Hike 25bps 80% · Fed maintains rate 20%`, `CPI August 2026 ·
++0.40% m/m · +3.4% y/y`. CME: `403 — suspected web scraping activity`.
+
+| Field | Was | Now |
+|---|---|---|
+| Fed-path odds | ⚫ EXCLUDED, "no free source" (D13, §12.2) | 🟢 LIVE via Kalshi, keyless |
+| Basis of that verdict | CME FedWatch is a data-free iframe | true, and about CME's rendering, not the odds |
+| Inflation prints | absent | CPI, core CPI, PPI from BLS, held until superseded |
+| Policy rate | absent | target range + EFFR from the New York Fed |
+| Wrong-verdict pattern | one instance (rev 4) | two, and §12.4a names the shape they share |
+
+**Why:** Kabil asked for the inflation prints, the last decision, and cut-vs-
+hike odds. Two were straightforward; the third had been written off, and the
+write-off was wrong.
+**Impact on prior conclusions:** D13 is partly retracted. Its other two
+clauses are now unconfirmed rather than settled, since both were reasoned the
+same way.
+**Not changed, deliberately:** the brief does not forecast the market's
+reaction to either decision, which was the fourth thing asked for. The
+interpretation layer was removed to hold D2, and a forecast set in the same
+typeface as a fetched number would undo D4. A test asserts the section makes
+no such claim. Polymarket is also left un-wired despite the deeper book: its
+per-month event slugs would need re-pointing every meeting, where Kalshi's
+tickers generalise.
 
 ## rev 4 · 2026-09-10 · A $6bn announcement that was present and unreadable
 **Sections touched:** §2.1d (new), §3.9–§3.13 (new, renumbered), §12.2, §12.4
@@ -624,7 +654,12 @@ them before the trigger is installed would leave no delivery path at all.
 | coinglass / coinalyze / theblock pages | `S6` | ⚫ EXCLUDED | emit literal `0%` placeholders that read as data |
 | bykaranteli ETF JSON | `S7` | 🟡 PROBED | 200; TFTC chosen instead |
 | AAII sentiment | `S7` | 🟡 PROBED | reachable, not parsed |
-| Fed-path odds (any free source) | `S2` `S6` | ⚫ EXCLUDED | needs contract-level Fed Funds settlements |
+| Kalshi `KXFEDDECISION` | `S0` | 🟢 LIVE | binary contracts per meeting, keyless read API, mid of book. **Prediction-market prices, not futures-implied — the two can disagree and the brief says which it is** |
+| BLS public API v1 | `S0` | 🟢 LIVE | CPI, core CPI, PPI. No key. No calculations on the free tier, so m/m and y/y are computed from the index; `"-"` is a real value (2025 appropriations lapse) |
+| New York Fed rates | `S0` | 🟢 LIVE | target range + EFFR from the desk that publishes them |
+| Polymarket gamma | `S7` | 🟡 PROBED | 200, and far more liquid than Kalshi on the September meeting ($20m/24h). Not wired: its event slugs are per-month strings, where Kalshi's tickers generalise |
+| CME quote service | `S1` | ⚫ EXCLUDED | `403 — "This IP address is blocked due to suspected web scraping activity"`. Farside's lesson, third occurrence |
+| ~~Fed-path odds (any free source)~~ | ~~`S2` `S6`~~ | ❌ **VERDICT WRONG** | was: "needs contract-level Fed Funds settlements". It needs a prediction market, which is free. See rev 5 |
 | ETH ETF flows | — | ❓ | TFTC is Bitcoin-only; no free replacement found |
 
 ### §12.3 Promotion ladder
@@ -636,6 +671,20 @@ them before the trigger is installed would leave no delivery path at all.
 ⚫ **EXCLUDED** — probed and failed, or paid. **Stop re-attempting it.** An
 excluded entry is worth as much as a live one: it is what stops the same dead
 API being rediscovered enthusiastically in six months.
+
+### §12.4a The shape both wrong verdicts share
+
+Two register entries have now been wrong, and they failed the same way:
+
+| Entry | What was observed | What was recorded |
+|---|---|---|
+| Fiscal Data buybacks | one query, one day, one row | "the dataset holds results only" |
+| Fed-path odds | CME's page carries no data | "the odds have no free source" |
+
+**Both mistook a property of one route for a property of the world.** The
+observation was correct each time; the generalisation was not. Before writing
+"unavailable", name the specific thing that failed and ask whether anything
+else could carry the same fact.
 
 ### §12.4 A verdict is a claim, and claims decay
 
