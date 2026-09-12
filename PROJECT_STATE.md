@@ -8,7 +8,7 @@
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 **On-time trigger installed 2026-09-08** · 🟡 Awaiting one week of delivered-vs-target |
 | **Last updated** | 2026-09-12 |
-| **Revision** | 5 |
+| **Revision** | 6 |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -138,8 +138,10 @@ theory that it would be needed; two days later it was.
 | Tue 2026-09-08 | — | trigger installed 13:27, not a scheduled morning |
 | Wed 2026-09-09 | on time (Kabil) | ✅ |
 | Thu 2026-09-10 | 09:20 LIS (run log 08:20 UTC) | ✅ **5 min early** |
+| Fri 2026-09-11 | 09:20 LIS | ✅ |
+| Sat 2026-09-12 | 09:20 LIS | ✅ |
 
-Two clean mornings of the five §5 asks for.
+Four clean mornings of the five §5 asks for. Monday closes it.
 
 ### §2.2 Token permission for the external trigger — measured, not assumed
 
@@ -280,6 +282,7 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 | D3 | No buy/sell calls, price targets, or position sizing anywhere in the brief | ✅ Locked |
 | D4 | Every number comes from something fetched this run; unavailable is a correct outcome | ✅ Locked |
 | D5 | Two cron slots (`25 8` / `25 9` UTC), job decides which owns today from the cron expression, not the wall clock | ✅ Locked |
+| D14 | **Seven days a week** (was: weekdays only, `* * 1-5`, until 2026-09-12). Crypto, funding and OI do not stop at the weekend, and Monday's setup is built on it. Weekend briefs still suppress the cash-session windows and say the market is shut | ✅ Locked |
 | D6 | Quarantine list — never fetch or cite: `deribit.com/statistics/*`, `optioncharts.io`, CME FedWatch, `coinglass.com`, `theblock.co/data`, `coinalyze.net` | ✅ Locked |
 | D7 | Google Apps Script as the external trigger, not cron-job.org | ✅ **Locked — installed and proven 2026-09-08** (was: Accepted, not installed) |
 | D8 | ~~The trigger token needs `Contents: write` and is therefore equivalent to the Gmail app password, so a third-party scheduler is unsafe~~ | ❌ **RETRACTED 2026-09-05.** Measured: the endpoint wants `Actions: write` and *refuses* `Contents: write` (§2.2). The claim came from community reports, not evidence. D7 still stands, but on convenience grounds — no new account — not security ones. cron-job.org was excluded on a false premise |
@@ -356,6 +359,10 @@ PROJECT_STATE.md           this file
 ## §7 · THE BRIEF IN BRIEF
 
 Nine sections, in order, all Lisbon-time:
+
+Seven days a week since 2026-09-12 (D14). A weekend brief carries no
+cash-session windows and states that, rather than printing an open and a close
+that will not happen.
 
 | Section | Content | Source |
 |---|---|---|
@@ -441,6 +448,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 12 | 2026-09-12 | Brief switched to seven days a week (D14). Both crons drop the weekday filter and the Apps Script trigger loses its weekend guard; the cash-session suppression stays and gains tests on a real Sunday and a real Monday |
 | 11 | 2026-09-12 | FED PATH added: target range and EFFR (NY Fed), priced odds for the next decision (Kalshi), CPI/core/PPI computed from the BLS index and held until superseded. **D13's Fed-path clause retracted** — the odds were never unavailable, only CME's rendering of them was (§12.4a). Expected-market-reaction deliberately not built, with a test asserting the section never forecasts |
 | 10 | 2026-09-10 | Kabil: the $6bn buyback announcement was missing. It was not missing, it was unreadable (§3.9). Four defects behind one line: a wrong verdict in §12.2, a string `"null"`, an unrequested column, and a cross-population median. Announced operations now lead the section with cap, Lisbon window and a bucket-aware step-up flag, and appear in RISK WINDOWS. Two of the four were caught only by dry-running against live data |
 | 9 | 2026-09-08 | **Trigger installed and proven (§2.1b).** Four failed token attempts first, from two silent GitHub UI traps (§3.9) — the second caught only because the token was dispatch-tested before the Google setup. Duplicate guard confirmed working in production against yesterday's 6h42m-late run (§2.1c). The project's blocking item since 2026-09-05 is closed |
@@ -466,6 +474,32 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 6 · 2026-09-12 · Seven days a week
+**Sections touched:** §2.1d, §4 D14 (new), §7, §10
+**Type:** DECISION
+**Evidence:** Kabil, this session. Workflow crons `25 8 * * *` / `25 9 * * *`;
+`sendBrief` weekend guard removed; new tests on 2026-09-13 (Sunday) and
+2026-09-14 (Monday).
+
+| Field | Was | Now |
+|---|---|---|
+| Schedule | weekdays, `* * 1-5` | every day |
+| Apps Script `sendBrief` | exits at weekends | dispatches every day |
+| Weekend rendering | n/a — no weekend brief existed | unchanged, and now tested: no cash open, no close, says the market is shut |
+| Delivery record | 2 clean mornings | 4 |
+
+**Why:** The weekday filter was inherited from the cash session, which the
+brief was never only about.
+**Impact on prior conclusions:** None. D5's two-slot DST logic is untouched —
+it resolves which slot owns *today*, which has nothing to do with weekday.
+**Not changed, deliberately:** weekend briefs still suppress the NYSE open and
+close. Running seven days is not a reason to print two windows that will not
+happen, and the failure mode worth guarding is a seven-day brief that forgets
+which days have a session.
+**Requires Kabil:** the Apps Script copy in his Google account still carries
+the old weekend guard and must be re-pasted, or Saturday and Sunday will fire
+only from GitHub's late scheduler.
 
 ## rev 5 · 2026-09-12 · FED PATH, and a second wrong verdict retracted
 **Sections touched:** §4 D13, §12.2, §12.4a (new), §10
