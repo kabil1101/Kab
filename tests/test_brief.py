@@ -1034,6 +1034,27 @@ check_true("each leg names its own failure",
 check_true("and no number is invented", "0%" not in _d, _d)
 
 
+print("\n-- seven days a week, but Sunday is still Sunday --")
+# The brief now runs at weekends. What must NOT happen is a weekend brief that
+# lists a cash open and close as if the session existed.
+_sun = dict(dead)
+_sun["now"] = datetime(2026, 9, 13, 9, 20, tzinfo=LISBON)   # a Sunday
+_sun_md = render.build(_sun)[0]
+_sun_rw = _sun_md.split("## RISK WINDOWS")[1].split("\n## ")[0]
+check_true("a weekend brief is still produced",
+           _sun_md.startswith("# MARKET BRIEF"), _sun_md[:60])
+check_true("and says the cash market is shut",
+           "Cash equity markets closed today" in _sun_rw, _sun_rw)
+check_true("without inventing an open", "NYSE cash open" not in _sun_rw, _sun_rw)
+check_true("or a close", "NYSE cash close" not in _sun_rw, _sun_rw)
+
+_mon = dict(dead)
+_mon["now"] = datetime(2026, 9, 14, 9, 20, tzinfo=LISBON)   # a Monday
+_mon_rw = render.build(_mon)[0].split("## RISK WINDOWS")[1].split("\n## ")[0]
+check_true("a weekday still gets its session windows",
+           "NYSE cash open" in _mon_rw, _mon_rw)
+
+
 print()
 if failures:
     print(f"FAILED ({len(failures)}):")

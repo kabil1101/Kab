@@ -1,6 +1,6 @@
 # Daily Market Brief
 
-Builds a market brief every weekday and emails it to `kabil.dh@gmail.com` at
+Builds a market brief **every day** and emails it to `kabil.dh@gmail.com` at
 **09:25 Europe/Lisbon**, then Mode A of the chat prompt relays it for free.
 
 The cloud run is the source of truth. It runs while the laptop is asleep, and
@@ -41,6 +41,11 @@ registered and the job decides which one owns today:
 25 8 UTC  ->  09:25 Lisbon while on WEST (UTC+1, summer)
 25 9 UTC  ->  09:25 Lisbon while on WET  (UTC+0, winter)
 ```
+
+Both fire seven days a week. Crypto, funding and open interest do not stop for
+the weekend, and Monday's setup is built on what happened during it. A weekend
+brief carries no cash-session windows and says so rather than printing an open
+and a close that will not happen.
 
 The guard resolves this from `github.event.schedule` — the cron expression that
 triggered the run — rather than from the wall clock. Actions frequently starts

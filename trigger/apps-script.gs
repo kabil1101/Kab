@@ -35,27 +35,20 @@ const TZ = 'Europe/Lisbon';
 
 /**
  * Fired by the time-driven trigger. Asks GitHub to run the brief now.
+ *
+ * Seven days a week since 2026-09-12. The weekday-only guard that used to
+ * live here was inherited from the cash session, but the brief has never been
+ * about the cash session alone - crypto, funding and open interest run
+ * through the weekend, and Monday's setup is built on what happened during it.
  */
 function sendBrief() {
-  const now = new Date();
-  // 'u' is the ISO day number: 1 = Monday ... 7 = Sunday. Numeric on purpose —
-  // a weekday *name* would depend on the account's display language.
-  const day = Number(Utilities.formatDate(now, TZ, 'u'));
-  if (day > 5) {
-    console.log('Weekend in Lisbon — no brief. The workflow is weekdays-only.');
-    return;
-  }
   dispatch();
 }
 
 /**
- * Same thing, minus the weekend check. This exists so the setup can be proved
- * on the day it is done rather than on the next working day: someone who
- * installs this on a Sunday would otherwise see "Weekend in Lisbon" and have
- * no way to tell a correct install from a broken token.
- *
- * Run it by hand whenever you want a brief now. The daily trigger never calls
- * it, so it cannot cause a weekend delivery on its own.
+ * Send a brief right now, by hand. Identical to the scheduled path - it
+ * exists so the setup can be proved the day it is done, and so a brief can be
+ * pulled on demand without waiting for tomorrow morning.
  */
 function testNow() {
   dispatch();
@@ -134,5 +127,5 @@ function install() {
       .create();
 
   console.log('Installed: sendBrief runs daily near 09:25 ' + TZ +
-              '. Weekends exit without dispatching.');
+              ', seven days a week.');
 }
