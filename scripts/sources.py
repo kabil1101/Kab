@@ -1036,3 +1036,230 @@ def treasury_ops(today: date, buyback_limit: int = 14,
             "auctions": auctions,
             "partial": "; ".join(notes) or None,
             "source": "Treasury Fiscal Data + TreasuryDirect"}
+
+
+# ------------------------------------------------------------- the fed path
+
+# Three things, three sources, all keyless and all probed from a runner:
+#   - the inflation prints, from BLS's public API (v1 takes no key at all)
+#   - the policy rate itself, from the desk that sets it
+#   - what the market has priced for the next decision
+#
+# The last one closes an item open since day one. It was recorded as having no
+# free source because CME's FedWatch page is a QuikStrike iframe carrying no
+# data - true, and still true: CME's own quote service answers datacenter IPs
+# with "This IP address is blocked due to suspected web scraping activity".
+# That was never a reason the ODDS were unavailable, only that CME's rendering
+# of them was. Kalshi lists the same decision as regulated binary contracts
+# over a free read API.
+
+BLS_SERIES = "https://api.bls.gov/publicAPI/v1/timeseries/data/{sid}"
+NYFED_RATES = "https://markets.newyorkfed.org/api/rates/all/latest.json"
+KALSHI_MARKETS = "https://api.elections.kalshi.com/trade-api/v2/markets"
+KALSHI_FED_SERIES = "KXFEDDECISION"
+
+# Seasonally adjusted, because month-over-month on an unadjusted index is
+# mostly the season.
+INFLATION_SERIES = (
+    ("CPI", "CUSR0000SA0"),
+    ("Core CPI", "CUSR0000SA0L1E"),
+    ("PPI final demand", "WPSFD4"),
+)
+
+_MONTHS = ("January", "February", "March", "April", "May", "June", "July",
+           "August", "September", "October", "November", "December")
+
+
+def _bls_points(series):
+    """[(year, month_number, value, footnote_codes)] newest first.
+
+    A value of "-" is a real thing BLS returns - October 2025 CPI carries
+    'Data unavailable due to the 2025 lapse in appropriations'. It must not
+    become a number.
+    """
+    out = []
+    for row in series.get("data") or []:
+        raw = (row.get("value") or "").strip()
+        period = (row.get("period") or "")
+        if not period.startswith("M") or period == "M13":
+            continue        # M13 is an annual average, not a month
+        try:
+            month = int(period[1:])
+            year = int(row.get("year"))
+        except (TypeError, ValueError):
+            continue
+        try:
+            value = float(raw)
+        except ValueError:
+            value = None    # "-" and anything else non-numeric
+        codes = [f.get("code") for f in (row.get("footnotes") or [])
+                 if isinstance(f, dict) and f.get("code")]
+        out.append((year, month, value, codes))
+    out.sort(key=lambda p: (p[0], p[1]), reverse=True)
+    return out
+
+
+def inflation() -> dict:
+    """Latest CPI, core CPI and PPI prints, with month-over-month and
+    year-over-year computed from the index.
+
+    The keyless BLS tier returns no calculations, so both changes are worked
+    out here from the raw index values. A print stays in the brief until BLS
+    publishes the next one, which is the behaviour Kabil asked for - these are
+    monthly releases and the last one remains the current read until superseded.
+    """
+    prints, notes = [], []
+    for label, sid in INFLATION_SERIES:
+        try:
+            data = _json(BLS_SERIES.format(sid=sid))
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"{label}: {_reason(exc)}")
+            continue
+        if (data.get("status") or "") != "REQUEST_SUCCEEDED":
+            msg = "; ".join(str(m) for m in (data.get("message") or [])) or "?"
+            notes.append(f"{label}: BLS said {msg[:60]}")
+            continue
+        series = (data.get("Results", {}).get("series") or [{}])[0]
+        pts = _bls_points(series)
+        cur = next((p for p in pts if p[2] is not None), None)
+        if cur is None:
+            notes.append(f"{label}: no usable observation")
+            continue
+        year, month, value, codes = cur
+
+        def _find(y, m):
+            return next((p[2] for p in pts if p[0] == y and p[1] == m), None)
+
+        prev = _find(year, month - 1) if month > 1 else _find(year - 1, 12)
+        yago = _find(year - 1, month)
+        prints.append({
+            "label": label,
+            "period": f"{_MONTHS[month - 1]} {year}",
+            "year": year,
+            "month": month,
+            "index": value,
+            "mom": (value / prev - 1) * 100 if prev else None,
+            "yoy": (value / yago - 1) * 100 if yago else None,
+            "preliminary": "P" in codes,
+            "series_id": sid,
+        })
+
+    if notes and not prints:
+        raise RuntimeError("; ".join(notes))
+    return {"prints": prints, "partial": "; ".join(notes) or None,
+            "source": "BLS public API"}
+
+
+def policy_rate() -> dict:
+    """The current target range and where the effective rate is sitting in it.
+
+    Straight from the New York Fed's own rates endpoint, which is the desk
+    that publishes the effective rate, so this is the decision itself rather
+    than a report of it.
+    """
+    rows = _json(NYFED_RATES).get("refRates") or []
+    effr = next((r for r in rows if (r.get("type") or "").upper() == "EFFR"),
+                None)
+    if not effr:
+        raise RuntimeError("EFFR not in the New York Fed response")
+    return {
+        "as_of": _td_date(effr.get("effectiveDate")),
+        "effr": effr.get("percentRate"),
+        "target_low": effr.get("targetRateFrom"),
+        "target_high": effr.get("targetRateTo"),
+        "volume_bn": effr.get("volumeInBillions"),
+        "source": "New York Fed",
+    }
+
+
+def _kalshi_prob(m):
+    """Mid of the book as a probability, falling back to the last trade.
+
+    A mid is the honest read when both sides are quoted. With one side missing
+    the last trade is all there is, and how stale that might be is the reason
+    the spread is reported alongside it.
+    """
+    def _f(key):
+        try:
+            return float(m.get(key))
+        except (TypeError, ValueError):
+            return None
+
+    bid, ask = _f("yes_bid_dollars"), _f("yes_ask_dollars")
+    if bid is not None and ask is not None and ask > 0:
+        return (bid + ask) / 2, (ask - bid)
+    last = _f("last_price_dollars")
+    return (last, None) if last is not None else (None, None)
+
+
+def fed_odds(today: date) -> dict:
+    """What the market has priced for the next FOMC decision.
+
+    Kalshi rather than CME: the contracts are structured per meeting with
+    machine-readable strikes, the read API needs no key, and CME blocks
+    datacenter IPs outright. These are prediction-market prices, not
+    futures-implied probabilities, and the brief says so - they are a
+    different instrument and can disagree.
+    """
+    data = _json(KALSHI_MARKETS, params={
+        "series_ticker": KALSHI_FED_SERIES,
+        "status": "open",
+        "limit": 200,
+    })
+    markets = data.get("markets") or []
+    if not markets:
+        raise RuntimeError("Kalshi returned no open Fed decision contracts")
+
+    # Group by meeting, then take the meeting that settles soonest.
+    by_event: dict[str, list] = {}
+    for m in markets:
+        by_event.setdefault(m.get("event_ticker") or "?", []).append(m)
+
+    def _closes(group):
+        stamps = []
+        for m in group:
+            raw = (m.get("close_time") or "").replace("Z", "+00:00")
+            try:
+                stamps.append(datetime.fromisoformat(raw))
+            except ValueError:
+                continue
+        return min(stamps) if stamps else None
+
+    dated = [(ev, g, _closes(g)) for ev, g in by_event.items()]
+    dated = [d for d in dated if d[2] and d[2].date() >= today]
+    if not dated:
+        raise RuntimeError("no Fed decision contract settles in the future")
+    event, group, closes = min(dated, key=lambda d: d[2])
+
+    outcomes = []
+    for m in group:
+        prob, spread = _kalshi_prob(m)
+        if prob is None:
+            continue
+        try:
+            volume = float(m.get("volume_fp"))
+        except (TypeError, ValueError):
+            volume = None
+        outcomes.append({
+            "label": (m.get("yes_sub_title") or m.get("subtitle")
+                      or m.get("ticker") or "?"),
+            "prob": prob * 100.0,
+            "spread": spread * 100.0 if spread is not None else None,
+            "volume": volume,
+            "ticker": m.get("ticker"),
+        })
+    if not outcomes:
+        raise RuntimeError("Fed contracts carried no usable prices")
+
+    # Mutually exclusive by construction, so the mids should sum near 100.
+    # They will not sum exactly, and normalising silently would hide a book
+    # too wide to be worth quoting - so the raw total is reported.
+    total = sum(o["prob"] for o in outcomes)
+    outcomes.sort(key=lambda o: o["prob"], reverse=True)
+    return {
+        "event": event,
+        "closes": closes.astimezone(LISBON) if closes else None,
+        "outcomes": outcomes,
+        "raw_total": total,
+        "source": "Kalshi (prediction market, mid of book)",
+    }

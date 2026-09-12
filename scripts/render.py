@@ -274,6 +274,22 @@ def build(ctx) -> tuple[str, str]:
         md.append(f"*{bad}*\n")
         html.append(f"<p class='muted'><em>{_esc(bad)}</em></p>")
 
+    # ---- FED PATH ------------------------------------------------------
+    # Above POLICY DESK: the rate and what is priced against it frame
+    # everything underneath, including the buyback and supply lines.
+    fed_lines, fed_notes = _fed_path(ctx, today)
+    md.append("## FED PATH\n")
+    html.append(_h_section("Fed Path"))
+    for l in fed_lines:
+        md.append(f"- {l}")
+    html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in fed_lines)
+                + "</ul>")
+    md.append("")
+    if fed_notes:
+        note = " · ".join(fed_notes)
+        md.append(f"*{note}*\n")
+        html.append(f"<p class='muted'><em>{_esc(note)}</em></p>")
+
     # ---- POLICY DESK ---------------------------------------------------
     # Warsh and Bessent, the two people whose decisions Kabil trades around.
     # Warsh is tracked by name off the Fed's own feeds. Bessent has no feed at
@@ -586,8 +602,8 @@ def _policy_desk(ctx, today):
         for i in d["items"][:5]:
             who = i["speaker"]
             title = i["title"]
-            if len(title) > 88:
-                title = title[:87].rstrip() + "\u2026"
+            if len(title) > 150:
+                title = title[:149].rstrip() + "\u2026"
             fed_lines.append(
                 f"**{who}** {i['date']:%d %b} \u00b7 {title} \u00b7 {i['kind']}")
         if not d["items"]:
@@ -660,6 +676,86 @@ def _policy_desk(ctx, today):
         ops_lines.append(f"Treasury operations unavailable \u2014 {ops['error']}")
 
     return fed_lines, ops_lines, notes
+
+
+def _pct(v, places=2):
+    return "\u2014" if v is None else f"{v:+.{places}f}%"
+
+
+def _fed_path(ctx, today):
+    """The rate picture: where the rate is, what is priced, and the last
+    inflation prints that inform both.
+
+    Deliberately absent: any statement of what the market will do on the
+    decision. The brief reports what is priced and what was printed; turning
+    that into an expected reaction is interpretation, and this project removed
+    its interpretation layer to hold the zero-cost line. Printing a guess in
+    the same typeface as a fetched number would undo every other guarantee
+    here.
+    """
+    lines, notes = [], []
+
+    rate = ctx.get("policy_rate")
+    odds = ctx.get("fed_odds")
+
+    if rate and rate["ok"]:
+        d = rate["data"]
+        bits = []
+        if d.get("target_low") is not None and d.get("target_high") is not None:
+            bits.append(f"**Target {d['target_low']:.2f}\u2013{d['target_high']:.2f}%**")
+        if d.get("effr") is not None:
+            bits.append(f"EFFR {d['effr']:.2f}%")
+        if d.get("as_of"):
+            bits.append(f"as of {d['as_of']:%d %b}")
+        bits.append(d["source"])
+        lines.append(" \u00b7 ".join(bits))
+    elif rate:
+        lines.append(f"Policy rate unavailable \u2014 {rate['error']}")
+
+    if odds and odds["ok"]:
+        d = odds["data"]
+        head = "**Priced for the next decision**"
+        if d.get("closes"):
+            days = (d["closes"].date() - today).days
+            head += f" ({_tminus(days)}, settles {d['closes']:%a %d %b})"
+        priced = " \u00b7 ".join(
+            f"{o['label']} **{o['prob']:.0f}%**" for o in d["outcomes"][:4])
+        lines.append(f"{head} \u2014 {priced}")
+
+        # A book whose mids do not sum near 100 is too wide to quote as
+        # probability, and saying so beats implying a precision the spread
+        # does not support.
+        if abs(d["raw_total"] - 100.0) > 8:
+            notes.append(f"Kalshi mids sum to {d['raw_total']:.0f}%, not ~100% "
+                         f"— wide book, treat these as indicative")
+        widest = max((o["spread"] for o in d["outcomes"]
+                      if o.get("spread") is not None), default=None)
+        tail = d["source"]
+        if widest is not None:
+            tail += f", widest spread {widest:.0f}pp"
+        lines.append(f"*{tail}*")
+    elif odds:
+        lines.append(f"Priced odds unavailable \u2014 {odds['error']}")
+
+    infl = ctx.get("inflation")
+    if infl and infl["ok"]:
+        for p in infl["data"]["prints"]:
+            age = ""
+            # How stale the print is matters: these are monthly, and the same
+            # number stands for weeks. Saying which month it is stops it
+            # reading as today's news.
+            flag = " *(preliminary)*" if p.get("preliminary") else ""
+            lines.append(
+                f"**{p['label']}** {p['period']}{flag} \u00b7 "
+                f"{_pct(p['mom'])} m/m \u00b7 {_pct(p['yoy'], 1)} y/y{age}")
+        if not infl["data"]["prints"]:
+            lines.append("No inflation prints returned.")
+        if infl["data"].get("partial"):
+            notes.append(f"BLS partial: {infl['data']['partial']}")
+    elif infl:
+        lines.append(f"Inflation prints unavailable \u2014 {infl['error']}")
+
+    return lines, notes
 
 
 def radar_events(ctx, today):
@@ -740,8 +836,8 @@ def _radar_groups(events, today):
 def _radar_text(days, e) -> str:
     """One event as a markdown line."""
     title = e["title"]
-    if len(title) > 115:
-        title = title[:114].rstrip() + "\u2026"
+    if len(title) > 190:
+        title = title[:189].rstrip() + "\u2026"
     head = f"**{_tminus(days)} \u00b7 {e['date']:%a %d %b}**"
     bits = [f"{head} \u2014 {title}"]
     label = e.get("label")
@@ -822,8 +918,8 @@ def _risk_windows(ctx, today, now):
         if days > 1:
             break
         title = e["title"]
-        if len(title) > 95:
-            title = title[:94].rstrip() + "\u2026"
+        if len(title) > 150:
+            title = title[:149].rstrip() + "\u2026"
         untimed.append(f"**{'TODAY' if days == 0 else 'Tomorrow'}** — {title}")
 
     ahead = sorted((dt, txt) for dt, txt in timed if dt > now)

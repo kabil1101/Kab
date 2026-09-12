@@ -68,6 +68,9 @@ def gather(now):
     ctx["policy_radar"] = safe(sources.policy_radar, now.date())
     ctx["fed_officials"] = safe(sources.fed_officials, now.date())
     ctx["treasury_ops"] = safe(sources.treasury_ops, now.date())
+    ctx["policy_rate"] = safe(sources.policy_rate)
+    ctx["fed_odds"] = safe(sources.fed_odds, now.date())
+    ctx["inflation"] = safe(sources.inflation)
     # Not wrapped in safe(): the watchlist reads a local file and already
     # degrades to an empty list, so the only thing left to guard against is a
     # bug in the parser itself.

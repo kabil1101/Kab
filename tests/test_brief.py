@@ -179,7 +179,8 @@ print("\n-- end-to-end render: every source down --")
 dead = {"now": now}
 for k in ("calendar", "crypto", "fear_greed", "flows_btc", "flows_eth",
           "options_btc", "cross_asset", "global_mcap", "policy_radar",
-          "fed_officials", "treasury_ops"):
+          "fed_officials", "treasury_ops", "policy_rate", "fed_odds",
+          "inflation"):
     dead[k] = {"ok": False, "error": "EGRESS_BLOCKED", "data": None}
 md2, html2 = render.build(dead)
 check_true("degraded brief still renders", md2.startswith("# MARKET BRIEF"))
@@ -898,6 +899,139 @@ check("and therefore no step-up claim",
 _one = _ops_for([_done("10Y to 20Y", 2.0e9, "2026-08-25")])
 check("a single peer is not enough to call a norm",
       _one["announced"][0]["norm"], None)
+
+
+print("\n-- BLS: index values in, m/m and y/y out --")
+# Shape copied from the live response, including the "-" that October 2025
+# carries for the appropriations lapse and the M13 annual average.
+_BLS = {"status": "REQUEST_SUCCEEDED", "message": [], "Results": {"series": [{
+    "seriesID": "CUSR0000SA0", "data": [
+        {"year": "2026", "period": "M13", "value": "330.000", "footnotes": [{}]},
+        {"year": "2026", "period": "M08", "value": "334.131", "latest": "true",
+         "footnotes": [{}]},
+        {"year": "2026", "period": "M07", "value": "332.813", "footnotes": [{}]},
+        {"year": "2025", "period": "M10", "value": "-", "footnotes": [
+            {"code": "X", "text": "Data unavailable due to the 2025 lapse"}]},
+        {"year": "2025", "period": "M08", "value": "323.291", "footnotes": [
+            {"code": "P", "text": "Preliminary."}]},
+    ]}]}}
+_pts = sources._bls_points(_BLS["Results"]["series"][0])
+check("the annual average is not a month", len(_pts), 4)
+check("newest first", (_pts[0][0], _pts[0][1]), (2026, 8))
+check("a '-' value is not a number", [p[2] for p in _pts if p[1] == 10], [None])
+
+_real = sources._json
+sources._json = lambda url, **kw: _BLS
+try:
+    _infl = sources.inflation()
+finally:
+    sources._json = _real
+_p = _infl["prints"][0]
+check("the period is named", _p["period"], "August 2026")
+check("month-over-month from the index", round(_p["mom"], 3), 0.396)
+check("year-over-year from the index", round(_p["yoy"], 2), 3.35)
+check_true("all three series were attempted",
+           "Core CPI" in (_infl.get("partial") or "") or len(_infl["prints"]) >= 1,
+           str(_infl.get("partial")))
+
+print("\n-- Kalshi: nearest meeting, mid of book --")
+def _mkt(ticker, event, sub, bid, ask, close, last="0.5000"):
+    return {"ticker": ticker, "event_ticker": event, "yes_sub_title": sub,
+            "yes_bid_dollars": bid, "yes_ask_dollars": ask,
+            "last_price_dollars": last, "close_time": close,
+            "volume_fp": "1000.00"}
+_KAL = {"markets": [
+    # A far-dated meeting, which must not win.
+    _mkt("KXFEDDECISION-28JAN-H25", "KXFEDDECISION-28JAN", "Hike 25bps",
+         "0.1000", "0.2100", "2028-01-26T18:59:00Z"),
+    # The next meeting.
+    _mkt("KXFEDDECISION-26SEP-H25", "KXFEDDECISION-26SEP", "Hike 25bps",
+         "0.8500", "0.8700", "2026-09-16T18:59:00Z"),
+    _mkt("KXFEDDECISION-26SEP-N", "KXFEDDECISION-26SEP", "No change",
+         "0.1300", "0.1500", "2026-09-16T18:59:00Z"),
+    _mkt("KXFEDDECISION-26SEP-C25", "KXFEDDECISION-26SEP", "Cut 25bps",
+         "0.0000", "0.0100", "2026-09-16T18:59:00Z"),
+]}
+sources._json = lambda url, **kw: _KAL
+try:
+    _odds = sources.fed_odds(date(2026, 9, 12))
+finally:
+    sources._json = _real
+check("the soonest meeting is chosen", _odds["event"], "KXFEDDECISION-26SEP")
+check("a far-dated contract is excluded", len(_odds["outcomes"]), 3)
+check("the favourite leads", _odds["outcomes"][0]["label"], "Hike 25bps")
+check("priced off the mid", round(_odds["outcomes"][0]["prob"], 1), 86.0)
+check("mids sum near 100", round(_odds["raw_total"]), 100)
+
+print("\n-- FED PATH renders, and refuses to forecast --")
+def _fed_ctx(rate=None, odds=None, infl=None):
+    c = dict(healthy)
+    c["now"] = datetime(2026, 9, 12, 9, 20, tzinfo=LISBON)
+    c["policy_radar"] = {"ok": True, "error": None, "data": {
+        "events": [], "texts_scanned": 3, "partial": None,
+        "source": "Federal Register"}}
+    c["watchlist"] = {"events": [], "problems": []}
+    c["fed_officials"] = None
+    c["treasury_ops"] = None
+    c["policy_rate"] = rate
+    c["fed_odds"] = odds
+    c["inflation"] = infl
+    return c
+
+_RATE_OK = {"ok": True, "error": None, "data": {
+    "as_of": date(2026, 9, 10), "effr": 3.63, "target_low": 3.5,
+    "target_high": 3.75, "volume_bn": 108, "source": "New York Fed"}}
+_ODDS_OK = {"ok": True, "error": None, "data": {
+    "event": "KXFEDDECISION-26SEP",
+    "closes": datetime(2026, 9, 16, 19, 59, tzinfo=LISBON),
+    "outcomes": [{"label": "Hike 25bps", "prob": 86.0, "spread": 2.0,
+                  "volume": 1e5, "ticker": "a"},
+                 {"label": "No change", "prob": 14.0, "spread": 2.0,
+                  "volume": 1e5, "ticker": "b"}],
+    "raw_total": 100.0, "source": "Kalshi (prediction market, mid of book)"}}
+_INFL_OK = {"ok": True, "error": None, "data": {"prints": [
+    {"label": "CPI", "period": "August 2026", "year": 2026, "month": 8,
+     "index": 334.131, "mom": 0.396, "yoy": 3.352, "preliminary": False,
+     "series_id": "CUSR0000SA0"},
+    {"label": "PPI final demand", "period": "August 2026", "year": 2026,
+     "month": 8, "index": 157.411, "mom": 0.400, "yoy": 5.41,
+     "preliminary": True, "series_id": "WPSFD4"}],
+    "partial": None, "source": "BLS public API"}}
+
+_fed = render.build(_fed_ctx(_RATE_OK, _ODDS_OK, _INFL_OK))[0] \
+    .split("## FED PATH")[1].split("\n## ")[0]
+check_true("the target range is stated",
+           "Target 3.50\u20133.75%" in _fed, _fed)
+check_true("the effective rate sits beside it", "EFFR 3.63%" in _fed, _fed)
+check_true("the priced favourite is shown",
+           "Hike 25bps **86%**" in _fed, _fed)
+check_true("with a countdown to the decision", "T-4" in _fed, _fed)
+check_true("CPI carries its month, not today's date",
+           "CPI** August 2026" in _fed, _fed)
+check_true("month-over-month and year-over-year both appear",
+           "+0.40% m/m" in _fed and "+3.4% y/y" in _fed, _fed)
+check_true("a preliminary PPI print says so",
+           "(preliminary)" in _fed, _fed)
+check_true("the odds are labelled a prediction market, not CME",
+           "prediction market" in _fed, _fed)
+check_true("it never claims what the market will do",
+           not any(w in _fed.lower() for w in
+                   ("expect", "should ", "will likely", "target price")), _fed)
+
+print("\n-- FED PATH degrades honestly --")
+_wide = {"ok": True, "error": None, "data": dict(
+    _ODDS_OK["data"], raw_total=72.0)}
+_w = render.build(_fed_ctx(_RATE_OK, _wide, _INFL_OK))[0] \
+    .split("## FED PATH")[1].split("\n## ")[0]
+check_true("a book that does not sum to 100 is flagged",
+           "not ~100%" in _w and "indicative" in _w, _w)
+
+_dead = {"ok": False, "error": "HTTP 429", "data": None}
+_d = render.build(_fed_ctx(_dead, _dead, _dead))[0] \
+    .split("## FED PATH")[1].split("\n## ")[0]
+check_true("each leg names its own failure",
+           _d.count("HTTP 429") == 3, _d)
+check_true("and no number is invented", "0%" not in _d, _d)
 
 
 print()
