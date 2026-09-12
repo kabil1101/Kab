@@ -28,35 +28,32 @@ BROWSER = {
 # CME's own quote service for 30-day Fed Funds futures (from which the
 # probabilities are arithmetic), and the two prediction markets that publish
 # Fed contracts over a free read API.
+# Round 13. Round 12 answered the hard question: the Fed-path odds this
+# project has recorded as having no free source since day one are available
+# from two independent prediction markets, both keyless. CME itself is 403 to
+# datacenter IPs - the Farside lesson again - so FedWatch stays quarantined
+# and the odds come from elsewhere.
+#
+# This round reads the shapes: which Kalshi contracts exist for the NEXT
+# meeting and how their strikes are labelled, what Polymarket's September
+# event carries, and what BLS actually returns per series (v1 has no
+# calculations, so month-over-month and year-over-year have to be computed
+# from the index values, which means knowing exactly what the index looks
+# like).
 CANDIDATES = [
-    # --- inflation: BLS public API v1 takes no key at all
+    ("kalshi/events-open",
+     "https://api.elections.kalshi.com/trade-api/v2/events"
+     "?series_ticker=KXFEDDECISION&status=open&limit=3"),
+    ("kalshi/markets-open",
+     "https://api.elections.kalshi.com/trade-api/v2/markets"
+     "?series_ticker=KXFEDDECISION&status=open&limit=20"),
+    ("polymarket/sept-event",
+     "https://gamma-api.polymarket.com/events?slug=fed-decision-in-september-762"),
     ("bls/cpi-headline",
      "https://api.bls.gov/publicAPI/v1/timeseries/data/CUSR0000SA0"),
-    ("bls/cpi-core",
-     "https://api.bls.gov/publicAPI/v1/timeseries/data/CUSR0000SA0L1E"),
     ("bls/ppi-final-demand",
      "https://api.bls.gov/publicAPI/v1/timeseries/data/WPSFD4"),
-    ("bls/ppi-alt",
-     "https://api.bls.gov/publicAPI/v1/timeseries/data/WPUFD4"),
-    # --- the policy rate itself, keyless, from the desk that sets it
-    ("nyfed/rates-latest",
-     "https://markets.newyorkfed.org/api/rates/all/latest.json"),
-    # --- odds: CME's quote service for ZQ (30-day Fed Funds futures)
-    ("cme/zq-quotes",
-     "https://www.cmegroup.com/CmeWS/mvc/Quotes/Future/305/G"),
-    ("cme/zq-settlements",
-     "https://www.cmegroup.com/CmeWS/mvc/Settlements/Futures/Settlements/305/FUT"),
-    # --- odds: prediction markets, free read APIs
-    ("kalshi/fed-series",
-     "https://api.elections.kalshi.com/trade-api/v2/markets?limit=5&series_ticker=KXFEDDECISION"),
-    ("kalshi/search",
-     "https://api.elections.kalshi.com/trade-api/v2/series?category=Economics"),
-    ("polymarket/fed",
-     "https://gamma-api.polymarket.com/markets?closed=false&limit=5&tag_id=100328"),
-    ("polymarket/search",
-     "https://gamma-api.polymarket.com/events?closed=false&limit=4&order=volume24hr&ascending=false"),
 ]
-
 
 def main() -> int:
     print(f"Probing {len(CANDIDATES)} candidates from an Actions runner\n")
@@ -79,7 +76,8 @@ def main() -> int:
             except json.JSONDecodeError:
                 print("  declared JSON, did not parse")
             else:
-                print(f"  {' '.join(json.dumps(data)[:900].split())}")
+                blob = json.dumps(data)
+                print(f"  {' '.join(blob[:2600].split())}")
         elif r.ok:
             print(f"  head: {' '.join(r.text[:200].split())}")
         else:
