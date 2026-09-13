@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger installed 2026-09-08 · 🔴 **Trigger stale in Google since 2026-09-12 — two briefs lost** · 🟡 Awaiting one week of delivered-vs-target |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live 2026-09-13 (was, rev 7: 🔴 stale in Google since 09-12) · 🟡 Awaiting one week of delivered-vs-target, **counting from Mon 2026-09-14** |
 | **Last updated** | 2026-09-13 |
-| **Revision** | 7 (was: 6) |
+| **Revision** | 8 (was: 7, was: 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -168,6 +168,23 @@ re-pasted.
 messages; there is none dated 12 Sep and none dated 13 Sep before the manual
 dispatch at 12:38 UTC. The Actions run list for `market-brief.yml` shows no run
 at all on 12 Sep other than #59, and none on 13 Sep before #60.
+
+### §2.1f Trigger v7 live — 2026-09-13
+
+| Fact | Evidence |
+|---|---|
+| Google runs the new code | Apps Script log `Brief dispatched 16:26 LIS (trigger v7).` — the `(trigger v7)` suffix exists only in the new file |
+| GitHub received it | run #64, `2026-09-13T15:26:45Z`, `workflow_dispatch`, success — 16:26 Lisbon, the same minute |
+| The version handshake passes | delivered brief goes straight from `built 16:26 LIS` to `## THE SETUP`; no `TRIGGER OUT OF DATE` banner, where run #61 with `trigger_version=6` printed one |
+| Delivery | 15:27:01Z, ~16 seconds after dispatch |
+| The honest delta label, in a real email | `BTC $77139, +0.5% vs earlier today` — the second brief of the day, correctly not called "vs yesterday" |
+
+✅ CONFIRMED end to end, and the detector's negative case is now confirmed too:
+it stayed silent when the versions agreed. A warning that only ever fires is
+worth nothing; this is the first evidence it does not.
+
+**Still unverified:** the daily timer itself. `testNow` exercises the code
+path, not the schedule. See §5.
 
 ### §2.1e The weekend gap, and why nothing raised it
 
@@ -371,11 +388,19 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 ### Blocking / high value
 - ✅ **CLOSED 2026-09-08: install the Apps Script trigger.** Open since
   2026-09-05, the highest-value item for four days. Done, proven (§2.1b).
-- 🔴 **BLOCKING, TWO MINUTES: re-paste `trigger/apps-script.gs` into Google.**
-  Until this is done the brief does not arrive at weekends at all, and the
-  count below cannot restart. Walkthrough: `docs/trigger-setup.md` →
-  *Re-pasting after the code changes*. **Checkpoint: the code panel shows
-  `const SCRIPT_VERSION = '7';` and `testNow` logs `(trigger v7)`.**
+- ✅ **CLOSED 2026-09-13, same day it opened: the script is re-pasted and v7
+  is live.** Apps Script logged `Brief dispatched 16:26 LIS (trigger v7)`,
+  GitHub run #64 started `15:26:45Z`, the brief arrived `15:27:01Z` and
+  carried **no** `TRIGGER OUT OF DATE` banner — so the version the script
+  reports and the version this repo expects now agree, measured rather than
+  assumed (§2.1f).
+- ❓ **Not verified: that the daily 09:25 timer still exists.** Re-pasting code
+  does not delete a trigger — the timer is bound to the handler name
+  `sendBrief`, which the new code still defines — but nobody has looked at the
+  Triggers page since the paste, and `testNow` proves the *code* works without
+  proving the *timer* is there. **Monday 09:20 LIS is the observation that
+  settles it.** If no brief arrives, the timer is the first place to look, and
+  `install()` re-creates it safely.
 - ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings — now seven-day,
   and the count restarts at 0** (was: 4 of 5, wrongly — see §2.1d).
   Read the `built HH:MM LIS` line each day and compare against 09:25. Nothing
@@ -553,7 +578,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
-| 13 | 2026-09-13 | **The seven-day switch had never taken effect.** Checked the inbox rather than the run log and found no brief for Sat 12 or Sun 13 Sep — the Google copy of the Apps Script still carried the weekend guard rev 6 removed from the repo, and §2.1d had recorded the Saturday as delivered. Sunday's brief sent by hand. Built the two detectors that would have caught it (`health.py`: missed days, trigger version) and fixed a third defect the gap exposed — a two-day move labelled "vs yesterday" (§3.18). Delivery record rebuilt from Gmail |
+| 13 | 2026-09-13 | **The seven-day switch had never taken effect.** Checked the inbox rather than the run log and found no brief for Sat 12 or Sun 13 Sep — the Google copy of the Apps Script still carried the weekend guard rev 6 removed from the repo, and §2.1d had recorded the Saturday as delivered. Sunday's brief sent by hand. Built the two detectors that would have caught it (`health.py`: missed days, trigger version) and fixed a third defect the gap exposed — a two-day move labelled "vs yesterday" (§3.18). Delivery record rebuilt from Gmail. **Kabil re-pasted within the hour; v7 confirmed live end to end (§2.1f)** |
 | 12 | 2026-09-12 | Brief switched to seven days a week (D14). Both crons drop the weekday filter and the Apps Script trigger loses its weekend guard; the cash-session suppression stays and gains tests on a real Sunday and a real Monday |
 | 11 | 2026-09-12 | FED PATH added: target range and EFFR (NY Fed), priced odds for the next decision (Kalshi), CPI/core/PPI computed from the BLS index and held until superseded. **D13's Fed-path clause retracted** — the odds were never unavailable, only CME's rendering of them was (§12.4a). Expected-market-reaction deliberately not built, with a test asserting the section never forecasts |
 | 10 | 2026-09-10 | Kabil: the $6bn buyback announcement was missing. It was not missing, it was unreadable (§3.9). Four defects behind one line: a wrong verdict in §12.2, a string `"null"`, an unrequested column, and a cross-population median. Announced operations now lead the section with cap, Lisbon window and a bucket-aware step-up flag, and appear in RISK WINDOWS. Two of the four were caught only by dry-running against live data |
@@ -580,6 +605,38 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 8 · 2026-09-13 · The trigger is current again, and the detector stayed quiet
+**Sections touched:** header, §2.1f (new), §5, §10
+**Type:** DATA
+**Evidence:** Apps Script execution log `Brief dispatched 16:26 LIS (trigger
+v7).`; GitHub run #64 `2026-09-13T15:26:45Z` workflow_dispatch success; brief
+delivered `15:27:01Z` reading `Cloud run — built 16:26 LIS.` followed
+immediately by `## THE SETUP`, with no warning banner between them; run #61
+(`trigger_version=6`) for the contrasting case.
+
+| Field | Was | Now |
+|---|---|---|
+| Installed script version | 6 — the weekend-guard copy | **7**, reported by the script itself on every dispatch |
+| The re-paste blocker | 🔴 open, §5's top item | ✅ closed the same day |
+| Trigger-drift detector | fires correctly (proved with a forced mismatch) | **and stays silent correctly** — the case that decides whether it is worth having |
+| Weekend delivery | none | expected; Sat 19 / Sun 20 Sep are the first real test |
+| Daily 09:25 timer | assumed intact | ❓ still assumed. `testNow` proves the code, not the schedule |
+
+**Why:** Kabil re-pasted within the hour. The close is worth its own revision
+because rev 7's whole point was that a change *made* is not a change that
+*works*, and writing "done" here without the dispatch timestamps would repeat
+exactly the error rev 7 corrected.
+
+**Impact on prior conclusions:** None reversed. §2.1d's corrected rows stand,
+and the five-clean-mornings count still starts at zero — it begins Mon 14 Sep.
+
+**Not changed, deliberately:** §5 keeps an open ❓ for the daily timer rather
+than marking the trigger fully proved. Re-pasting code does not delete a
+trigger and the handler name is unchanged, so it *should* be intact — but
+"should" is the word this project has been burned by twice, and nobody has
+looked at the Triggers page. Monday at 09:20 settles it at no cost, where
+asserting it now would be another §3.17.
 
 ## rev 7 · 2026-09-13 · A delivered-vs-target table with a delivery that never happened
 **Sections touched:** header, §1, §2.1, §2.1d, §2.1e (new), §3.16–§3.18 (new),
