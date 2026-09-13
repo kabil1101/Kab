@@ -22,7 +22,7 @@ Eleven sections, in order:
 | Section | What it carries |
 |---|---|
 | **THE SETUP** | Three lines: BTC with day-over-day move and range position, the top USD risk today, the latest ETF flow |
-| **CALENDAR** | Today's High/Medium events with actuals and forecasts; forward view to end of week |
+| **CALENDAR** | Today's High/Medium events with forecast and previous; forward view to end of week |
 | **AHEAD** | Countdown to every dated policy and geopolitical event, repeated daily until it passes |
 | **FED PATH** | Target range and EFFR; priced odds for the next decision; CPI, core CPI and PPI held until superseded |
 | **POLICY DESK** | Warsh remarks and FOMC releases; buyback operations announced and completed; the coupon auction calendar |

@@ -8,7 +8,7 @@
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 Trigger v7 live 2026-09-13 (was, rev 7: 🔴 stale in Google since 09-12) · 🟡 Awaiting one week of delivered-vs-target, **counting from Mon 2026-09-14** |
 | **Last updated** | 2026-09-13 |
-| **Revision** | 9 (was: 8, was: 7, was: 6) |
+| **Revision** | 10 (was: 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -348,6 +348,25 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.20 — A mirror can lag the thing it mirrors by days, and the status code
+says nothing about it.** `watcher.guru/news/feed` answered `200`,
+`application/rss+xml`, 10 well-formed items, every one carrying a parseable
+timestamp — and its **newest item was 41.9 hours old**, on a site whose X
+account posts hourly. It also carried Tesla, Apple and Nvidia stories on a feed
+meant to be the crypto beat. §3.7 said a 200 is not signal; this is the sharper
+version — **the feed carried real signal, from the day before yesterday.**
+Every freshness check in this project measures the *quote's* age; nothing
+measured the *feed's*. A probe must read the newest item's timestamp, not just
+count items. *Evidence: probe round 14.*
+
+**§3.21 — A new fetcher on a host you already depend on can cost you the source
+that works.** The Yahoo news feed answered `429 Too Many Requests` from the
+runner. Yahoo's chart API is the entire MACRO & EQUITIES section. Wiring a
+second, chattier call to the same host risks the rate limit landing on the
+quotes instead — trading a section that works for one that might. **Before
+adding a source, check whether its host is already carrying something you
+cannot afford to lose.** *Evidence: probe round 14.*
+
 **§3.19 — A green health indicator on a component that did nothing is not
 evidence it worked.** Google's Triggers page showed `Taux d'erreur 0%` beside a
 last run of `13 sept. 2026, 09:20:11` — the exact morning the brief did not
@@ -531,7 +550,7 @@ that will not happen.
 | Section | Content | Source |
 |---|---|---|
 | THE SETUP | Three lines: BTC with day-over-day delta and range position, top USD risk today, latest ETF flow | derived |
-| CALENDAR | Today's High/Medium events with actual/forecast; forward view to end of week | ForexFactory JSON |
+| CALENDAR | Today's High/Medium events with **forecast and previous**; forward view to end of week | ForexFactory JSON |
 | **AHEAD** | Countdown to every dated policy/geopolitical event, repeated daily until it passes | Federal Register + watchlist |
 | **POLICY DESK** | Warsh remarks and FOMC releases; buyback sizes; coupon auction calendar | Fed RSS + Fiscal Data + TreasuryDirect |
 | CRYPTO | BTC/ETH/SOL with deltas, ranges, VWAP; options max pain and OI | Kraken + Deribit |
@@ -540,6 +559,13 @@ that will not happen.
 | SENTIMENT | Fear & Greed with day and week deltas; total mcap and dominance | alternative.me + CoinGecko |
 | MACRO & EQUITIES | DXY, 10Y, gold, WTI, VIX, S&P and Nasdaq futures, each with an age stamp | Yahoo chart API |
 | RISK WINDOWS | Only windows still ahead; weekends suppress the cash session; a policy date landing today appears here | derived |
+
+**The calendar carries no `actual`.** `sources.py:143`: *"ForexFactory weekly
+feeds. Schedule-only: there is no `actual` field."* So the brief can print what
+a number is forecast to be and never what it came in at — which is the whole
+reason a second daily edition needs a release source of its own before it is
+worth sending *(was, rev 1–9: "with actual/forecast" — ❌ WRONG, the source has
+no such field)*.
 
 Subject line carries date, BTC, next USD event, and a policy date if it is
 within 7 days. The `Market Brief - ` prefix is load-bearing for the chat-side
@@ -645,6 +671,41 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 10 · 2026-09-13 · Probe round 14 — the accounts were the route, not the fact
+**Sections touched:** header, §3.20–§3.21 (new), §7, §12.2, §12.8 (new)
+**Type:** DATA + CORRECTION
+**Evidence:** probe run 34782212483, job 103791166562, ten candidates from an
+Actions runner. FRED: `400 · "The value for variable api_key is not
+registered"`. watcher.guru: `200`, 10 items, newest **41.9h old**. CNBC: `200`,
+30 items, **54.8h window**, newest 3.1h. Yahoo news: `429`.
+
+| Field | Was | Now |
+|---|---|---|
+| §7 CALENDAR description | "with actual/forecast" | **forecast and previous.** `sources.py:143` says the source is schedule-only and has no `actual` field — the claim was wrong in this file and in the synopsis |
+| Release actuals | no source | **FRED reachable**, auth the only barrier. Needs Kabil to get a free key |
+| The four X accounts | assumed relayable | one survives (@zerohedge), one is 42h stale (@WatcherGuru), one has no feed (@financialjuice), one has no free primary by design (@DeItaone) |
+| Best news source found | — | **CNBC, which Kabil did not name**, beat three of his four |
+| Freshness checking | quote age only | §3.20: nothing measured the *feed's* age. A 200 with well-formed timestamped items can still be two days behind |
+| Host-collision risk | unconsidered | §3.21: Yahoo news `429`d, and Yahoo's chart API is the entire MACRO section |
+
+**Why:** Kabil wants breaking news in the brief and named four X accounts. X
+itself fails D2 outright — free tier killed 2026-02-06, pay-per-use at
+$0.005/read, Nitter under cease-and-desist — so the question became which of
+those accounts merely *relay* something reachable. Probing answered it, and
+answered it differently than expected.
+
+**Impact on prior conclusions:** §7 is corrected in both this file and the
+synopsis. Nothing else is invalidated. §3.7's "a 200 is not signal" gains its
+sharper sibling in §3.20 — the feed *did* carry signal, from two days ago.
+
+**Not changed, deliberately:** nothing is wired yet, and the FRED key has not
+been requested as a blocking item. Round 14 was run **before** asking Kabil for
+a signup precisely so his time would not be spent on a host that might have
+refused datacenter IPs the way Farside, Binance and CME all did. It did not
+refuse, so the ask is now worth making — and that ordering is the reusable part.
+The PM edition also stays unbuilt until the five clean mornings are measured;
+probing cannot touch the delivery path, and building it can.
 
 ## rev 9 · 2026-09-13 · Google rendered a lost brief as 0% error
 **Sections touched:** header, §2.1g (new), §3.19 (new), §5
@@ -979,6 +1040,15 @@ them before the trigger is installed would leave no delivery path at all.
 | Polymarket gamma | `S7` | 🟡 PROBED | 200, and far more liquid than Kalshi on the September meeting ($20m/24h). Not wired: its event slugs are per-month strings, where Kalshi's tickers generalise |
 | CME quote service | `S1` | ⚫ EXCLUDED | `403 — "This IP address is blocked due to suspected web scraping activity"`. Farside's lesson, third occurrence |
 | ~~Fed-path odds (any free source)~~ | ~~`S2` `S6`~~ | ❌ **VERDICT WRONG** | was: "needs contract-level Fed Funds settlements". It needs a prediction market, which is free. See rev 5 |
+| FRED (St. Louis Fed) | `S0`* | 🟡 PROBED | `400 · "The value for variable api_key is not registered"` from a runner — **reachable; auth is the only barrier**. Probed with a deliberately invalid key so nobody signs up for a host that would have blocked us. Needs a free key before it can be wired |
+| ZeroHedge via Feedburner | `S0` | 🟡 PROBED | `200`, 25 items, all timestamped, newest 0.7h old. **Window only 21.6h** — marginal for a 24h look-back, ample for a 5h one. Carries political commentary alongside market stories; see §12.8 |
+| `zerohedge.com/fullrss2.xml` | `S3` | ⚫ EXCLUDED | 404. Feedburner is the live path |
+| `watcher.guru/news/feed` (= `/feed`) | `S5` | ⚫ EXCLUDED | `200`, well-formed, 10 items, all timestamped — and **newest item 41.9h old**, carrying equity stories on the crypto beat. The site feed does not carry what the X account posts. §3.20 |
+| CNBC `combinedcms` top news | `S0` | 🟢 **BEST OF ROUND** | `200`, 30 items, all timestamped, newest 3.1h old, **54.8h window**. Real wire content — the Strait of Hormuz vessel strike was in it |
+| MarketWatch top stories | `S5` | 🟡 PROBED | `200`, fresh (0.3h) but only **6.7h window** and the wrong beat — retail personal finance, not a market wire |
+| Yahoo Finance news RSS | `S1` | ⚫ EXCLUDED | `429 Too Many Requests`. **And excluded on principle: Yahoo's chart API is the whole MACRO section** — §3.21 |
+| financialjuice.com | `S6`? | 🟡 PROBED | `200` HTML, **no RSS/Atom link advertised**. The squawk is a real-time product, almost certainly client-rendered. Unresolved |
+| X / Twitter API (any account) | `S2` | ⚫ EXCLUDED | Free tier killed for new developers 2026-02-06; pay-per-use at $0.005/read (~$23–60/mo for this use). Basic/Pro closed to new signups. Nitter under cease-and-desist. **Fails D2 and the reachability bar at once** |
 | ETH ETF flows | — | ❓ | TFTC is Bitcoin-only; no free replacement found |
 
 ### §12.3 Promotion ladder
@@ -990,6 +1060,31 @@ them before the trigger is installed would leave no delivery path at all.
 ⚫ **EXCLUDED** — probed and failed, or paid. **Stop re-attempting it.** An
 excluded entry is worth as much as a live one: it is what stops the same dead
 API being rediscovered enthusiastically in six months.
+
+### §12.8 What round 14 actually settled about the news idea
+
+Kabil named four X accounts. Probed at their primary sources, the result
+inverts the premise:
+
+| His account | Primary source | Verdict |
+|---|---|---|
+| @zerohedge | Feedburner RSS | 🟡 the only one that survives as a direct relay |
+| @WatcherGuru | watcher.guru RSS | ⚫ **42 hours stale and the wrong beat** |
+| @financialjuice | no feed advertised | 🟡 unresolved, likely client-rendered |
+| @DeItaone | a Bloomberg terminal | ⚫ no free primary, by design |
+
+**CNBC — which he did not name — beat three of the four.** 30 items, a 54.8h
+window, three hours fresh, and genuinely market-moving content in it.
+
+The lesson is §12.4a pointing forward rather than backward: the accounts were
+the *route* he knew, not the *fact* he wanted. Probing the fact found a better
+route he had not thought to ask for.
+
+**Still his to decide:** ZeroHedge mixes market stories with political
+commentary. In a brief where every line is a fetched number with a source and
+an age stamp, a commentary headline renders with identical authority. That is
+§3.9 inverted — opinion typeset as data — and it would be the first unsourced
+claim the brief has ever printed.
 
 ### §12.4a The shape both wrong verdicts share
 
