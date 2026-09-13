@@ -29,6 +29,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from zoneinfo import ZoneInfo
 
+import health
 import render
 import sources
 import state
@@ -181,6 +182,14 @@ def main() -> int:
 
     ctx = gather(now)
     ctx["prev"] = prev          # yesterday's figures, for day-over-day deltas
+    # Whether the delivery system itself is healthy. Computed here, not in the
+    # renderer, because this is the only layer that can see the environment.
+    ctx["health"] = health.notes(prev, now.date(),
+                                 os.environ.get("TRIGGER_VERSION"))
+    for note in ctx["health"]:
+        # Also surfaces on the Actions run page, so a gap is visible to
+        # whoever opens GitHub as well as to whoever opens Gmail.
+        print(f"::warning::{note}", file=sys.stderr)
     markdown, html = render.build(ctx)
 
     print(markdown)  # lands in the Actions log for debugging

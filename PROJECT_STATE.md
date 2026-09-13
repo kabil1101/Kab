@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 **On-time trigger installed 2026-09-08** · 🟡 Awaiting one week of delivered-vs-target |
-| **Last updated** | 2026-09-12 |
-| **Revision** | 6 |
+| **Status** | 🟢 Content complete · 🟢 Trigger installed 2026-09-08 · 🔴 **Trigger stale in Google since 2026-09-12 — two briefs lost** · 🟡 Awaiting one week of delivered-vs-target |
+| **Last updated** | 2026-09-13 |
+| **Revision** | 7 (was: 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -47,9 +47,23 @@ run #44 completed 15 seconds later (§2.1b).
 
 The project therefore moves from building to **measuring**. Fourteen briefs of
 history say a scheduler can look fine for two days and then degrade, so a
-single punctual morning proves nothing. **This is now a measurement problem,
-not a delivery problem, and it is blocked on nothing but the passage of five
-weekday mornings.**
+single punctual morning proves nothing. *(was, rev 3–6: "blocked on nothing but
+the passage of five weekday mornings.")*
+
+**And then the measurement itself turned out to be wrong.** On 2026-09-13 the
+inbox was checked for the first time rather than the run log, and two briefs —
+Sat 12 and Sun 13 September — had never been sent at all. §2.1d had recorded
+the Saturday as delivered at 09:20. It had not been. The cause is the one this
+file predicted in rev 6 and then failed to verify: the Apps Script in Kabil's
+Google account still carries the weekend guard that was removed from the
+repository, so it exits cleanly every Saturday and Sunday without dispatching.
+
+**The lesson is not "re-paste the script." It is that this project had no way
+to detect its own absence** — a brief that is never sent cannot report that it
+was never sent, Apps Script only emails on a throw, and GitHub only shows runs
+someone asked for. Rev 7 closes that: the next brief to arrive names the days
+that did not, and a stale trigger identifies itself. **The blocking item is a
+two-minute re-paste by Kabil (§5); the measurement restarts from zero.**
 
 ---
 
@@ -73,7 +87,8 @@ weekday mornings.**
 | Worst | 11 h 49 m late | 📄 REPORTED |
 | Manual dispatch latency | seconds | ✅ CONFIRMED (every dispatch, sessions 6–8, incl. 2026-09-07) |
 | Target | 09:25 Europe/Lisbon | — |
-| **Delivered-vs-target over a full week with the fix installed** | ❓ UNKNOWN — **measurable from 2026-09-09** (was: not measurable, no trigger) | **the measurement that decides whether this is solved** |
+| Consecutive on-time mornings, confirmed from the inbox | **3** (Wed 9 – Fri 11 Sep), then a 2-day gap | ✅ CONFIRMED (§2.1d, Gmail) |
+| **Delivered-vs-target over a full week with the fix installed** | ❓ UNKNOWN — **restarts once the trigger is re-pasted** (was, rev 3–6: "measurable from 2026-09-09"; the run that would have measured it never fired at weekends) | **the measurement that decides whether this is solved** |
 
 The 39-minute figure is the trap: the schedule was near-punctual on its first
 two days and then degraded. **One good morning proves nothing.**
@@ -131,17 +146,43 @@ the mechanism that stops the crons delivering a second, staler copy every
 afternoon now that the trigger sends first. It was written on 2026-09-05 on the
 theory that it would be needed; two days later it was.
 
-### §2.1d Delivery, days 1–3 with the trigger live
+### §2.1d Delivery, days 1–5 with the trigger live — **corrected 2026-09-13**
 
-| Day | Built | vs 09:25 target |
+Rebuilt from the **inbox**, which is the only record of a delivery. The rows
+below that changed were taken from what the trigger was expected to do.
+
+| Day | Brief in inbox (Gmail) | Dispatch run | vs 09:25 target |
+|---|---|---|---|
+| Tue 2026-09-08 | 13:28 LIS | #44, manual `testNow` | trigger installed, not a scheduled morning |
+| Wed 2026-09-09 | 09:20 LIS | #47, 08:20:13Z | ✅ |
+| Thu 2026-09-10 | 09:20 LIS | #50, 08:20:14Z | ✅ **5 min early** |
+| Fri 2026-09-11 | 09:20 LIS | #56, 08:20:14Z | ✅ |
+| **Sat 2026-09-12** | **none — no brief was sent** (was: "09:20 LIS ✅") | **no dispatch fired**; the only run was #59 11:45Z, a `skip_email` dry-run | ❌ **MISSED** |
+| **Sun 2026-09-13** | 13:38 LIS, dispatched by hand this session | #60 | ❌ **MISSED at target** |
+
+**Three clean mornings, not four** (was: "Four clean mornings of the five §5
+asks for. Monday closes it."). The counter restarts when the trigger is
+re-pasted.
+
+**Evidence.** Gmail `subject:"Market Brief"` for 5–13 Sep returns eight
+messages; there is none dated 12 Sep and none dated 13 Sep before the manual
+dispatch at 12:38 UTC. The Actions run list for `market-brief.yml` shows no run
+at all on 12 Sep other than #59, and none on 13 Sep before #60.
+
+### §2.1e The weekend gap, and why nothing raised it
+
+| Link in the chain | What it did on Sat 12 Sep | Why it stayed silent |
 |---|---|---|
-| Tue 2026-09-08 | — | trigger installed 13:27, not a scheduled morning |
-| Wed 2026-09-09 | on time (Kabil) | ✅ |
-| Thu 2026-09-10 | 09:20 LIS (run log 08:20 UTC) | ✅ **5 min early** |
-| Fri 2026-09-11 | 09:20 LIS | ✅ |
-| Sat 2026-09-12 | 09:20 LIS | ✅ |
+| Apps Script `sendBrief` (Google copy) | ran, hit the weekend guard, exited | it did not throw, and Google only emails on a throw |
+| GitHub Actions | nothing | a run nobody requests is not a failed run |
+| The workflow's own crons | nothing | they were still `* * 1-5` in the last run's checkout |
+| The test suite | green | it tests the brief, and the brief was never built |
+| `state/latest.json` | held `2026-09-11` | nothing had ever compared it to today |
+| §2.1d, this file | recorded ✅ | written from the intent, not from the inbox |
 
-Four clean mornings of the five §5 asks for. Monday closes it.
+✅ CONFIRMED. **Six places could have noticed and none was looking**, because
+every one of them watches for a failure and this was an absence. That is the
+finding, and §3.16 states it as a rule.
 
 ### §2.2 Token permission for the external trigger — measured, not assumed
 
@@ -261,6 +302,36 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.16 — Every guard in this system watches for failure; none watched for
+absence.** A throw is caught, a non-204 is caught, a degraded fetcher is
+caught, a duplicate run is caught. A run that was never requested is not any of
+those. On 12 Sep the trigger exited cleanly, GitHub was never called, and the
+silence propagated through six independent checks (§2.1e) without tripping one.
+**Absence needs its own detector, and the only place that can hold one is the
+next thing that does succeed.** `scripts/health.py` compares `last_sent_date`
+to today and the next brief names the days that never came. *Evidence: §2.1d,
+§2.1e; run list for 12–13 Sep; Gmail.*
+
+**§3.17 — The delivery record was written from intent, not observation — and
+this file is where that error landed.** §2.1d recorded Sat 12 Sep as "09:20 LIS
+✅". No brief existed. The row was written because the trigger had been changed
+to run at weekends, and a change that was *made* was recorded as a change that
+*worked*. **The project's single most important measurement had never once been
+checked against the inbox**, which is the only place a delivery exists.
+*Evidence: rev 6 wrote the row and its own "Requires Kabil" line predicted the
+failure in the same commit.*
+
+**§3.18 — A correct number under a confident wrong label.** Sunday's brief
+printed `BTC $76,724, -0.6% vs yesterday`. The figure was right; the comparison
+was against **Friday**, because `state.delta` compares against whatever the
+state file holds and all three callers said "vs yesterday" regardless. One
+missed brief silently turned every day-over-day line in the next one into a
+two-day move wearing a one-day label. This is §3.12's shape again — a true
+statistic described as something it is not — and it is the second time a
+missing comparison population produced a wrong claim. The label is now derived
+from the state file's own date. *Evidence: brief of 2026-09-13 13:38 LIS
+against `state/latest.json` dated 2026-09-11; `render._vs_label` and its tests.*
+
 **§3.14 — Positive: degradation is honest throughout.** Every fetcher raises
 rather than returning a placeholder, every section prints `unavailable —
 <reason>`, and an empty result is rendered differently from a failed fetch.
@@ -290,6 +361,7 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 | D10 | Curated watchlist is pipe-delimited plain text, not YAML — indentation must not be able to break it | ✅ Locked |
 | D11 | Watchlist entries carry a last-confirmed date; >75 days prints as `unconfirmed` | ✅ Locked |
 | D12 | Bessent tracked through operations (buybacks, auctions, refunding), not remarks, because Treasury publishes no usable feed — and the brief states the gap | ✅ Accepted |
+| D15 | **The brief monitors its own delivery.** `last_sent_date` is compared to today and any missed day leads the brief in red; the Apps Script reports `SCRIPT_VERSION` on dispatch and a mismatch with `scripts/health.py` is printed. Neither check ever guesses: no state date, or no version on the dispatch, produces no claim | ✅ Locked 2026-09-13 |
 | D13 | ~~ETH ETF flows, aggregate liquidations **and Fed-path odds** stay out of scope. No free source~~ | ⚠ **PARTLY RETRACTED 2026-09-12.** Fed-path odds *are* freely available — Kalshi lists the decision as binary contracts over a keyless API (§12.2). The claim rested on CME's FedWatch being a data-free iframe, which was true and irrelevant: that is CME's *rendering* of the odds, not the odds. ETH ETF flows and aggregate liquidations still stand, but were reasoned the same way and are now **unconfirmed rather than settled** |
 
 ---
@@ -299,11 +371,33 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 ### Blocking / high value
 - ✅ **CLOSED 2026-09-08: install the Apps Script trigger.** Open since
   2026-09-05, the highest-value item for four days. Done, proven (§2.1b).
-- ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean weekday mornings.**
+- 🔴 **BLOCKING, TWO MINUTES: re-paste `trigger/apps-script.gs` into Google.**
+  Until this is done the brief does not arrive at weekends at all, and the
+  count below cannot restart. Walkthrough: `docs/trigger-setup.md` →
+  *Re-pasting after the code changes*. **Checkpoint: the code panel shows
+  `const SCRIPT_VERSION = '7';` and `testNow` logs `(trigger v7)`.**
+- ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings — now seven-day,
+  and the count restarts at 0** (was: 4 of 5, wrongly — see §2.1d).
   Read the `built HH:MM LIS` line each day and compare against 09:25. Nothing
   else in this file matters until that number exists. The old schedule was ~40
   minutes late on its first two days before degrading to eleven hours, so one
-  good morning is not evidence.
+  good morning is not evidence — and rev 6 proved that a *recorded* good
+  morning is not even evidence that a brief was sent.
+- ❓ **Does the gap detector actually fire in production?** It is tested
+  offline and dry-run against live data, but it has never printed on a real
+  morning. The next genuine miss is its first real test, and by construction
+  nobody can schedule one.
+- ⚠ **The gap detector inherits the state commit's reliability, and that is
+  not measured.** `last_sent_date` only reaches the next run if the workflow's
+  `Persist state` step pushes successfully. A push rejected as non-fast-forward
+  — a commit landing on the branch between dispatch and push — would lose the
+  marker and make the *following* brief report a gap that never happened. The
+  step fails loudly if that happens, so it is detectable, and `concurrency:
+  market-brief` serialises the runs themselves. **Deliberately not fixed in
+  rev 7:** hardening the push is a change to the delivery path, and bundling it
+  with the detector would mean shipping two untested things at once. A false
+  alarm here would retire the detector within a week, so this is the first
+  thing to watch.
 - ⏳ **2026-11-07 — the trigger token expires.** The brief silently stops
   arriving on time when it does. Added to `data/watchlist.txt` so the brief
   counts down to it; Apps Script also emails Kabil when a trigger throws.
@@ -338,17 +432,22 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
   probe.yml                manual source probe — the discipline in §12
   probe-permissions.yml    manual token-scope experiment (§2.2)
 scripts/
-  sources.py    (921)      one adapter per source; each raises or returns real data
-  render.py     (849)      markdown + HTML; every unavailability handled explicitly
-  main.py       (218)      run guard, orchestration, SMTP, recipient lock
+  sources.py   (1265)      one adapter per source; each raises or returns real data
+  render.py    (1030)      markdown + HTML; every unavailability handled explicitly
+  main.py       (230)      run guard, orchestration, SMTP, recipient lock
   state.py      (102)      day-over-day memory + duplicate-send guard
   watchlist.py   (98)      the curated half of the policy radar
-  probe.py       (71)      scratch prober, rewritten each round
+  health.py     (119)      does the brief itself still work — missed days,
+                           stale trigger. The only module that checks the
+                           system rather than the market
+  probe.py       (95)      scratch prober, rewritten each round
 tests/
-  test_brief.py (710)      offline, no network, gates every brief
+  test_brief.py(1176)      offline, no network, gates every brief
 data/watchlist.txt         dated events Kabil maintains by hand
 state/latest.json          yesterday's figures, committed by the run itself
-trigger/apps-script.gs     the on-time trigger — NOT YET INSTALLED
+trigger/apps-script.gs     the on-time trigger — installed 2026-09-08; carries
+                           SCRIPT_VERSION, which the brief checks (was: "NOT
+                           YET INSTALLED", stale since 2026-09-08)
 docs/trigger-setup.md      its walkthrough, checkpoint by checkpoint
 README.md                  setup, source table, design rationale
 PROJECT_STATE.md           this file
@@ -405,6 +504,12 @@ decisions are, not in a footnote, with the measurement that killed it. The
 `should_run` argument that was ignored, and the "Contents: write" claim are all
 recorded rather than quietly corrected.
 
+**⚠ CHECK THE INBOX, NOT THE INTENT.** A delivery exists in exactly one place:
+`kabil.dh@gmail.com`. A run log says a job ran, a commit says code changed, and
+neither says a brief arrived. Every row of §2.1d that turned out to be wrong
+was written from a run log or from an intention. **Before writing ✅ against a
+morning, search the mailbox for it.**
+
 **⚠ THE COMFORTABLE-WORK TRAP IN THIS DOMAIN: adding another data source
 instead of installing the trigger.** Probing a new API is engaging, produces
 visible output, and carries no discomfort. Installing the trigger is fifteen
@@ -448,6 +553,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 13 | 2026-09-13 | **The seven-day switch had never taken effect.** Checked the inbox rather than the run log and found no brief for Sat 12 or Sun 13 Sep — the Google copy of the Apps Script still carried the weekend guard rev 6 removed from the repo, and §2.1d had recorded the Saturday as delivered. Sunday's brief sent by hand. Built the two detectors that would have caught it (`health.py`: missed days, trigger version) and fixed a third defect the gap exposed — a two-day move labelled "vs yesterday" (§3.18). Delivery record rebuilt from Gmail |
 | 12 | 2026-09-12 | Brief switched to seven days a week (D14). Both crons drop the weekday filter and the Apps Script trigger loses its weekend guard; the cash-session suppression stays and gains tests on a real Sunday and a real Monday |
 | 11 | 2026-09-12 | FED PATH added: target range and EFFR (NY Fed), priced odds for the next decision (Kalshi), CPI/core/PPI computed from the BLS index and held until superseded. **D13's Fed-path clause retracted** — the odds were never unavailable, only CME's rendering of them was (§12.4a). Expected-market-reaction deliberately not built, with a test asserting the section never forecasts |
 | 10 | 2026-09-10 | Kabil: the $6bn buyback announcement was missing. It was not missing, it was unreadable (§3.9). Four defects behind one line: a wrong verdict in §12.2, a string `"null"`, an unrequested column, and a cross-population median. Announced operations now lead the section with cap, Lisbon window and a bucket-aware step-up flag, and appear in RISK WINDOWS. Two of the four were caught only by dry-running against live data |
@@ -474,6 +580,57 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 7 · 2026-09-13 · A delivered-vs-target table with a delivery that never happened
+**Sections touched:** header, §1, §2.1, §2.1d, §2.1e (new), §3.16–§3.18 (new),
+§4 D15 (new), §5, §6, §8, §10
+**Type:** CORRECTION + DATA + DECISION
+**Evidence:** Gmail `subject:"Market Brief"` 5–13 Sep — eight messages, none
+dated 12 Sep, none on 13 Sep before 12:38 UTC. Actions `market-brief.yml` run
+list — 12 Sep carries only run #59 (11:45Z, `skip_email` dry-run, job
+103548387840); 13 Sep carries nothing before #60, dispatched by hand this
+session and delivered 13:38 LIS. Live dry-run of `scripts/main.py` with the
+state file rewound to 2026-09-11 printing both banners above THE SETUP.
+
+| Field | Was | Now |
+|---|---|---|
+| Sat 2026-09-12 delivery | `09:20 LIS ✅` | **no brief was sent.** The row was false |
+| Sun 2026-09-13 delivery | not yet recorded | missed at target; sent by hand at 13:38 LIS |
+| Consecutive clean mornings | 4 of 5 | **3**, then a two-day gap. Counter restarts |
+| Basis of §2.1d | run logs and intent | the inbox, which is where a delivery exists |
+| Detection of a missing brief | none — six checks, none watching for absence | `health.missed_days`; the next brief names the days that did not arrive |
+| Detection of a stale trigger | none | `SCRIPT_VERSION` on every dispatch, compared against `health.EXPECTED_TRIGGER_VERSION` |
+| Day-over-day label | hard-coded `vs yesterday` in three places | derived from the state file's own date |
+| Apps Script warning claim (`docs/trigger-setup.md`) | "an expired token announces itself rather than appearing as a week of silence" | true for a throw, **false for a clean exit** — which is the case that happened. Corrected, with what each check does and does not cover |
+| §6 trigger line | "NOT YET INSTALLED" | installed 2026-09-08; stale since |
+
+**Why:** Rev 6 changed the brief to seven days a week, wrote "Requires Kabil:
+the Apps Script copy in his Google account still carries the old weekend guard
+and must be re-pasted", and then recorded the following Saturday as delivered
+at 09:20. Both statements are in the same commit. The prediction was right and
+the record was written as if the fix had already happened.
+
+**Impact on prior conclusions:** §2.1d is corrected, not extended — three of
+its rows stand and one was false. D14 (seven days a week) is *unaffected in
+code and never took effect in production*, which is a distinction this file had
+collapsed. §2.1b still stands: the trigger does work, and did on all three
+weekdays. Nothing about the scheduler diagnosis changes; this failure is
+downstream of it.
+
+**Not changed, deliberately:** the crons stay at `25 8`/`25 9` and D5 stands.
+They would have delivered Sunday's brief late rather than never, and on a
+weekend "late" is worth more than the argument for tightening them. The
+detectors are also deliberately *silent under uncertainty* — no
+`last_sent_date`, an unparseable one, or a dispatch carrying no version each
+produce no claim at all rather than a guess. §12.4a cost two wrong verdicts to
+learn that, and a delivery warning that cries wolf would be retired within a
+week. And the subject line is untouched: a gap warning belongs in a brief that
+arrived, and by then the inbox list has already done its job.
+
+**Requires Kabil:** two minutes, once. Re-paste `trigger/apps-script.gs` into
+Apps Script (`docs/trigger-setup.md` → *Re-pasting after the code changes*).
+Until then there is no weekend brief, and Saturdays and Sundays fire only from
+GitHub's late scheduler.
 
 ## rev 6 · 2026-09-12 · Seven days a week
 **Sections touched:** §2.1d, §4 D14 (new), §7, §10

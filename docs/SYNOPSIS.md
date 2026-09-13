@@ -88,7 +88,37 @@ clicking. On **7 September** the failure was caught in the act for the first
 time: Kabil went looking for a brief that was 1h57m overdue and not yet
 started. It was installed the next day.
 
-**Since installation: 09:20 Lisbon, every morning, four for four.**
+**Since installation: 09:20 Lisbon, three mornings out of three — and then two
+missing days nobody noticed.**
+
+On 12 September the brief was switched to run seven days a week. The change
+landed in the repository. It never landed in Google, where the copy of the
+trigger that actually runs still carried the old weekend guard, so it exited
+quietly on Saturday and Sunday without calling GitHub. No brief was sent on
+either day.
+
+Nothing raised it. The script did not throw, so Google sent no alert. GitHub
+was never asked to run, so there was no failed run to see. The test suite was
+green, because it tests a brief that was never built. And this project's own
+delivery table recorded the Saturday as **delivered at 09:20** — written from
+the change that had been made rather than from the inbox, which is the only
+place a delivery exists.
+
+> **Every guard in the system watched for a failure. This was an absence, and
+> absence needs its own detector.**
+
+Two now exist. The next brief to arrive names every day that did not, by
+comparing the date of the last confirmed send against today. And the trigger
+states its own version on each dispatch, so a copy that has drifted from the
+repository says so in red at the top of the brief. Neither ever guesses: with
+no state date, or no version reported, they say nothing at all.
+
+The gap left a third mark. Sunday's brief read `BTC $76,724, -0.6% vs
+yesterday` — the right number against **Friday's** close, because the
+comparison is drawn from the state file and all three callers said "yesterday"
+regardless. One missed brief had quietly turned every day-over-day line into a
+two-day move wearing a one-day label. The label is now derived from the state
+file's own date.
 
 The old crons stay registered as a fallback. On 7 September one of them woke
 up 6h42m late, read `state/latest.json`, and printed
@@ -243,7 +273,7 @@ were reasoned the same way as the two retracted verdicts, and are now marked
 
 | | |
 |---|---|
-| Delivery | 09:20 Lisbon, four consecutive mornings since the trigger went in |
+| Delivery | 09:20 Lisbon on three weekday mornings; **no weekend brief until the trigger is re-pasted** |
 | Schedule | Seven days a week |
 | Cost | Zero |
 | Sources live | ~15, each degrading independently |
@@ -253,12 +283,17 @@ were reasoned the same way as the two retracted verdicts, and are now marked
 
 **Two things need Kabil:**
 
-1. **Re-paste the Apps Script** — the copy in Google still carries the weekend
-   guard, so Saturdays and Sundays will otherwise fire only from GitHub's late
-   scheduler.
+1. **Re-paste the Apps Script** — two minutes, and nothing else is blocked
+   behind it. The copy in Google still carries the weekend guard, so until then
+   there is no weekend brief at all. The walkthrough is in
+   `docs/trigger-setup.md`; the checkpoint is that the code shows
+   `SCRIPT_VERSION = '7'` and a test run logs `(trigger v7)`.
 2. **7 November** — the trigger token expires. The brief counts down to its own
    maintenance in `data/watchlist.txt`.
 
-**And one measurement still open:** five clean weekday mornings. Four are done.
-The old schedule was also punctual for two days before degrading to eleven
-hours, which is exactly why one good morning proves nothing.
+**And one measurement still open:** five clean mornings. The count stands at
+**zero** — three were recorded, a fourth was recorded and never happened, and a
+record that cannot tell those apart is not a measurement. It restarts once the
+trigger is re-pasted. The old schedule was also punctual for two days before
+degrading to eleven hours, which is exactly why one good morning proves
+nothing.

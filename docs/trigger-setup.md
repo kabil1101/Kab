@@ -162,10 +162,60 @@ proves nothing** — the GitHub schedule was also only ~40 minutes late on its
 first two days before degrading to 10+ hours. Read that line for a full week
 and compare it against 09:25.
 
-If a morning goes missing, Apps Script emails you: the script throws on any
-response other than `HTTP 204`, and Google reports failed triggers to the
-account owner. An expired token therefore announces itself rather than
-appearing as a week of silence.
+### What warns you, and what does not
+
+Apps Script emails you when a trigger **throws**. This script throws on any
+response other than `HTTP 204`, so an expired or broken token announces itself
+rather than appearing as a week of silence.
+
+**That net has a hole, and on 12 September 2026 the brief fell through it.**
+The script did not fail — it ran, decided it was the weekend, and exited
+cleanly without dispatching. Nothing threw, so Google sent nothing; GitHub was
+never asked to run, so there was no failed run to see. Two briefs went missing
+in complete silence, and one of them was written down as delivered.
+
+So the warning cannot live only in the trigger. Two checks now live in the
+brief itself:
+
+- **A missed day is named in the next brief that does arrive.** The state file
+  records the date of the last confirmed send, and any calendar day between
+  that and today appears at the top of the brief in red.
+- **A stale copy of this script is named too.** The script reports its own
+  version number on every dispatch (`SCRIPT_VERSION`), and the brief compares
+  it against `scripts/health.py`. If you edit the file in the repository and
+  forget to re-paste it here, the next brief says so — which is exactly the
+  mistake that caused the gap above.
+
+Neither check can fire on a day with no brief at all. They turn a silent
+failure into a loud one *on the next delivery*, which is the best any
+in-brief check can do.
+
+## Re-pasting after the code changes (about 2 minutes)
+
+Do this whenever `trigger/apps-script.gs` changes in the repository — a brief
+will tell you when it has.
+
+1. Open [script.google.com](https://script.google.com) and click your
+   **Market Brief Trigger** project.
+2. Click into the code panel and select everything: **Ctrl+A** (**Cmd+A** on a
+   Mac), then **Delete**. The panel should be completely empty.
+3. Open `trigger/apps-script.gs` in the repository, copy the whole file, and
+   paste it into the empty panel.
+4. Click the **floppy-disk Save** icon.
+
+   > **Checkpoint.** Near the top of the code you should see a line reading
+   > `const SCRIPT_VERSION = '7';` — or a higher number. If it still shows a
+   > lower one, the paste did not take; repeat from step 2.
+
+5. Choose **testNow** in the function dropdown and click **Run**.
+
+   > **Checkpoint.** The execution log should end with
+   > `Brief dispatched HH:MM LIS (trigger v7).` A brief should reach your inbox
+   > within a few minutes, and it should **not** carry a red
+   > `TRIGGER OUT OF DATE` line at the top.
+
+You do **not** need to touch the trigger, the token, or the script properties.
+Re-pasting the code leaves all three alone.
 
 ## Turning it off
 

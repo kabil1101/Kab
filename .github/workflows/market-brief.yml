@@ -27,6 +27,16 @@ on:
         description: "Dump today's raw calendar rows to the log"
         type: boolean
         default: false
+      trigger_version:
+        # The external Apps Script trigger states its own version on every
+        # dispatch. The brief compares it against scripts/health.py and says
+        # so when they disagree, because the running copy of that script lives
+        # in a Google account and is updated by hand - it drifted silently on
+        # 12 Sep and cost two briefs. Blank on a dispatch started by a human,
+        # which is not evidence of drift and is treated as no claim.
+        description: "Version reported by the external trigger (leave blank)"
+        type: string
+        default: ""
 
 concurrency:
   group: market-brief
@@ -66,6 +76,7 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           SKIP_EMAIL: ${{ inputs.skip_email && '1' || '' }}
           BRIEF_DEBUG: ${{ inputs.debug && '1' || '' }}
+          TRIGGER_VERSION: ${{ inputs.trigger_version }}
           FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
         run: python scripts/main.py
 

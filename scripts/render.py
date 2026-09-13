@@ -14,6 +14,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import health
 import state
 import watchlist
 
@@ -83,6 +84,35 @@ def _as_of_stamp(as_of, now):
     hours = int(age.total_seconds() // 3600)
     age_txt = f"{hours}h old" if hours < 48 else f"{age.days}d old"
     return f" (as of {as_of:%a %d %b} {_hhmm(as_of)} LIS — {age_txt})"
+
+
+def _vs_label(ctx) -> str:
+    """What the day-over-day comparison is actually against.
+
+    state.delta compares today's figure against whatever the state file holds,
+    and until 13 September 2026 all three callers labelled that "vs yesterday"
+    no matter how old it was. On the morning after a missed brief that is
+    simply untrue: the 13 Sep brief called a two-day move "vs yesterday",
+    because the last state written was Friday's. The number was right and the
+    label was wrong — the same class of error as §3.12, a true figure
+    described as something it is not.
+
+    The label now comes from the state file's own date, so it can only say
+    what the comparison really is.
+    """
+    base = health.baseline_date(ctx.get("prev") or {})
+    if base is None:
+        return "vs last brief"
+    days = (ctx["now"].date() - base).days
+    if days == 1:
+        return "vs yesterday"
+    if days == 0:
+        return "vs earlier today"
+    if days < 0:
+        # A state file dated in the future is a bug somewhere else. Still
+        # compare, but do not put a date on it that would read as fact.
+        return "vs last brief"
+    return f"vs {base:%a %d %b}"
 
 
 def _range_pos(pair):
@@ -157,6 +187,13 @@ def build(ctx) -> tuple[str, str]:
     md.append(f"# {title}\n")
     md.append(f"*Cloud run — built {_hhmm(now)} LIS.*\n")
     html.append(_h_open(title, f"Cloud run — built {_hhmm(now)} LIS."))
+
+    # Anything wrong with the delivery system itself leads, ahead of the
+    # market. §3.9 is why it sits here and is typeset differently: a warning
+    # that reads like one more data line is a warning nobody sees.
+    for note in ctx.get("health") or []:
+        md.append(f"> **⚠ {note}**\n")
+        html.append(f"<p class='warn'>⚠ {_esc(note)}</p>")
 
     # ---- THE SETUP -----------------------------------------------------
     setup = _setup_bullets(ctx)
@@ -328,7 +365,7 @@ def build(ctx) -> tuple[str, str]:
         prev = ctx.get("prev") or {}
         for p in c["data"]["pairs"]:
             d = state.delta(prev, p["symbol"].lower(), p["last"])
-            vs = f" · {d[1]:+.1f}% vs yesterday" if d else ""
+            vs = f" · {d[1]:+.1f}% {_vs_label(ctx)}" if d else ""
             lines.append(
                 f"**{p['symbol']}** ${p['last']:,.2f}{vs} · "
                 f"{p['pct_since_utc_midnight']:+.2f}% since 00:00 UTC · "
@@ -417,7 +454,7 @@ def build(ctx) -> tuple[str, str]:
                 f"({d['today']['classification']})**")
         dd = state.delta(ctx.get("prev") or {}, "fng", d["today"]["value"])
         if dd:
-            line += f" · {dd[0]:+.0f} vs yesterday"
+            line += f" · {dd[0]:+.0f} {_vs_label(ctx)}"
         if d["week_ago"]:
             delta = d["today"]["value"] - d["week_ago"]["value"]
             line += (f" · 7 days ago {d['week_ago']['value']} "
@@ -548,7 +585,7 @@ def _setup_bullets(ctx):
             # honest fallback is where price sits in the 24h range: the
             # UTC-day figure is near zero by construction early in the day.
             d = state.delta(ctx.get("prev") or {}, "btc", btc["last"])
-            lead = f", {d[1]:+.1f}% vs yesterday" if d else ""
+            lead = f", {d[1]:+.1f}% {_vs_label(ctx)}" if d else ""
             out.append(
                 f"BTC ${btc['last']:,.0f}{lead}{where} "
                 f"(${btc['low_24h']:,.0f}–${btc['high_24h']:,.0f})."
@@ -951,6 +988,8 @@ th{text-align:left;padding:6px 8px;border-bottom:1px solid #ccc;background:#f2f2
 td{padding:5px 8px;border-bottom:1px solid #eee}
 tr.hi td{background:#fff8e1;font-weight:600}
 p{margin:8px 0}.muted{color:#666;font-size:12.5px}
+p.warn{background:#fff4f4;border-left:4px solid #c0392b;color:#8e2b20;
+font-weight:600;padding:9px 12px;margin:12px 0;border-radius:2px}
 .sub{color:#666;font-style:italic;font-size:13px;margin:0 0 14px}
 """
 

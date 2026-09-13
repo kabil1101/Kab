@@ -402,8 +402,12 @@ check_true("a manual dispatch is never suppressed",
 _os2.environ.pop("FORCE_RUN", None)
 
 print("\n-- deltas reach the brief --")
+# `now` is Friday 21 August 2026, so a state file dated the 20th really is
+# yesterday. Dating the fixture matters: the label is derived from this date
+# rather than assumed, which is the whole point of the 13 Sep fix below.
 _with_prev = dict(healthy)
-_with_prev["prev"] = {"btc": 70000.0, "eth": 2000.0, "fng": 60}
+_with_prev["prev"] = {"btc": 70000.0, "eth": 2000.0, "fng": 60,
+                      "date": "2026-08-20", "last_sent_date": "2026-08-20"}
 md_d, _ = render.build(_with_prev)
 check_true("headline leads with the day-over-day move",
            "+9.7% vs yesterday" in md_d, md_d[:400])
@@ -414,6 +418,114 @@ check_true("no prior state means no delta text, not a broken one",
            "vs yesterday" not in md_n, md_n[:400])
 check_true("without deltas the headline still says where price sits",
            "up its 24h range" in md_n)
+
+
+print("\n-- a multi-day move is never called 'vs yesterday' --")
+# 13 September 2026. The brief was not sent on the 12th, so Sunday's run
+# compared against Friday's figures and printed "-0.6% vs yesterday". The
+# number was correct; the label was two days wrong. Nothing in the suite had
+# an opinion about it, because the fixture above carried no date at all.
+import health  # noqa: E402
+
+
+def _label(prev_date, today=date(2026, 8, 21)):
+    c = {"now": datetime(today.year, today.month, today.day, 9, 30,
+                         tzinfo=LISBON)}
+    c["prev"] = {"date": prev_date} if prev_date else {}
+    return render._vs_label(c)
+
+
+check("yesterday is called yesterday", _label("2026-08-20"), "vs yesterday")
+check("two days back names the day", _label("2026-08-19"), "vs Wed 19 Aug")
+check("a week back names the day", _label("2026-08-14"), "vs Fri 14 Aug")
+check("a second run the same day says so", _label("2026-08-21"),
+      "vs earlier today")
+check("an undated state file claims no date", _label(None), "vs last brief")
+check("a state file from the future claims no date", _label("2026-08-25"),
+      "vs last brief")
+
+# And it must reach the rendered brief, not just the helper. This is the
+# §3.11 rule: a green unit test over a function nothing calls proves nothing.
+_gap_ctx = dict(healthy)
+_gap_ctx["prev"] = {"btc": 70000.0, "fng": 60, "date": "2026-08-19",
+                    "last_sent_date": "2026-08-19"}
+_gap_md, _ = render.build(_gap_ctx)
+check_true("the rendered brief carries the honest label",
+           "+9.7% vs Wed 19 Aug" in _gap_md, _gap_md[:400])
+check_true("and does not claim yesterday anywhere",
+           "vs yesterday" not in _gap_md, _gap_md[:600])
+
+
+print("\n-- the brief notices when it did not arrive --")
+check("the 12 Sep gap is found",
+      health.missed_days({"last_sent_date": "2026-09-11"}, date(2026, 9, 13)),
+      [date(2026, 9, 12)])
+check("a brief sent yesterday is no gap",
+      health.missed_days({"last_sent_date": "2026-09-12"}, date(2026, 9, 13)),
+      [])
+check("a brief already sent today is no gap",
+      health.missed_days({"last_sent_date": "2026-09-13"}, date(2026, 9, 13)),
+      [])
+check("no state file makes no claim",
+      health.missed_days({}, date(2026, 9, 13)), [])
+check("an unparseable date makes no claim",
+      health.missed_days({"last_sent_date": "not a date"}, date(2026, 9, 13)),
+      [])
+check("a state file from the future makes no claim",
+      health.missed_days({"last_sent_date": "2026-09-20"}, date(2026, 9, 13)),
+      [])
+check("three missing days are all named",
+      len(health.missed_days({"last_sent_date": "2026-09-09"},
+                             date(2026, 9, 13))), 3)
+
+_note = health.delivery_note({"last_sent_date": "2026-09-11"},
+                             date(2026, 9, 13))
+check_true("the note names the missing day", "Sat 12 Sep" in _note, _note)
+check_true("and the last confirmed send", "Fri 11 Sep" in _note, _note)
+check_true("singular reads as singular", "1 brief never sent" in _note, _note)
+check_true("a healthy run says nothing at all",
+           health.delivery_note({"last_sent_date": "2026-09-12"},
+                                date(2026, 9, 13)) is None)
+# A long gap is a state file that stopped being written, not 100 mornings.
+_long = health.delivery_note({"last_sent_date": "2026-06-01"},
+                             date(2026, 9, 13))
+check_true("a long gap is counted, not listed",
+           "103 briefs never sent" in _long and "Jun" in _long, _long)
+check_true("and stays one line", len(_long) < 120, _long)
+
+
+print("\n-- the brief notices a stale trigger --")
+check("the matching version is silent",
+      health.trigger_note(health.EXPECTED_TRIGGER_VERSION), None)
+check("no version reported is no claim", health.trigger_note(""), None)
+check("nor is a missing one", health.trigger_note(None), None)
+_drift = health.trigger_note("6")
+check_true("a mismatch names both versions",
+           "6" in _drift and health.EXPECTED_TRIGGER_VERSION in _drift, _drift)
+check_true("and says what to do about it",
+           "apps-script.gs" in _drift, _drift)
+check("the repo's own script matches what health expects",
+      (Path(__file__).resolve().parents[1] / "trigger" / "apps-script.gs")
+      .read_text(encoding="utf-8")
+      .split("const SCRIPT_VERSION = '")[1].split("'")[0],
+      health.EXPECTED_TRIGGER_VERSION)
+
+
+print("\n-- warnings lead the brief, and look like warnings --")
+_warn_ctx = dict(healthy)
+_warn_ctx["health"] = ["DELIVERY GAP — 1 brief never sent: Sat 12 Sep.",
+                       "TRIGGER OUT OF DATE — reports version 6."]
+_wmd, _whtml = render.build(_warn_ctx)
+check_true("the warning is in the brief", "DELIVERY GAP" in _wmd, _wmd[:400])
+check_true("above every market section",
+           _wmd.index("DELIVERY GAP") < _wmd.index("## THE SETUP"), _wmd[:400])
+check_true("both warnings survive", "TRIGGER OUT OF DATE" in _wmd)
+check_true("typeset as a warning, not as one more data line",
+           "> **⚠ DELIVERY GAP" in _wmd, _wmd[:400])
+check_true("and carries its own style in the email",
+           "class='warn'" in _whtml, _whtml[:900])
+check_true("a healthy brief carries no banner at all",
+           "⚠ DELIVERY GAP" not in render.build(healthy)[0])
 
 print("\n-- flows and derivatives rendering --")
 md_f, _ = render.build(healthy)

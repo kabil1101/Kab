@@ -34,6 +34,21 @@ const REF = 'claude/daily-market-brief-kvfi35';
 const TZ = 'Europe/Lisbon';
 
 /**
+ * Which version of this file is actually installed.
+ *
+ * This file lives in the repository; the copy that runs lives in a Google
+ * account and is updated by pasting. On 12 September 2026 those two drifted:
+ * the weekend guard was removed here, never re-pasted there, and the brief
+ * stopped arriving at weekends. Nothing detected it - the workflow was simply
+ * never asked to run, so there was no failure anywhere to notice.
+ *
+ * So the script now says which version it is on every dispatch, and the brief
+ * compares that against EXPECTED_TRIGGER_VERSION in scripts/health.py. If you
+ * change this file, bump both.
+ */
+const SCRIPT_VERSION = '7';
+
+/**
  * Fired by the time-driven trigger. Asks GitHub to run the brief now.
  *
  * Seven days a week since 2026-09-12. The weekday-only guard that used to
@@ -77,7 +92,10 @@ function dispatch() {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28'
     },
-    payload: JSON.stringify({ref: REF}),
+    payload: JSON.stringify({
+      ref: REF,
+      inputs: {trigger_version: SCRIPT_VERSION}
+    }),
     // Read the status ourselves so a refusal produces a message that says
     // what GitHub actually objected to.
     muteHttpExceptions: true
@@ -94,7 +112,8 @@ function dispatch() {
         ' (wanted: ' + res.getHeaders()['x-accepted-github-permissions'] + ')');
   }
   console.log('Brief dispatched ' +
-              Utilities.formatDate(new Date(), TZ, 'HH:mm') + ' LIS.');
+              Utilities.formatDate(new Date(), TZ, 'HH:mm') + ' LIS' +
+              ' (trigger v' + SCRIPT_VERSION + ').');
 }
 
 
