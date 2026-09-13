@@ -8,7 +8,7 @@
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 Trigger v7 live 2026-09-13 (was, rev 7: 🔴 stale in Google since 09-12) · 🟡 Awaiting one week of delivered-vs-target, **counting from Mon 2026-09-14** |
 | **Last updated** | 2026-09-13 |
-| **Revision** | 8 (was: 7, was: 6) |
+| **Revision** | 9 (was: 8, was: 7, was: 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -169,6 +169,35 @@ messages; there is none dated 12 Sep and none dated 13 Sep before the manual
 dispatch at 12:38 UTC. The Actions run list for `market-brief.yml` shows no run
 at all on 12 Sep other than #59, and none on 13 Sep before #60.
 
+### §2.1g The weekend guard, caught in the act — 2026-09-13
+
+The Triggers page settles two things at once, and the second was not expected.
+
+| Column | Value |
+|---|---|
+| Owner / Event / Function | Moi · Basé sur l'heure · `sendBrief` |
+| Deployment | **Head** — runs the newest saved code, not a pinned version |
+| Error rate | **0%** |
+| Last run | **13 Sep 2026, 09:20:11** |
+
+**The timer fired this morning at 09:20:11, did not error, and no brief
+exists.** GitHub logged no run at 08:20Z; Gmail holds nothing before the manual
+13:38 dispatch. A trigger that ran, returned cleanly, and produced nothing is
+the weekend guard, executing exactly as the old code was written to.
+
+✅ CONFIRMED — and this is an upgrade in evidence, not a new finding. Until now
+the stale-copy diagnosis rested on inference: weekdays worked, weekends did
+not, and the guard was visible in the old source. **It is now observed
+directly**, from the one surface that had never been looked at. §3.16's claim
+that "every guard watches for failure, none watched for absence" has its
+sharpest possible illustration: Google's own dashboard rendered this morning's
+lost brief as **0% error**.
+
+**The lesson for the register:** a green health indicator on a component that
+did nothing is not evidence the component worked. `0%` here means "nothing
+threw", which is a different statement from "the brief was sent" — the same
+gap between *ran* and *delivered* that put a false ✅ in §2.1d.
+
 ### §2.1f Trigger v7 live — 2026-09-13
 
 | Fact | Evidence |
@@ -319,6 +348,18 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.19 — A green health indicator on a component that did nothing is not
+evidence it worked.** Google's Triggers page showed `Taux d'erreur 0%` beside a
+last run of `13 sept. 2026, 09:20:11` — the exact morning the brief did not
+arrive. The figure was accurate: nothing threw. It was also worthless as a
+delivery signal, because *ran without error* and *delivered* are different
+claims, and only one of them is what anybody cares about. This is the same
+confusion that put a false ✅ in §2.1d, arriving from the opposite direction —
+there a change made was recorded as a change that worked; here a function
+returning cleanly was displayed as a system functioning. **Before trusting any
+dashboard, ask what it actually measures and whether that is the thing you
+need.** *Evidence: §2.1g.*
+
 **§3.16 — Every guard in this system watches for failure; none watched for
 absence.** A throw is caught, a non-204 is caught, a degraded fetcher is
 caught, a duplicate run is caught. A run that was never requested is not any of
@@ -394,13 +435,12 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
   carried **no** `TRIGGER OUT OF DATE` banner — so the version the script
   reports and the version this repo expects now agree, measured rather than
   assumed (§2.1f).
-- ❓ **Not verified: that the daily 09:25 timer still exists.** Re-pasting code
-  does not delete a trigger — the timer is bound to the handler name
-  `sendBrief`, which the new code still defines — but nobody has looked at the
-  Triggers page since the paste, and `testNow` proves the *code* works without
-  proving the *timer* is there. **Monday 09:20 LIS is the observation that
-  settles it.** If no brief arrives, the timer is the first place to look, and
-  `install()` re-creates it safely.
+- ✅ **CLOSED 2026-09-13: the timer is intact** (was: ❓ not verified). The
+  Triggers page shows exactly one trigger — owner *Moi*, time-based, function
+  `sendBrief`, deployment **Head**, error rate **0%**, last run **13 Sep 2026
+  09:20:11**. `Head` matters: the trigger runs the newest saved code rather
+  than a pinned deployment, so the re-paste is live for tomorrow without any
+  further step (§2.1g).
 - ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings — now seven-day,
   and the count restarts at 0** (was: 4 of 5, wrongly — see §2.1d).
   Read the `built HH:MM LIS` line each day and compare against 09:25. Nothing
@@ -605,6 +645,37 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 9 · 2026-09-13 · Google rendered a lost brief as 0% error
+**Sections touched:** header, §2.1g (new), §3.19 (new), §5
+**Type:** DATA + CORRECTION
+**Evidence:** Apps Script Triggers page, screenshot 2026-09-13 — one trigger,
+owner *Moi*, `Basé sur l'heure`, function `sendBrief`, deployment `Head`,
+`Taux d'erreur 0%`, `Dernière exécution 13 sept. 2026, 09:20:11`. Against:
+zero GitHub runs at 08:20Z on 13 Sep, and no email before the 13:38 manual
+dispatch.
+
+| Field | Was | Now |
+|---|---|---|
+| The daily 09:25 timer | ❓ assumed intact, unverified (rev 8, §5) | ✅ present, healthy, `sendBrief`, 0% errors |
+| Trigger deployment mode | not known to be a variable | **`Head`** — runs newest saved code, so the re-paste is live with no further step. Had it been a pinned deployment, the paste would have changed nothing |
+| Stale-copy diagnosis | inference from weekday/weekend pattern + the guard in the old source | **directly observed**: the timer ran at 09:20:11, returned cleanly, and produced no brief |
+| What "0% error rate" means | read as a health signal | "nothing threw" — which on 13 Sep was true of a morning with no brief at all |
+
+**Why:** Kabil opened the Triggers page to answer §5's last ❓ and the answer
+carried more than the question. The row does not only prove the timer exists;
+its *last run* timestamp is this morning's missing brief, recorded by Google as
+a success.
+
+**Impact on prior conclusions:** None reversed; one upgraded. Rev 7 called the
+stale Google copy the cause and said so from inference. It is now measured.
+§3.19 is added as the general form, because the shape recurs: rev 7's own §2.1d
+error was also a *ran* being written down as a *delivered*.
+
+**Not changed, deliberately:** the five-clean-mornings count still starts at
+zero on Mon 14 Sep. Three proofs in one afternoon — v7 dispatching, the
+detector staying silent, the timer intact — are three proofs about the
+mechanism, and the measurement is about mornings. Nothing here shortens it.
 
 ## rev 8 · 2026-09-13 · The trigger is current again, and the detector stayed quiet
 **Sections touched:** header, §2.1f (new), §5, §10
