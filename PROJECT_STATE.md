@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live 2026-09-13 (was, rev 7: 🔴 stale in Google since 09-12) · 🟡 Awaiting one week of delivered-vs-target, **counting from Mon 2026-09-14** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: day 1 of 5 clean, Mon 2026-09-14** (was: awaiting, counting from Mon) |
 | **Last updated** | 2026-09-13 |
-| **Revision** | 10 (was: 9, 8, 7, 6) |
+| **Revision** | 11 (was: 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -168,6 +168,31 @@ re-pasted.
 messages; there is none dated 12 Sep and none dated 13 Sep before the manual
 dispatch at 12:38 UTC. The Actions run list for `market-brief.yml` shows no run
 at all on 12 Sep other than #59, and none on 13 Sep before #60.
+
+### §2.1h The five clean mornings — the measurement itself
+
+The count §5 has headed since rev 3. Restarted at zero on 2026-09-14 after
+rev 7 found a recorded morning that never happened. **Every row is read from
+the inbox first, then corroborated against the run log — never the other way
+round** (§3.17, §8).
+
+| # | Day | In inbox | vs 09:25 | Dispatch | Banner | Delta label |
+|---|---|---|---|---|---|---|
+| 1 | Mon 2026-09-14 | **09:20 LIS** (08:20:37Z) | ✅ 5 min early | #65 `workflow_dispatch` 08:20:13Z — the Google timer | none | `+0.8% vs yesterday`, state dated 09-13 ✅ |
+| 2 | Tue 2026-09-15 | — | — | — | — | — |
+| 3 | Wed 2026-09-16 | — | — | — | — | — |
+| 4 | Thu 2026-09-17 | — | — | — | — | — |
+| 5 | Fri 2026-09-18 | — | — | — | — | — |
+
+**Day 1 carried more than a tick.** Run #65 executed at `616aaaf` — the head
+holding every change made on 13 Sep: `health.py`, `_vs_label`, the
+`trigger_version` workflow input. **The delivery path survived all of it
+through a real morning**, which is the thing a green offline suite could not
+tell us (§3.11).
+
+The duplicate guard also fired again unprompted: run #63 (13 Sep 13:50Z,
+`schedule`) exited on `last_sent_date`. D5's fallback continues to cost
+nothing while the trigger wins the race.
 
 ### §2.1g The weekend guard, caught in the act — 2026-09-13
 
@@ -460,8 +485,9 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
   09:20:11**. `Head` matters: the trigger runs the newest saved code rather
   than a pinned deployment, so the re-paste is live for tomorrow without any
   further step (§2.1g).
-- ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings — now seven-day,
-  and the count restarts at 0** (was: 4 of 5, wrongly — see §2.1d).
+- ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings — now seven-day.
+  Running count: 1 of 5** (was: 0 of 5 at rev 9; was: 4 of 5, wrongly, at rev 6
+  — see §2.1d). Live table in §2.1h.
   Read the `built HH:MM LIS` line each day and compare against 09:25. Nothing
   else in this file matters until that number exists. The old schedule was ~40
   minutes late on its first two days before degrading to eleven hours, so one
@@ -671,6 +697,36 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 11 · 2026-09-14 · Day 1 of five, and it is the first row read from the inbox
+**Sections touched:** header, §2.1h (new), §5
+**Type:** DATA
+**Evidence:** Gmail `2026-09-14T08:20:37Z` — *"Cloud run — built 09:20 LIS.
+The Setup BTC $77724, +0.8% vs yesterday"*, running straight into `## THE
+SETUP` with nothing between. Actions run #65, `workflow_dispatch`,
+`2026-09-14T08:20:13Z`, head `616aaaf`.
+
+| Field | Was | Now |
+|---|---|---|
+| Five clean mornings | 0 of 5, restarted rev 9 | **1 of 5** |
+| Day 1 arrival | — | 09:20 LIS, 5 min ahead of target |
+| Day 1 dispatch path | — | the Google timer, not a late cron |
+| Both detectors on a healthy morning | untested in production | **silent, correctly** — no gap banner, no drift banner |
+| `_vs_label` in production | tested offline and on a same-day rerun | `vs yesterday`, on a day when yesterday is genuinely the baseline |
+
+**Why:** This is the first row in this file's delivery record that was read
+from the inbox before anything else was consulted. Rev 7 had to correct a row
+written the other way round, and §2.1h now says in its own header which
+direction the evidence flows.
+
+**Impact on prior conclusions:** None. It is one clean morning, which §2.1
+has said since rev 3 proves nothing on its own — the old schedule was
+near-punctual for two days before degrading to eleven hours.
+
+**Not changed, deliberately:** the PM edition stays unbuilt and FRED stays
+unwired. Both are queued behind the fifth clean morning precisely because they
+touch the path that produced this row, and rev 10 already set that order. A
+clean day 1 is not a reason to spend the remaining four.
 
 ## rev 10 · 2026-09-13 · Probe round 14 — the accounts were the route, not the fact
 **Sections touched:** header, §3.20–§3.21 (new), §7, §12.2, §12.8 (new)
