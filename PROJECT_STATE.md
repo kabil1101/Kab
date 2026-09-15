@@ -8,7 +8,7 @@
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: 2 of 5 clean** (was: 1 of 5 at rev 11) |
 | **Last updated** | 2026-09-13 |
-| **Revision** | 13 (was: 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 14 (was: 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -388,6 +388,16 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.22 — When two readings agree, the agreement carries no information.**
+Round 15's decisive test fetched one payrolls figure two ways — as first
+published and as it stands today — and got 159,075 both times. That result is
+consistent with *"never revised"* and with *"the vintage lookup silently
+ignored my parameters"*, and the values alone cannot separate them. What
+separated them was a field nobody was comparing: `realtime_end: 9999-12-31` on
+the initial release, meaning the first print is still current. **A test whose
+pass and fail look identical is not a test** — design the check so the two
+outcomes differ, or read the metadata that does. *Evidence: §12.9.*
+
 **§3.20 — A mirror can lag the thing it mirrors by days, and the status code
 says nothing about it.** `watcher.guru/news/feed` answered `200`,
 `application/rss+xml`, 10 well-formed items, every one carrying a parseable
@@ -713,6 +723,37 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 14 · 2026-09-15 · FRED can say "came in", and a test that nearly proved nothing
+**Sections touched:** header, §3.22 (new), §12.2, §12.9 (new)
+**Type:** DATA
+
+**Evidence:** probe run 35007629742, job 104511294765. Initial-release payload
+verbatim: `{"realtime_start": "2026-09-04", "realtime_end": "9999-12-31",
+"date": "2026-08-01", "value": "159075"}`.
+
+| Field | Was | Now |
+|---|---|---|
+| FRED verdict | 🟡 PROBED — reachable, shape unknown | 🟠 **WIRED-READY** — carries the initial release *and* its publication date |
+| "came in at X" | unsupportable by any wired source | **supportable** — `realtime_start` is the release date |
+| Key handling in probes | round 14 used a hard-coded fake | real key from env, redacted from every printed URL; verified in the log |
+| Release-date semantics | assumed usable | ⚠ **unresolved** — see §12.9 |
+
+**Why:** This was the question the whole 14:00 edition rested on. It passed.
+
+**Impact on prior conclusions:** None reversed. §3.22 is new and general: the
+decisive test came within one field of proving nothing at all, because its
+pass and fail produced the same two numbers.
+
+**Not changed, deliberately:** **FRED is not wired.** Two things are unresolved
+and both would put a wrong date in front of a reader: `realtime_start` came
+back as `2026-09-11` on one call and `2026-09-15` on another seconds later
+with no realtime parameter set on either, which suggests a cached response can
+carry a stale "today"; and `releases/dates` listed an FOMC press release dated
+today when the decision is tomorrow, so a listed date may mean *scheduled*
+rather than *published*. §12.4 is explicit that a verdict from a single
+observation gets re-tested before anything is built on it, and these are two
+single observations pointing at the same risk. Round 16 settles them.
 
 ## rev 13 · 2026-09-15 · ZeroHedge in, and FRED wants an account
 **Sections touched:** header, §4 D16 (new), §12.2, `data/watchlist.txt`
@@ -1174,7 +1215,8 @@ them before the trigger is installed would leave no delivery path at all.
 | Polymarket gamma | `S7` | 🟡 PROBED | 200, and far more liquid than Kalshi on the September meeting ($20m/24h). Not wired: its event slugs are per-month strings, where Kalshi's tickers generalise |
 | CME quote service | `S1` | ⚫ EXCLUDED | `403 — "This IP address is blocked due to suspected web scraping activity"`. Farside's lesson, third occurrence |
 | ~~Fed-path odds (any free source)~~ | ~~`S2` `S6`~~ | ❌ **VERDICT WRONG** | was: "needs contract-level Fed Funds settlements". It needs a prediction market, which is free. See rev 5 |
-| FRED (St. Louis Fed) | `S0`* | 🟡 PROBED | `400 · "The value for variable api_key is not registered"` from a runner — **reachable; auth is the only barrier**. Probed with a deliberately invalid key so nobody signs up for a host that would have blocked us. **Needs a full `fredaccount.stlouisfed.org` login, not just an email** (was: "needs a free key" — understated; the key cannot be requested or viewed while logged out). Still free, still inside D2. **Scheduled outage Sat 2026-09-19 14:30–16:00 LIS**, now in `data/watchlist.txt` |
+| FRED (St. Louis Fed) | `S0` | 🟠 **WIRED-READY** — round 15 answered the shape question. `output_type=4` returns the initial release **with `realtime_start` = the publication date**, which is exactly what *"came in this morning"* needs. `series/release` maps a series to its publisher. See §12.9 for the one unresolved caution | ⬇ round 14 detail below |
+| FRED — round 14 detail | `S0`* | 🟡 PROBED | `400 · "The value for variable api_key is not registered"` from a runner — **reachable; auth is the only barrier**. Probed with a deliberately invalid key so nobody signs up for a host that would have blocked us. **Needs a full `fredaccount.stlouisfed.org` login, not just an email** (was: "needs a free key" — understated; the key cannot be requested or viewed while logged out). Still free, still inside D2. **Scheduled outage Sat 2026-09-19 14:30–16:00 LIS**, now in `data/watchlist.txt` |
 | ZeroHedge via Feedburner | `S0` | 🟡 PROBED | `200`, 25 items, all timestamped, newest 0.7h old. **Window only 21.6h** — marginal for a 24h look-back, ample for a 5h one. Carries political commentary alongside market stories; see §12.8 |
 | `zerohedge.com/fullrss2.xml` | `S3` | ⚫ EXCLUDED | 404. Feedburner is the live path |
 | `watcher.guru/news/feed` (= `/feed`) | `S5` | ⚫ EXCLUDED | `200`, well-formed, 10 items, all timestamped — and **newest item 41.9h old**, carrying equity stories on the crypto beat. The site feed does not carry what the X account posts. §3.20 |
@@ -1219,6 +1261,41 @@ commentary. In a brief where every line is a fetched number with a source and
 an age stamp, a commentary headline renders with identical authority. That is
 §3.9 inverted — opinion typeset as data — and it would be the first unsourced
 claim the brief has ever printed.
+
+### §12.9 Round 15 — FRED can carry "came in", with one caution
+
+Run 35007629742, job 104511294765. Key redacted from every printed URL
+(`api_key=***REDACTED***` throughout; the probe reads it from the environment
+and never writes it to source).
+
+| Question | Answer |
+|---|---|
+| Does a real key work? | ✅ `200`, PAYEMS 1,052 observations |
+| Is the initial release retrievable? | ✅ `output_type=4` → `{"realtime_start": "2026-09-04", "realtime_end": "9999-12-31", "date": "2026-08-01", "value": "159075"}` |
+| Is the **release date** available? | ✅ **`realtime_start` IS the publication date** — 4 Sep is exactly when August payrolls published |
+| Which release publishes a series? | ✅ `series/release` → id 50, *Employment Situation*, `press_release: true` |
+| What published on a given day? | ✅ `releases/dates` returns dated releases |
+
+**The decisive test returned identical values — and that was the right answer,
+not a failure.** August payrolls read 159,075 both as first published and
+today. The probe's own verdict said this was ambiguous. It was not: the
+initial release carries **`realtime_end: 9999-12-31`**, which means *this value
+is still current and has never been revised*. The values agreeing carried no
+information; **the field that resolved it was metadata, not the number** —
+§3.22.
+
+**⚠ Unresolved, and it must be settled before the PM edition trusts a release
+date.** Two calls seconds apart returned different `realtime_start` values for
+"today": the first said `2026-09-11`, the second `2026-09-15`. Neither request
+set a realtime parameter, so both should have defaulted to today. Likely edge
+caching. **If a cached four-day-old realtime window can be served, then
+"is this today's print" cannot be decided from `realtime_start` alone.** One
+more probe round before anything renders on it.
+
+Also unresolved: `releases/dates` listed *"FOMC Press Release, 2026-09-15"* on
+a day the FOMC decision is still **tomorrow**. Whether a listed date means
+*published* or *scheduled* decides whether the PM edition can say "released
+this morning" at all. Same round.
 
 ### §12.4a The shape both wrong verdicts share
 
