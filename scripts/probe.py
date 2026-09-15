@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-import sys
+from datetime import date, timedelta
 
 import requests
 
@@ -17,46 +17,52 @@ BROWSER = {
     "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                    "AppleWebKit/537.36 (KHTML, like Gecko) "
                    "Chrome/126.0.0.0 Safari/537.36"),
-    "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
+    "Accept": "application/json,*/*;q=0.8",
+    # Round 15 saw two calls seconds apart disagree about what "today" was.
+    # If an edge cache is in play, say so at the door rather than guessing.
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
 
-# Round 15. Round 14 proved FRED answers a datacenter IP; the key is now a
-# repository secret. This round asks the only question that matters next:
-# can FRED carry the claim the 14:00 edition wants to make?
+# Round 16. Round 15 established FRED can return a first print together with
+# its publication date, which is what the 14:00 edition needs. It left two
+# things unresolved, and each of them would put a WRONG DATE in front of a
+# reader - the failure this project cares about most.
 #
-# The distinction is narrow and decides the whole feature.
+#   Q1  realtime_start came back 2026-09-11 on one call and 2026-09-15 on
+#       another seconds later, neither request naming a date. If a cached
+#       response can carry a stale "today", that field cannot decide whether
+#       something published this morning.
 #
-#   "the current read on August CPI is X"  - latest observation. The brief
-#       already does this correctly through BLS, and flags preliminary values.
+#       The resolution is not to trust the default at all. Ask explicitly for
+#       today's vintage and check FRED honours it. Then the default's
+#       behaviour stops mattering, and Q1 becomes "does an explicit window
+#       work" rather than "is the cache lying".
 #
-#   "CPI CAME IN at X this morning"        - the value AS FIRST PUBLISHED,
-#       plus the date it was released. This is what the market traded. A later
-#       revision printed under "came in" would be the right series carrying a
-#       materially wrong claim, which is §3.10's shape.
+#   Q2  releases/dates listed an FOMC press release dated 15 Sep when the
+#       decision is on the 16th. If a listed date can mean SCHEDULED rather
+#       than PUBLISHED, then "released this morning" cannot rest on it.
+#       Decisive test: ask for dates in the FUTURE. Anything returned is by
+#       definition not yet published.
 #
-# FRED documents output_type=4 as "initial release only" and a realtime window
-# for vintage retrieval. Documented is not measured, so both get tested, and
-# the decisive check is whether a first release and a current value for the
-# SAME observation can actually be told apart. PAYEMS is the test case because
-# payrolls are revised in the two months after publication as a matter of
-# routine - August 2026 was published 4 September, so it has had one revision
-# cycle already.
-#
-# SECURITY: this prints payloads into an Actions log. The key must never reach
-# it. Every URL goes through _redact before printing, and the key is read from
-# the environment rather than written in source.
+# And the end-to-end question neither round has asked: given a real release
+# that landed this morning, can the brief find it and read its first print?
+# The Empire State Manufacturing Survey published today at 08:30 ET, so it is
+# the live test case rather than a hypothetical one.
 FRED = "https://api.stlouisfed.org/fred"
 KEY = (os.environ.get("FRED_API_KEY") or "").strip()
 
-# PAYEMS Aug 2026 = the 2026-08-01 observation, first published 2026-09-04.
-SERIES, OBS, FIRST_PUB = "PAYEMS", "2026-08-01", "2026-09-04"
+TODAY = date.today().isoformat()
+FUTURE = (date.today() + timedelta(days=120)).isoformat()
+EMPIRE_STATE_RELEASE = 321     # published this morning per round 15's listing
+FOMC_RELEASE = 101             # the one that looked scheduled, not published
 
 
 def _redact(url: str) -> str:
     return url.replace(KEY, "***REDACTED***") if KEY else url
 
 
-def _get(label: str, url: str, note: str = ""):
+def _get(label, url, note="", cap=1200):
     print(f"--- {label}\n    {_redact(url)}")
     if note:
         print(f"    ({note})")
@@ -66,100 +72,94 @@ def _get(label: str, url: str, note: str = ""):
         print(f"  FAILED {type(exc).__name__}: "
               f"{_redact(' '.join(str(exc).split())[:120])}\n")
         return None
-    ctype = r.headers.get("content-type", "?")
-    print(f"  HTTP {r.status_code} · {ctype} · {len(r.content):,} bytes")
+    age = r.headers.get("age") or r.headers.get("x-cache") or "-"
+    print(f"  HTTP {r.status_code} · {len(r.content):,} bytes · cache hints: {age}")
     data = None
-    if "json" in ctype.lower():
+    if "json" in (r.headers.get("content-type") or "").lower():
         try:
             data = json.loads(r.text)
         except json.JSONDecodeError:
             print("  declared JSON, did not parse")
-    if data is not None:
-        print(f"  {_redact(' '.join(json.dumps(data)[:1400].split()))}")
-    else:
-        print(f"  body: {_redact(' '.join(r.text[:200].split()))}")
+    print(f"  {_redact(' '.join((json.dumps(data) if data is not None else r.text)[:cap].split()))}")
     print()
     return data
 
 
-def _value(data, obs_date):
-    """The observation for obs_date, or None."""
-    for o in (data or {}).get("observations") or []:
-        if o.get("date") == obs_date:
-            return o
-    return None
-
-
 def main() -> int:
     if not KEY:
-        print("::error::FRED_API_KEY is not set. Add it as a repository "
-              "secret and pass it into the probe workflow's env.")
+        print("::error::FRED_API_KEY is not set.")
         return 1
-    print(f"Round 15 · FRED payload shape · key present ({len(KEY)} chars, "
-          f"never printed)\n")
-
+    print(f"Round 16 · FRED date semantics · today={TODAY} · "
+          f"key present ({len(KEY)} chars, never printed)\n")
     q = f"api_key={KEY}&file_type=json"
 
-    # 1. Baseline: does a real key return observations at all?
-    _get("fred/observations-latest",
-         f"{FRED}/series/observations?series_id={SERIES}&{q}"
-         f"&sort_order=desc&limit=3",
-         "newest first — proves the key works and shows the default shape")
+    # ---- Q1: can we stop depending on the default "today"? ---------------
+    a = _get("Q1a/default-realtime",
+             f"{FRED}/series/observations?series_id=PAYEMS&{q}&limit=1&sort_order=desc",
+             "no realtime param — whatever FRED decides 'now' is", cap=420)
+    b = _get("Q1b/default-realtime-again",
+             f"{FRED}/series/observations?series_id=PAYEMS&{q}&limit=2&sort_order=desc",
+             "same shape, different limit — does 'now' move between calls?", cap=420)
+    c = _get("Q1c/explicit-today",
+             f"{FRED}/series/observations?series_id=PAYEMS&{q}&limit=1"
+             f"&sort_order=desc&realtime_start={TODAY}&realtime_end={TODAY}",
+             "asking for today's vintage BY NAME — the version we would ship", cap=420)
 
-    # 2. Vintage markers. Without realtime_start/realtime_end in the payload a
-    #    first print cannot be distinguished from a revision at all.
-    current = _get("fred/observations-current-vintage",
-                   f"{FRED}/series/observations?series_id={SERIES}&{q}"
-                   f"&observation_start={OBS}&observation_end={OBS}",
-                   f"the {OBS} observation as it stands TODAY")
+    # ---- Q2: does a listed release date mean published? ------------------
+    fut = _get("Q2a/releases-dates-in-the-future",
+               f"{FRED}/releases/dates?{q}&realtime_start={TODAY}"
+               f"&realtime_end={FUTURE}&sort_order=asc&limit=6"
+               f"&include_release_dates_with_no_data=true",
+               "anything returned here has NOT published yet, by definition")
+    _get("Q2b/fomc-release-dates",
+         f"{FRED}/release/dates?release_id={FOMC_RELEASE}&{q}"
+         f"&sort_order=desc&limit=6&include_release_dates_with_no_data=true",
+         "the release that looked scheduled rather than published")
 
-    # 3. The same observation as first published. output_type=4 is documented
-    #    as "initial release only"; realtime bounds widen the vintage search.
-    first = _get("fred/observations-initial-release",
-                 f"{FRED}/series/observations?series_id={SERIES}&{q}"
-                 f"&observation_start={OBS}&observation_end={OBS}"
-                 f"&output_type=4&realtime_start=1776-07-04"
-                 f"&realtime_end=9999-12-31",
-                 "output_type=4 — the value as FIRST PUBLISHED")
+    # ---- End to end: a release that really landed this morning -----------
+    ser = _get("E2E/series-in-todays-release",
+               f"{FRED}/release/series?release_id={EMPIRE_STATE_RELEASE}&{q}&limit=3",
+               "Empire State published 08:30 ET today — what series does it carry?",
+               cap=900)
+    sid = None
+    for s in (ser or {}).get("seriess") or []:
+        sid = s.get("id")
+        break
+    if sid:
+        _get("E2E/first-print-of-that-series",
+             f"{FRED}/series/observations?series_id={sid}&{q}"
+             f"&output_type=4&realtime_start=1776-07-04&realtime_end=9999-12-31"
+             f"&sort_order=desc&limit=3",
+             f"{sid} — initial releases, newest first. Does the newest carry "
+             f"realtime_start == {TODAY}?", cap=700)
 
-    # 4. Release dates. "Came in this morning" is a claim about a RELEASE date,
-    #    not an observation date. Conflating them is how a month-old figure
-    #    gets announced as news.
-    _get("fred/series-release",
-         f"{FRED}/series/release?series_id={SERIES}&{q}",
-         "which release publishes this series")
-    _get("fred/releases-dates-recent",
-         f"{FRED}/releases/dates?{q}&sort_order=desc&limit=8"
-         f"&include_release_dates_with_no_data=false",
-         "what has actually published recently")
-
-    # ---- the decisive comparison ----------------------------------------
+    # ---- verdicts --------------------------------------------------------
     print("=" * 64)
-    cur_o, first_o = _value(current, OBS), _value(first, OBS)
-    print(f"DECISIVE TEST — {SERIES} observation {OBS}")
-    print(f"  as it stands today : {cur_o.get('value') if cur_o else 'NOT FOUND'}")
-    print(f"  as first published : {first_o.get('value') if first_o else 'NOT FOUND'}")
-    if cur_o:
-        print(f"  current vintage window: {cur_o.get('realtime_start')} "
-              f"-> {cur_o.get('realtime_end')}")
-    if first_o:
-        print(f"  first   vintage window: {first_o.get('realtime_start')} "
-              f"-> {first_o.get('realtime_end')}")
-
-    if not (cur_o and first_o):
-        print("\n  VERDICT: one side is missing — cannot separate first print "
-              "from revision. The PM edition must fall back to "
-              '"latest value for X is ..." rather than "came in at".')
-    elif cur_o.get("value") != first_o.get("value"):
-        print(f"\n  VERDICT: THEY DIFFER "
-              f"({first_o.get('value')} -> {cur_o.get('value')}). FRED can "
-              f'support "came in at", and reporting the current value as the '
-              f"print would have been wrong by that margin.")
+    ra, rb, rc = [(x or {}).get("realtime_start") for x in (a, b, c)]
+    print(f"Q1  default said {ra!r} then {rb!r}; explicit-today returned {rc!r}")
+    if rc == TODAY:
+        print("    => VERDICT: an explicit realtime window IS honoured. Ship "
+              "every call with realtime_start/realtime_end set and the "
+              "default's wobble stops mattering.")
     else:
-        print("\n  VERDICT: identical for this observation. Either it has not "
-              "been revised yet, or output_type=4 is not doing what the docs "
-              "say. Re-test against an older observation before trusting it — "
-              "a single matching pair proves nothing (§12.4).")
+        print("    => VERDICT: explicit window NOT honoured. FRED cannot be "
+              "trusted to answer 'as of today' and the PM edition must not "
+              "claim a release date.")
+    if ra != rb:
+        print(f"    (and the default really does move between calls: "
+              f"{ra} vs {rb} — never rely on it)")
+
+    n_future = len((fut or {}).get("release_dates") or [])
+    print(f"\nQ2  release dates returned for {TODAY}..{FUTURE}: {n_future}")
+    if n_future:
+        print("    => VERDICT: releases/dates INCLUDES SCHEDULED dates. A "
+              "listed date does NOT mean published, so 'released this "
+              "morning' must be proven from an observation's own vintage, "
+              "never from this endpoint.")
+    else:
+        print("    => VERDICT: no future dates returned — the endpoint appears "
+              "to list published releases only. Re-test near a known "
+              "announcement before relying on it (§12.4).")
     return 0
 
 
