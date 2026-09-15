@@ -8,7 +8,7 @@
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: 2 of 5 clean** (was: 1 of 5 at rev 11) |
 | **Last updated** | 2026-09-13 |
-| **Revision** | 14 (was: 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 15 (was: 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -388,6 +388,17 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.23 — A calendar tells you what is planned; only the data tells you what
+happened.** FRED's `releases/dates` returns the FOMC press release dated
+26, 27, 28, 29, 30 and 31 December — every day to year end, for a release that
+happens eight times a year. Those are projections, and the endpoint marks them
+no differently from a release that actually landed. Round 15 saw one such date
+and hesitated; round 16 asked for dates in the **future**, got 2,965 of them,
+and settled it in a single call. **Publication must be proven from the data's
+own vintage — the timestamp attached to the number — never from a schedule
+that merely names the day.** The same shape as §3.17, where a change that had
+been *made* was recorded as a change that *worked*. *Evidence: §12.10.*
+
 **§3.22 — When two readings agree, the agreement carries no information.**
 Round 15's decisive test fetched one payrolls figure two ways — as first
 published and as it stands today — and got 159,075 both times. That result is
@@ -723,6 +734,37 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 15 · 2026-09-15 · Round 16 — proven on a release that landed this morning
+**Sections touched:** header, §3.23 (new), §12.2, §12.10 (new)
+**Type:** DATA
+
+**Evidence:** probe run 35030196370, job 104586657834. Empire State series
+`AWCDINA066MNFRBNY`, initial releases newest-first: `realtime_start` =
+`2026-09-15`, `2026-08-17`, `2026-07-15` against observation dates `2026-09-01`,
+`2026-08-01`, `2026-07-01`. FOMC release dates: `2026-12-31 … 2026-12-26`.
+
+| Field | Was | Now |
+|---|---|---|
+| Default realtime window | ⚠ suspected cache wobble | **confirmed unreliable** — `2026-09-04` twice today, `09-11`/`09-15` yesterday. Never use it |
+| Explicit realtime window | untested | ✅ **honoured exactly** |
+| `releases/dates` semantics | ⚠ unresolved | ⛔ **lists scheduled dates** — 2,965 in the forward window; FOMC projected daily to year end |
+| "did this publish today?" | no reliable method | ✅ **the observation's own `realtime_start`** |
+| FRED latency after a release | unknown | **~3 minutes** (`last_updated 07:33:29-05` for an 08:30 ET release) |
+
+**Why:** Both of rev 14's cautions would have put a wrong date in front of a
+reader. Round 16 was designed so each had a single decisive test rather than an
+accumulation of hints — asking for *future* dates settles "scheduled or
+published" in one call, and naming the window settles the cache question by
+making it irrelevant.
+
+**Impact on prior conclusions:** None reversed. §3.23 generalises the result
+and links it to §3.17 — both are a plan being mistaken for an outcome.
+
+**Not changed, deliberately:** still no FRED code, and the PM edition is still
+unbuilt. Today is day 2 of five clean mornings; the plan's own §6 puts the
+build after the fifth, and three decisive probe rounds in one evening are not a
+reason to move a date set to protect the thing that already works.
 
 ## rev 14 · 2026-09-15 · FRED can say "came in", and a test that nearly proved nothing
 **Sections touched:** header, §3.22 (new), §12.2, §12.9 (new)
@@ -1215,7 +1257,8 @@ them before the trigger is installed would leave no delivery path at all.
 | Polymarket gamma | `S7` | 🟡 PROBED | 200, and far more liquid than Kalshi on the September meeting ($20m/24h). Not wired: its event slugs are per-month strings, where Kalshi's tickers generalise |
 | CME quote service | `S1` | ⚫ EXCLUDED | `403 — "This IP address is blocked due to suspected web scraping activity"`. Farside's lesson, third occurrence |
 | ~~Fed-path odds (any free source)~~ | ~~`S2` `S6`~~ | ❌ **VERDICT WRONG** | was: "needs contract-level Fed Funds settlements". It needs a prediction market, which is free. See rev 5 |
-| FRED (St. Louis Fed) | `S0` | 🟠 **WIRED-READY** — round 15 answered the shape question. `output_type=4` returns the initial release **with `realtime_start` = the publication date**, which is exactly what *"came in this morning"* needs. `series/release` maps a series to its publisher. See §12.9 for the one unresolved caution | ⬇ round 14 detail below |
+| FRED (St. Louis Fed) | `S0` | 🟠 **WIRED-READY, method settled (round 16).** Ask with `output_type=4` and an **explicit** `realtime_start`/`realtime_end`; a first print whose `realtime_start` equals today published today. **Never** use `releases/dates` to decide publication and **never** rely on the default realtime window — both lie (§12.10) | ⬇ round 15 detail below |
+| FRED — round 15 detail | `S0` | 🟠 shape question answered. `output_type=4` returns the initial release **with `realtime_start` = the publication date**, which is exactly what *"came in this morning"* needs. `series/release` maps a series to its publisher. See §12.9 for the one unresolved caution | ⬇ round 14 detail below |
 | FRED — round 14 detail | `S0`* | 🟡 PROBED | `400 · "The value for variable api_key is not registered"` from a runner — **reachable; auth is the only barrier**. Probed with a deliberately invalid key so nobody signs up for a host that would have blocked us. **Needs a full `fredaccount.stlouisfed.org` login, not just an email** (was: "needs a free key" — understated; the key cannot be requested or viewed while logged out). Still free, still inside D2. **Scheduled outage Sat 2026-09-19 14:30–16:00 LIS**, now in `data/watchlist.txt` |
 | ZeroHedge via Feedburner | `S0` | 🟡 PROBED | `200`, 25 items, all timestamped, newest 0.7h old. **Window only 21.6h** — marginal for a 24h look-back, ample for a 5h one. Carries political commentary alongside market stories; see §12.8 |
 | `zerohedge.com/fullrss2.xml` | `S3` | ⚫ EXCLUDED | 404. Feedburner is the live path |
@@ -1261,6 +1304,50 @@ commentary. In a brief where every line is a fetched number with a source and
 an age stamp, a commentary headline renders with identical authority. That is
 §3.9 inverted — opinion typeset as data — and it would be the first unsourced
 claim the brief has ever printed.
+
+### §12.10 Round 16 — both cautions resolved, and the method is now a rule
+
+Run 35030196370, job 104586657834.
+
+**Q1 — the default realtime window is not today, and it moves.** Two calls
+returned `2026-09-04`; round 15's two returned `2026-09-11` and `2026-09-15`.
+**An explicit window is honoured exactly**: asking `realtime_start=2026-09-15&
+realtime_end=2026-09-15` returned `2026-09-15`. So the rule is *name the window
+on every call* and the default's wobble stops mattering. ✅
+
+**Q2 — `releases/dates` lists SCHEDULED dates.** Asking for 2026-09-15 →
+2027-01-13 returned 6 of a count of **2,965**. Worse, the FOMC release (id 101)
+returns `2026-12-31, 12-30, 12-29, 12-28, 12-27, 12-26` — FRED projects a daily
+release date for it through the end of the year. **A date from a calendar
+endpoint is a plan, not an event.** ⛔ Never use it to claim publication.
+
+**End-to-end, on a release that landed this morning.** Empire State published
+08:30 ET today. Release 321 → series `AWCDINA066MNFRBNY` → initial releases:
+
+```
+{"realtime_start": "2026-09-15", "realtime_end": "9999-12-31", "date": "2026-09-01", "value": "14.9"}
+{"realtime_start": "2026-08-17", ..., "date": "2026-08-01", "value": "8.2"}
+{"realtime_start": "2026-07-15", ..., "date": "2026-07-01", "value": "6.0"}
+```
+
+`realtime_start` = **today** on the newest, and the mid-month cadence on the
+two before it matches Empire State's real schedule. **The observation's own
+vintage proves it published today — no calendar endpoint involved.**
+
+**The method, settled:**
+
+1. `output_type=4` with explicit `realtime_start=1776-07-04&realtime_end=9999-12-31`
+2. read the newest observation's `realtime_start`
+3. equals today → it published today, and the value is the first print
+
+**Latency, measured:** the series carried `last_updated: 2026-09-15 07:33:29-05`
+— 08:33 ET, about three minutes after an 08:30 ET release. A 14:00 Lisbon
+(09:00 ET) edition will comfortably have the morning's print.
+
+**Useful field found in passing:** `release_last_updated` on `releases/dates`
+is a real timestamp, and it disagrees with `date` — *Coinbase Cryptocurrencies*
+listed `date: 2026-09-15` with `release_last_updated: 2026-09-14 19:06:24-05`.
+Further evidence that `date` is nominal.
 
 ### §12.9 Round 15 — FRED can carry "came in", with one caution
 
