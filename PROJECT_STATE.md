@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: day 1 of 5 clean, Mon 2026-09-14** (was: awaiting, counting from Mon) |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: 2 of 5 clean** (was: 1 of 5 at rev 11) |
 | **Last updated** | 2026-09-13 |
-| **Revision** | 11 (was: 10, 9, 8, 7, 6) |
+| **Revision** | 12 (was: 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -178,8 +178,8 @@ round** (§3.17, §8).
 
 | # | Day | In inbox | vs 09:25 | Dispatch | Banner | Delta label |
 |---|---|---|---|---|---|---|
-| 1 | Mon 2026-09-14 | **09:20 LIS** (08:20:37Z) | ✅ 5 min early | #65 `workflow_dispatch` 08:20:13Z — the Google timer | none | `+0.8% vs yesterday`, state dated 09-13 ✅ |
-| 2 | Tue 2026-09-15 | — | — | — | — | — |
+| 1 | Mon 2026-09-14 | **09:20 LIS** (08:20:37Z) | ✅ 5 min early | #65 `workflow_dispatch` **08:20:13Z** — the Google timer | none | `+0.8% vs yesterday`, state dated 09-13 ✅ |
+| 2 | Tue 2026-09-15 | **09:20 LIS** (08:20:38Z) | ✅ 5 min early | #68 `workflow_dispatch` **08:20:13Z** | none | `-1.2% vs yesterday`, state dated 09-14 ✅ |
 | 3 | Wed 2026-09-16 | — | — | — | — | — |
 | 4 | Thu 2026-09-17 | — | — | — | — | — |
 | 5 | Fri 2026-09-18 | — | — | — | — | — |
@@ -191,8 +191,23 @@ through a real morning**, which is the thing a green offline suite could not
 tell us (§3.11).
 
 The duplicate guard also fired again unprompted: run #63 (13 Sep 13:50Z,
-`schedule`) exited on `last_sent_date`. D5's fallback continues to cost
-nothing while the trigger wins the race.
+`schedule`) exited on `last_sent_date`, and run #67 (14 Sep 15:57Z) did the
+same. D5's fallback continues to cost nothing while the trigger wins the race.
+
+**Day 2 added a measurement nobody asked for.** Both dispatches fired at
+**08:20:13Z — the same second, two days running.** Google documents
+`nearMinute(25)` as ±15 minutes and §12.2's setup doc repeats that, so the
+expected spread was up to half an hour. Two identical samples suggest the timer
+is far tighter in practice than its own documentation promises. **Two samples
+are not a claim** — this gets revisited at day 5, and if it holds, the setup
+doc's "expect the brief between roughly 09:10 and 09:40" is understated and
+should be corrected rather than left as a safe over-estimate.
+
+The AHEAD countdown also reached **T-0 for the first time this session**: the
+Canada tariff scope change, tracked since T-2, surfaced in Tuesday's subject
+line as `TODAY Modifying the Scope of Produc…`. Partial evidence for §5's open
+question about whether the radar surfaces anything useful — one landing is not
+the month of observation that question asks for.
 
 ### §2.1g The weekend guard, caught in the act — 2026-09-13
 
@@ -486,8 +501,8 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
   than a pinned deployment, so the re-paste is live for tomorrow without any
   further step (§2.1g).
 - ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings — now seven-day.
-  Running count: 1 of 5** (was: 0 of 5 at rev 9; was: 4 of 5, wrongly, at rev 6
-  — see §2.1d). Live table in §2.1h.
+  Running count: 2 of 5** (was: 1 of 5 at rev 11; 0 of 5 at rev 9; 4 of 5,
+  wrongly, at rev 6 — see §2.1d). Live table in §2.1h.
   Read the `built HH:MM LIS` line each day and compare against 09:25. Nothing
   else in this file matters until that number exists. The old schedule was ~40
   minutes late on its first two days before degrading to eleven hours, so one
@@ -697,6 +712,36 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 12 · 2026-09-15 · Day 2, and a timer more precise than its own documentation
+**Sections touched:** header, §2.1h, §5
+**Type:** DATA
+
+**Evidence:** Gmail `2026-09-15T08:20:38Z` — *"Cloud run — built 09:20 LIS.
+The Setup BTC $76797, -1.2% vs yesterday"*, running straight into `## THE
+SETUP`. Actions run #68, `workflow_dispatch`, `2026-09-15T08:20:13Z`, head
+`316da27`. Prior day's dispatch: `2026-09-14T08:20:13Z`.
+
+| Field | Was | Now |
+|---|---|---|
+| Five clean mornings | 1 of 5 | **2 of 5** |
+| Day 2 arrival | — | 09:20 LIS, 5 min ahead of target |
+| Dispatch precision | assumed ±15 min per Google's docs | **08:20:13Z on both days — the same second** |
+| AHEAD radar | never observed reaching T-0 | the Canada tariff landed as `TODAY …` in the subject line |
+| Duplicate guard | confirmed 13 Sep | confirmed again 14 Sep (run #67) |
+
+**Why:** Day 2 of the measurement that §5 has headed since rev 3, and the
+second row written inbox-first under §2.1h's rule.
+
+**Impact on prior conclusions:** None. Two clean mornings is still short of
+what §2.1 requires, and the old schedule managed two before degrading.
+
+**Not changed, deliberately:** the `docs/trigger-setup.md` line promising
+delivery "between roughly 09:10 and 09:40" stays as written. It is a safe
+over-estimate and two samples do not justify narrowing a user-facing promise —
+**if the timer misses once, the wide range is the honest one and the narrow one
+would read as a broken guarantee.** Revisit at day 5. The PM edition and FRED
+also stay untouched behind the remaining three mornings, per rev 10.
 
 ## rev 11 · 2026-09-14 · Day 1 of five, and it is the first row read from the inbox
 **Sections touched:** header, §2.1h (new), §5
