@@ -6,10 +6,9 @@ Probe, read the output, then write a fetcher against what actually came back.
 
 from __future__ import annotations
 
-import re
-import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
+import json
+import os
+import sys
 
 import requests
 
@@ -18,179 +17,149 @@ BROWSER = {
     "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                    "AppleWebKit/537.36 (KHTML, like Gecko) "
                    "Chrome/126.0.0.0 Safari/537.36"),
-    "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-GB,en;q=0.9",
+    "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
 }
 
-# Round 14. Two questions, and they are asked in this order deliberately.
+# Round 15. Round 14 proved FRED answers a datacenter IP; the key is now a
+# repository secret. This round asks the only question that matters next:
+# can FRED carry the claim the 14:00 edition wants to make?
 #
-# 1. FRED, for release ACTUALS. The 09:20 brief can only ever print a
-#    forecast, because sources.py:143 is right - ForexFactory is schedule-only
-#    and carries no `actual` field. A second edition at 14:00 Lisbon (09:00 ET,
-#    thirty minutes after the 08:30 ET prints) is worth sending only if it can
-#    say what a number actually came in at.
+# The distinction is narrow and decides the whole feature.
 #
-#    FRED needs a free API key, which means Kabil has to go and sign up. That
-#    is his time, and it would be wasted if FRED turns out to refuse datacenter
-#    IPs the way Farside, Binance and CME all did. So probe with a DELIBERATELY
-#    INVALID key first: a 400 saying the key is unregistered proves the host
-#    answers us and auth is the only barrier, while a 403 or a timeout means
-#    excluded and nobody signs up for anything.
+#   "the current read on August CPI is X"  - latest observation. The brief
+#       already does this correctly through BLS, and flags preliminary values.
 #
-# 2. The four news accounts Kabil follows on X, probed at their PRIMARY
-#    sources rather than through X. X killed its free tier in February 2026
-#    ($0.005/read, no free option for new developers) and Nitter is under
-#    cease-and-desist, so X itself fails D2 and the reachability bar at once.
-#    But three of the four accounts are relays of sites that publish their own
-#    feeds - which is §12.4a exactly: name the route that failed, then ask what
-#    else carries the same fact.
+#   "CPI CAME IN at X this morning"        - the value AS FIRST PUBLISHED,
+#       plus the date it was released. This is what the market traded. A later
+#       revision printed under "came in" would be the right series carrying a
+#       materially wrong claim, which is §3.10's shape.
 #
-#    For a feed, HTTP 200 is not the answer. §3.7 already cost this project a
-#    source that answered 200 with careers pages. What matters here is whether
-#    items carry a parseable timestamp and HOW FAR BACK the feed reaches: an
-#    "everything since the last brief" section needs ~24h of history for the
-#    morning edition. A feed holding 10 items spanning two busy hours cannot
-#    support the design, however healthy its status code.
-FRED_BAD_KEY = "0123456789abcdef0123456789abcdef"
+# FRED documents output_type=4 as "initial release only" and a realtime window
+# for vintage retrieval. Documented is not measured, so both get tested, and
+# the decisive check is whether a first release and a current value for the
+# SAME observation can actually be told apart. PAYEMS is the test case because
+# payrolls are revised in the two months after publication as a matter of
+# routine - August 2026 was published 4 September, so it has had one revision
+# cycle already.
+#
+# SECURITY: this prints payloads into an Actions log. The key must never reach
+# it. Every URL goes through _redact before printing, and the key is read from
+# the environment rather than written in source.
+FRED = "https://api.stlouisfed.org/fred"
+KEY = (os.environ.get("FRED_API_KEY") or "").strip()
 
-CANDIDATES = [
-    # --- FRED: reachability before signup -----------------------------------
-    ("fred/observations-badkey",
-     "https://api.stlouisfed.org/fred/series/observations"
-     f"?series_id=CPIAUCSL&api_key={FRED_BAD_KEY}&file_type=json&limit=3"),
-    ("fred/releases-badkey",
-     "https://api.stlouisfed.org/fred/releases"
-     f"?api_key={FRED_BAD_KEY}&file_type=json&limit=3"),
-
-    # --- news primaries: the four X accounts, at source ----------------------
-    ("zerohedge/feedburner", "https://feeds.feedburner.com/zerohedge/feed"),
-    ("zerohedge/fullrss2", "https://www.zerohedge.com/fullrss2.xml"),
-    ("watcherguru/feed", "https://watcher.guru/news/feed"),
-    ("watcherguru/rootfeed", "https://watcher.guru/feed"),
-    ("financialjuice/home", "https://www.financialjuice.com/"),
-    # @DeItaone relays a Bloomberg terminal verbatim; there is no free primary,
-    # so these are the substitutes. A daily brief is already hours behind, so
-    # the latency they give up against a terminal costs this reader nothing.
-    ("cnbc/topnews", "https://search.cnbc.com/rs/search/combinedcms/view.xml"
-                     "?partnerId=wrss01&id=100003114"),
-    ("marketwatch/topstories",
-     "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
-    ("yahoo/finance-news",
-     "https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC&region=US&lang=en-US"),
-]
+# PAYEMS Aug 2026 = the 2026-08-01 observation, first published 2026-09-04.
+SERIES, OBS, FIRST_PUB = "PAYEMS", "2026-08-01", "2026-09-04"
 
 
-def _stamp(text):
-    """A datetime from an RSS/Atom date string, or None."""
-    if not text:
+def _redact(url: str) -> str:
+    return url.replace(KEY, "***REDACTED***") if KEY else url
+
+
+def _get(label: str, url: str, note: str = ""):
+    print(f"--- {label}\n    {_redact(url)}")
+    if note:
+        print(f"    ({note})")
+    try:
+        r = requests.get(url, headers=BROWSER, timeout=TIMEOUT)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  FAILED {type(exc).__name__}: "
+              f"{_redact(' '.join(str(exc).split())[:120])}\n")
         return None
-    text = text.strip()
-    try:
-        d = parsedate_to_datetime(text)
-        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
-    except (TypeError, ValueError):
-        pass
-    try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return None
+    ctype = r.headers.get("content-type", "?")
+    print(f"  HTTP {r.status_code} · {ctype} · {len(r.content):,} bytes")
+    data = None
+    if "json" in ctype.lower():
+        try:
+            data = json.loads(r.text)
+        except json.JSONDecodeError:
+            print("  declared JSON, did not parse")
+    if data is not None:
+        print(f"  {_redact(' '.join(json.dumps(data)[:1400].split()))}")
+    else:
+        print(f"  body: {_redact(' '.join(r.text[:200].split()))}")
+    print()
+    return data
 
 
-def _feed_report(body: bytes) -> bool:
-    """Print item count, titles and the window the feed covers. True if parsed."""
-    # BOM and leading whitespace both break ElementTree, and the Fed feeds
-    # already taught this project that lesson (§12.2).
-    raw = body.lstrip(b"\xef\xbb\xbf").lstrip()
-    try:
-        root = ET.fromstring(raw)
-    except ET.ParseError as exc:
-        print(f"  not parseable XML: {exc}")
-        return False
-
-    items = root.findall(".//item") or root.findall(
-        ".//{http://www.w3.org/2005/Atom}entry")
-    if not items:
-        print("  parsed, but zero items")
-        return False
-
-    def _txt(el, *names):
-        for n in names:
-            found = el.find(n)
-            if found is not None and (found.text or "").strip():
-                return found.text.strip()
-        return ""
-
-    stamps = []
-    for it in items:
-        s = _stamp(_txt(it, "pubDate", "date", "{http://purl.org/dc/elements/1.1/}date",
-                        "{http://www.w3.org/2005/Atom}updated",
-                        "{http://www.w3.org/2005/Atom}published"))
-        if s:
-            stamps.append(s)
-
-    print(f"  items: {len(items)} · with a parseable timestamp: {len(stamps)}")
-    for it in items[:3]:
-        t = _txt(it, "title", "{http://www.w3.org/2005/Atom}title")
-        print(f"    - {' '.join(t.split())[:110]}")
-
-    if not stamps:
-        print("  NO USABLE TIMESTAMPS — cannot support a 'since last brief' window")
-        return True
-    newest, oldest = max(stamps), min(stamps)
-    span_h = (newest - oldest).total_seconds() / 3600
-    age_h = (datetime.now(timezone.utc) - newest).total_seconds() / 3600
-    print(f"  newest {newest:%Y-%m-%d %H:%M %Z} (age {age_h:.1f}h) · "
-          f"oldest {oldest:%Y-%m-%d %H:%M %Z}")
-    print(f"  window covered: {span_h:.1f}h "
-          f"{'— ENOUGH for a 24h look-back' if span_h >= 24 else '— TOO SHORT for 24h'}")
-    return True
+def _value(data, obs_date):
+    """The observation for obs_date, or None."""
+    for o in (data or {}).get("observations") or []:
+        if o.get("date") == obs_date:
+            return o
+    return None
 
 
 def main() -> int:
-    print(f"Round 14 · probing {len(CANDIDATES)} candidates from an Actions runner\n")
-    verdicts = []
-    for name, url in CANDIDATES:
-        print(f"--- {name}\n    {url}")
-        try:
-            r = requests.get(url, headers=BROWSER, timeout=TIMEOUT)
-        except Exception as exc:  # noqa: BLE001
-            print(f"  FAILED {type(exc).__name__}: "
-                  f"{' '.join(str(exc).split())[:100]}\n")
-            verdicts.append((name, "unreachable"))
-            continue
+    if not KEY:
+        print("::error::FRED_API_KEY is not set. Add it as a repository "
+              "secret and pass it into the probe workflow's env.")
+        return 1
+    print(f"Round 15 · FRED payload shape · key present ({len(KEY)} chars, "
+          f"never printed)\n")
 
-        ctype = r.headers.get("content-type", "?")
-        print(f"  HTTP {r.status_code} · {ctype} · {len(r.content):,} bytes")
+    q = f"api_key={KEY}&file_type=json"
 
-        if name.startswith("fred/"):
-            # The body is the whole point: which barrier answered us?
-            print(f"  body: {' '.join(r.text[:300].split())}")
-            if r.status_code == 400 and "api_key" in r.text.lower():
-                print("  => REACHABLE. Auth is the only barrier — a key is worth getting.")
-            elif r.status_code in (403, 451):
-                print("  => BLOCKED at the edge. Do not sign up; this is Farside again.")
-        elif "xml" in ctype.lower() or "rss" in ctype.lower() or r.content[:200].lstrip().startswith(b"<?xml"):
-            _feed_report(r.content)
-        elif r.ok:
-            head = " ".join(r.text[:200].split())
-            print(f"  head: {head}")
-            # Does the page advertise a feed we could use instead?
-            links = re.findall(
-                r'<link[^>]+type=["\']application/(?:rss|atom)\+xml["\'][^>]*>',
-                r.text, re.I)[:3]
-            for l in links:
-                print(f"  advertises feed: {' '.join(l.split())[:160]}")
-            if not links:
-                print("  no RSS/Atom <link> advertised in the HTML head")
-        else:
-            print(f"  body: {' '.join(r.text[:200].split())}")
+    # 1. Baseline: does a real key return observations at all?
+    _get("fred/observations-latest",
+         f"{FRED}/series/observations?series_id={SERIES}&{q}"
+         f"&sort_order=desc&limit=3",
+         "newest first — proves the key works and shows the default shape")
 
-        verdicts.append((name, f"HTTP {r.status_code}"))
-        print()
+    # 2. Vintage markers. Without realtime_start/realtime_end in the payload a
+    #    first print cannot be distinguished from a revision at all.
+    current = _get("fred/observations-current-vintage",
+                   f"{FRED}/series/observations?series_id={SERIES}&{q}"
+                   f"&observation_start={OBS}&observation_end={OBS}",
+                   f"the {OBS} observation as it stands TODAY")
 
+    # 3. The same observation as first published. output_type=4 is documented
+    #    as "initial release only"; realtime bounds widen the vintage search.
+    first = _get("fred/observations-initial-release",
+                 f"{FRED}/series/observations?series_id={SERIES}&{q}"
+                 f"&observation_start={OBS}&observation_end={OBS}"
+                 f"&output_type=4&realtime_start=1776-07-04"
+                 f"&realtime_end=9999-12-31",
+                 "output_type=4 — the value as FIRST PUBLISHED")
+
+    # 4. Release dates. "Came in this morning" is a claim about a RELEASE date,
+    #    not an observation date. Conflating them is how a month-old figure
+    #    gets announced as news.
+    _get("fred/series-release",
+         f"{FRED}/series/release?series_id={SERIES}&{q}",
+         "which release publishes this series")
+    _get("fred/releases-dates-recent",
+         f"{FRED}/releases/dates?{q}&sort_order=desc&limit=8"
+         f"&include_release_dates_with_no_data=false",
+         "what has actually published recently")
+
+    # ---- the decisive comparison ----------------------------------------
     print("=" * 64)
-    for name, verdict in verdicts:
-        print(f"{verdict:<16} {name}")
+    cur_o, first_o = _value(current, OBS), _value(first, OBS)
+    print(f"DECISIVE TEST — {SERIES} observation {OBS}")
+    print(f"  as it stands today : {cur_o.get('value') if cur_o else 'NOT FOUND'}")
+    print(f"  as first published : {first_o.get('value') if first_o else 'NOT FOUND'}")
+    if cur_o:
+        print(f"  current vintage window: {cur_o.get('realtime_start')} "
+              f"-> {cur_o.get('realtime_end')}")
+    if first_o:
+        print(f"  first   vintage window: {first_o.get('realtime_start')} "
+              f"-> {first_o.get('realtime_end')}")
+
+    if not (cur_o and first_o):
+        print("\n  VERDICT: one side is missing — cannot separate first print "
+              "from revision. The PM edition must fall back to "
+              '"latest value for X is ..." rather than "came in at".')
+    elif cur_o.get("value") != first_o.get("value"):
+        print(f"\n  VERDICT: THEY DIFFER "
+              f"({first_o.get('value')} -> {cur_o.get('value')}). FRED can "
+              f'support "came in at", and reporting the current value as the '
+              f"print would have been wrong by that margin.")
+    else:
+        print("\n  VERDICT: identical for this observation. Either it has not "
+              "been revised yet, or output_type=4 is not doing what the docs "
+              "say. Re-test against an older observation before trusting it — "
+              "a single matching pair proves nothing (§12.4).")
     return 0
 
 

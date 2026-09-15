@@ -17,4 +17,10 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
-      - run: python scripts/probe.py
+      - name: Probe
+        env:
+          # Round 15 needs the real FRED key. scripts/probe.py redacts it from
+          # every URL it prints - an Actions log is readable, and a key that
+          # reaches one is a key that has to be rotated.
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python scripts/probe.py
