@@ -53,4 +53,5 @@
 # tokens → regenerate (Expiration must be a PRESET, never Custom; Actions must
 # be Read and write) → paste into Apps Script → Project Settings → Script
 # Properties → GITHUB_TOKEN.
+2026-09-19 | admin | FRED API maintenance 14:30–16:00 LIS (08:30–10:00 CT) — release actuals degrade to unavailable inside that window | https://fred.stlouisfed.org/docs/api/api_key.html | 2026-09-15
 2026-11-07 | admin | GitHub trigger token expires — renew it or the brief stops arriving on time (see docs/trigger-setup.md) | https://github.com/settings/personal-access-tokens | 2026-09-08

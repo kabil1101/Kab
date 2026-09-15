@@ -8,7 +8,7 @@
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: 2 of 5 clean** (was: 1 of 5 at rev 11) |
 | **Last updated** | 2026-09-13 |
-| **Revision** | 12 (was: 11, 10, 9, 8, 7, 6) |
+| **Revision** | 13 (was: 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -478,6 +478,7 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 | D10 | Curated watchlist is pipe-delimited plain text, not YAML — indentation must not be able to break it | ✅ Locked |
 | D11 | Watchlist entries carry a last-confirmed date; >75 days prints as `unconfirmed` | ✅ Locked |
 | D12 | Bessent tracked through operations (buybacks, auctions, refunding), not remarks, because Treasury publishes no usable feed — and the brief states the gap | ✅ Accepted |
+| D16 | **ZeroHedge is IN, as visibly-marked commentary.** Own section, every line tagged `via ZeroHedge`, subtitle naming it commentary rather than a wire. This is the first non-fetched content the brief will carry, so the marking is the whole point: D4 guarantees every *number* is fetched, and anything that is not a number must be visibly not one. Dropped if it ever renders indistinguishably from a data line | ✅ Locked 2026-09-15 |
 | D15 | **The brief monitors its own delivery.** `last_sent_date` is compared to today and any missed day leads the brief in red; the Apps Script reports `SCRIPT_VERSION` on dispatch and a mismatch with `scripts/health.py` is printed. Neither check ever guesses: no state date, or no version on the dispatch, produces no claim | ✅ Locked 2026-09-13 |
 | D13 | ~~ETH ETF flows, aggregate liquidations **and Fed-path odds** stay out of scope. No free source~~ | ⚠ **PARTLY RETRACTED 2026-09-12.** Fed-path odds *are* freely available — Kalshi lists the decision as binary contracts over a keyless API (§12.2). The claim rested on CME's FedWatch being a data-free iframe, which was true and irrelevant: that is CME's *rendering* of the odds, not the odds. ETH ETF flows and aggregate liquidations still stand, but were reasoned the same way and are now **unconfirmed rather than settled** |
 
@@ -712,6 +713,38 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 13 · 2026-09-15 · ZeroHedge in, and FRED wants an account
+**Sections touched:** header, §4 D16 (new), §12.2, `data/watchlist.txt`
+**Type:** DECISION + CORRECTION
+
+**Evidence:** Kabil, this session. FRED's own API-key page: *"you cannot
+request or view your API keys without first logging into your
+fredaccount.stlouisfed.org user account."* Its maintenance banner: 19 Sep 2026,
+08:30–10:00 Central = **13:30–15:00 UTC = 14:30–16:00 Lisbon**.
+
+| Field | Was | Now |
+|---|---|---|
+| ZeroHedge | ❓ open since the probe | **IN** (D16), as visibly-marked commentary |
+| FRED signup | "a free key" | **a full account login**. The walkthrough given to Kabil was wrong and was corrected to his face |
+| FRED availability | assumed continuous | outage Sat 19 Sep, now counted down in the watchlist |
+
+**Why:** Both were open questions blocking the PM edition's design. Neither
+needed code.
+
+**Impact on prior conclusions:** None. D16 does not weaken D4 — it is the
+mechanism that lets non-fetched content exist without pretending to be fetched.
+
+**Not changed, deliberately:** **no PM-edition code was written.** The approved
+plan's §6 puts the build after the fifth clean morning and today is day 2. A
+green approval is not a reason to start touching `main.py` mid-measurement —
+that is exactly the trade §12.7's ladder exists to refuse. The watchlist entry
+is the one exception, and only because `data/watchlist.txt` is plain text by
+D10, is hand-edited by Kabil as a matter of course, and its parser skips and
+reports a bad line rather than failing (verified: `problems: []`).
+
+**Requires Kabil:** a `fredaccount.stlouisfed.org` account before the key can
+be issued. Nothing is blocked until Friday.
 
 ## rev 12 · 2026-09-15 · Day 2, and a timer more precise than its own documentation
 **Sections touched:** header, §2.1h, §5
@@ -1141,7 +1174,7 @@ them before the trigger is installed would leave no delivery path at all.
 | Polymarket gamma | `S7` | 🟡 PROBED | 200, and far more liquid than Kalshi on the September meeting ($20m/24h). Not wired: its event slugs are per-month strings, where Kalshi's tickers generalise |
 | CME quote service | `S1` | ⚫ EXCLUDED | `403 — "This IP address is blocked due to suspected web scraping activity"`. Farside's lesson, third occurrence |
 | ~~Fed-path odds (any free source)~~ | ~~`S2` `S6`~~ | ❌ **VERDICT WRONG** | was: "needs contract-level Fed Funds settlements". It needs a prediction market, which is free. See rev 5 |
-| FRED (St. Louis Fed) | `S0`* | 🟡 PROBED | `400 · "The value for variable api_key is not registered"` from a runner — **reachable; auth is the only barrier**. Probed with a deliberately invalid key so nobody signs up for a host that would have blocked us. Needs a free key before it can be wired |
+| FRED (St. Louis Fed) | `S0`* | 🟡 PROBED | `400 · "The value for variable api_key is not registered"` from a runner — **reachable; auth is the only barrier**. Probed with a deliberately invalid key so nobody signs up for a host that would have blocked us. **Needs a full `fredaccount.stlouisfed.org` login, not just an email** (was: "needs a free key" — understated; the key cannot be requested or viewed while logged out). Still free, still inside D2. **Scheduled outage Sat 2026-09-19 14:30–16:00 LIS**, now in `data/watchlist.txt` |
 | ZeroHedge via Feedburner | `S0` | 🟡 PROBED | `200`, 25 items, all timestamped, newest 0.7h old. **Window only 21.6h** — marginal for a 24h look-back, ample for a 5h one. Carries political commentary alongside market stories; see §12.8 |
 | `zerohedge.com/fullrss2.xml` | `S3` | ⚫ EXCLUDED | 404. Feedburner is the live path |
 | `watcher.guru/news/feed` (= `/feed`) | `S5` | ⚫ EXCLUDED | `200`, well-formed, 10 items, all timestamped — and **newest item 41.9h old**, carrying equity stories on the crypto beat. The site feed does not carry what the X account posts. §3.20 |
