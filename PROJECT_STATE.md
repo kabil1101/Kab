@@ -7,8 +7,8 @@
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: 3 of 5 clean** (was: 2 of 5 at rev 12) |
-| **Last updated** | 2026-09-13 |
-| **Revision** | 16 (was: 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Last updated** | 2026-09-16 |
+| **Revision** | 17 (was: 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -28,12 +28,12 @@
 
 ## §1 · WHERE THINGS STAND
 
-The brief builds itself in GitHub Actions every weekday, fetches nine live
-sources, renders markdown and HTML, and emails `kabil.dh@gmail.com` over Gmail
-SMTP. It runs with the laptop shut. Content is complete: calendar, a forward
-policy radar with countdowns, a policy desk tracking Warsh and Treasury
-operations, crypto, ETF flows, derivatives, sentiment, macro and risk windows.
-Nine sections, all live-verified in a real run, all degrading to a named
+The brief builds itself in GitHub Actions **seven days a week** (was, rev 1–5:
+"every weekday"), fetches around eighteen live sources, renders markdown and
+HTML, and emails `kabil.dh@gmail.com` over Gmail SMTP. It runs with the laptop
+shut. **Eleven sections** (was: nine) — THE SETUP, CALENDAR, AHEAD, FED PATH,
+POLICY DESK, CRYPTO, FLOWS, DERIVATIVES, SENTIMENT, MACRO & EQUITIES, RISK
+WINDOWS — all live-verified in real runs, all degrading to a named
 `unavailable` rather than a fabricated number.
 
 **The diagnosis.** *(was, rev 1–2: "a delivery problem, not a content problem,
@@ -62,8 +62,27 @@ repository, so it exits cleanly every Saturday and Sunday without dispatching.
 to detect its own absence** — a brief that is never sent cannot report that it
 was never sent, Apps Script only emails on a throw, and GitHub only shows runs
 someone asked for. Rev 7 closes that: the next brief to arrive names the days
-that did not, and a stale trigger identifies itself. **The blocking item is a
-two-minute re-paste by Kabil (§5); the measurement restarts from zero.**
+that did not, and a stale trigger identifies itself. *(was, rev 7–9: "the
+blocking item is a two-minute re-paste by Kabil" — done the same day, §2.1f.)*
+
+**Where it stands now, 2026-09-16.** The trigger is live at v7 and the timer is
+confirmed. Three mornings of five have landed at 09:20 Lisbon, each read from
+the inbox before the run log. The FOMC on day 3 was the first live test of the
+sections under pressure and they held (§2.1h). FRED is probed across three
+rounds and its method is settled — it can carry *"came in at X"*, which is the
+entire justification for a second edition — and the second edition itself is
+designed, costed and approved.
+
+**None of it is built, and that is the point.** Everything the next phase needs
+is proven; what is not yet proven is that the thing already working keeps
+working. Two mornings remain. The plan's own §6 puts the build after the fifth,
+and three decisive probe rounds in one evening did not move that date.
+
+**This is a sequencing problem, not a capability problem.** The capability is
+demonstrated. The discipline being tested is whether a proven improvement can
+wait behind an unfinished measurement — which is the same discipline §8's
+comfortable-work trap describes, arriving from the opposite direction: not
+"build something easier instead", but "build something ready too early".
 
 ---
 
@@ -548,8 +567,8 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
   than a pinned deployment, so the re-paste is live for tomorrow without any
   further step (§2.1g).
 - ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings — now seven-day.
-  Running count: 2 of 5** (was: 1 of 5 at rev 11; 0 of 5 at rev 9; 4 of 5,
-  wrongly, at rev 6 — see §2.1d). Live table in §2.1h.
+  Running count: 3 of 5** (was: 2 of 5 at rev 12; 1 of 5 at rev 11; 0 of 5 at
+  rev 9; 4 of 5, wrongly, at rev 6 — see §2.1d). Live table in §2.1h.
   Read the `built HH:MM LIS` line each day and compare against 09:25. Nothing
   else in this file matters until that number exists. The old schedule was ~40
   minutes late on its first two days before degrading to eleven hours, so one
@@ -587,10 +606,26 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 - ❓ Is the AHEAD horizon (130 days) right? Untested against Kabil's actual
   planning window.
 
+### Queued behind the fifth clean morning
+- 🟠 **The 14:00 Lisbon "US OPEN" edition.** Designed, costed, approved. 09:00
+  ET for ~48 weeks a year; lands 30 min after the 08:30 ET prints and 30 min
+  before the NYSE open. **Not built** — it touches `main.py`, `state.py`, the
+  workflow and the Apps Script, all on the path producing the 09:20 brief.
+- 🟠 **FRED, method settled (§12.10).** `output_type=4` + an explicit realtime
+  window; a first print whose `realtime_start` is today published today. Key is
+  in place as a repository secret. **Not wired.**
+- 🟠 **The news set** — ZeroHedge (D16, as marked commentary) and CNBC, which
+  beat three of the four X accounts Kabil named (§12.8).
+
 ### Data Kabil still owes
+- ✅ **CLOSED 2026-09-15: the FRED API key.** Created and added as repository
+  secret `FRED_API_KEY`.
+- ✅ **CLOSED 2026-09-15: ZeroHedge in or out.** In, as visibly-marked
+  commentary (D16).
 - ⏳ **The events he already watches.** Summits, court dates, deal deadlines he
   is trading around. The curated leg of the radar is empty of everything he has
-  not named, and only he knows that list.
+  not named, and only he knows that list. **The one item on this list that has
+  not moved since rev 1.**
 - ⏳ Whether he wants any Fed speaker beyond Warsh tracked by name.
 
 ---
@@ -612,7 +647,7 @@ scripts/
   health.py     (119)      does the brief itself still work — missed days,
                            stale trigger. The only module that checks the
                            system rather than the market
-  probe.py       (95)      scratch prober, rewritten each round
+  probe.py      (167)      scratch prober, rewritten each round
 tests/
   test_brief.py(1176)      offline, no network, gates every brief
 data/watchlist.txt         dated events Kabil maintains by hand
@@ -704,12 +739,16 @@ never once arrived on time. **When this file is next read, check §5 before
 ```
 1. Trigger fires 09:25 LIS  ->  dispatch  ->  run starts in seconds
 2. Self-test gates the build (offline suite must pass)
-3. Nine sources fetched, each wrapped so a failure degrades one line
-4. Brief rendered, emailed, state committed
-5. Scheduled cron fires late  ->  sees last_sent_date  ->  exits silently
-6. Kabil reads the "built HH:MM LIS" line and logs delivered-vs-target
-7. Weekly: confirm watchlist entries, add events he hears about
-8. New source proposed  ->  PROBE FIRST  ->  §12.2 entry  ->  only then wire
+3. ~18 sources fetched, each wrapped so a failure degrades one line
+4. health.py checks the SYSTEM: missed days, stale trigger  ->  banner if wrong
+5. Brief rendered, emailed, state committed
+6. Scheduled cron fires late  ->  sees last_sent_date  ->  exits silently
+7. The inbox is read FIRST, the run log second  ->  §2.1h row
+8. Weekly: confirm watchlist entries, add events he hears about
+9. New source proposed  ->  PROBE FIRST  ->  §12.2 entry  ->  only then wire
+
+   -- after the fifth clean morning, and not before --
+10. PM edition at 14:00 LIS, read-only against state, actuals from FRED
 ```
 
 **What success in this phase actually is.** Not a longer brief. A brief that
@@ -732,6 +771,10 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 17 | 2026-09-16 | Day 3 of five, and the FOMC. Both radar legs fired on the same event and agreed; FED PATH resolved its countdown to `TODAY` with Kalshi live at 86% against 80% on the 13th; RISK WINDOWS listed all four components separately. **The ETF sign-flip flag — the detector the synopsis records as inverted at birth — was observed firing correctly on a real reversal for the first time** |
+| 16 | 2026-09-15 | Probe rounds 15 and 16. FRED can carry *"came in at X"*: `output_type=4` returns the first print with `realtime_start` = its publication date, proven end to end on Empire State, which had published 3 minutes before FRED carried it. Two traps caught — the default realtime window wanders and must never be used, and `releases/dates` lists **scheduled** dates (FOMC projected daily to year end). §3.22 and §3.23 |
+| 15 | 2026-09-15 | Day 2. Kabil added `FRED_API_KEY`; ZeroHedge decided IN as marked commentary (D16). The 14:00 Lisbon second edition designed and approved — corrected from his proposed 13:00, which is 08:00 ET, not 09:00. FRED's own maintenance window (Sat 19 Sep) added to the watchlist so the brief counts down to it |
+| 14 | 2026-09-14 | Day 1 of five clean mornings, and the first delivery row in this file read from the inbox before anything else. Probe round 14: X costs $0.005/read with no free tier and Nitter is under cease-and-desist, so the four accounts were probed at source instead — **CNBC, which Kabil never named, beat three of his four** (§12.8). §3.20 and §3.21 |
 | 13 | 2026-09-13 | **The seven-day switch had never taken effect.** Checked the inbox rather than the run log and found no brief for Sat 12 or Sun 13 Sep — the Google copy of the Apps Script still carried the weekend guard rev 6 removed from the repo, and §2.1d had recorded the Saturday as delivered. Sunday's brief sent by hand. Built the two detectors that would have caught it (`health.py`: missed days, trigger version) and fixed a third defect the gap exposed — a two-day move labelled "vs yesterday" (§3.18). Delivery record rebuilt from Gmail. **Kabil re-pasted within the hour; v7 confirmed live end to end (§2.1f)** |
 | 12 | 2026-09-12 | Brief switched to seven days a week (D14). Both crons drop the weekday filter and the Apps Script trigger loses its weekend guard; the cash-session suppression stays and gains tests on a real Sunday and a real Monday |
 | 11 | 2026-09-12 | FED PATH added: target range and EFFR (NY Fed), priced odds for the next decision (Kalshi), CPI/core/PPI computed from the BLS index and held until superseded. **D13's Fed-path clause retracted** — the odds were never unavailable, only CME's rendering of them was (§12.4a). Expected-market-reaction deliberately not built, with a test asserting the section never forecasts |
@@ -759,6 +802,41 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 17 · 2026-09-16 · Housekeeping pass — the narrative sections had drifted
+**Sections touched:** header, §1, §5, §6, §9, §10
+**Type:** STRUCTURE + CORRECTION
+**Evidence:** Kabil, this session, asking for a full update. Line counts from
+`wc -l`; section list from `render.py`'s own `md.append("## …")` calls.
+
+| Field | Was | Now |
+|---|---|---|
+| §1 cadence | "every weekday" | **seven days a week** — D14 landed on 2026-09-12 and §1 was never updated |
+| §1 section count | "nine sections", "nine live sources" | **eleven sections, ~18 sources** — FED PATH shipped rev 5 and §1 never caught up |
+| §1 blocking item | "a two-minute re-paste by Kabil" | closed the same day it was written (§2.1f); §1 still carried it three revisions later |
+| §1 diagnosis | "a measurement problem" | **"a sequencing problem, not a capability problem"** |
+| §5 running count | 2 of 5 | 3 of 5 |
+| §5 "Data Kabil owes" | 4 items | 2 closed, and the one that has not moved since rev 1 is now named as such |
+| §6 `probe.py` | 95 lines | 167 |
+| §9 loop | 8 steps, no health check, one edition | 10 steps, health.py named, inbox-first stated, PM edition placed **after** the fifth morning |
+| §10 | ended at session 13 | sessions 14–17 added |
+
+**Why:** Four days of daily revisions kept §2.1h, §3, §4 and §12 current while
+the narrative sections silently aged. §1 was describing a nine-section weekday
+brief blocked on a task finished three revisions earlier. **A state file whose
+summary is stale is worse than one with no summary, because the summary is what
+a new session reads first** — which is exactly how rev 6 put a false ✅ in
+§2.1d.
+
+**Impact on prior conclusions:** None. Nothing measured changes; this corrects
+descriptions that had fallen behind the measurements.
+
+**Not changed, deliberately:** §5's Mechanics and Process questions stand
+unaltered — the FOMC dates still came from secondary sources, the refunding
+date is still conventional rather than announced, and the radar has still not
+been watched for a month. Three of those could have been quietly closed on the
+strength of this week going well. None of them was actually checked, and
+"nothing went wrong" is not the same as "it was verified" (§3.19).
 
 ## rev 16 · 2026-09-16 · Day 3, the FOMC, and a detector caught doing its job
 **Sections touched:** header, §2.1h

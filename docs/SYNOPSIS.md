@@ -1,8 +1,8 @@
 # THE DAILY MARKET BRIEF — SYNOPSIS
 
 *A narrative account of how this was built, what it does, what it refuses to
-do, and everything that went wrong on the way. Covers 21 August – 12 September
-2026, twelve working sessions, 52 commits.*
+do, and everything that went wrong on the way. Covers 21 August – 16 September
+2026, seventeen working sessions.*
 
 *For the operating document — decisions, open questions, the source register —
 see [`PROJECT_STATE.md`](../PROJECT_STATE.md). This is the story; that is the
@@ -64,6 +64,8 @@ sequence that mattered:
 | **8 Sep** | **The trigger installed.** Delivery goes from a 4.5-hour median delay to fifteen seconds |
 | **10 Sep** | Announced buybacks rebuilt after a $6bn announcement was rendered as noise |
 | **12 Sep** | **FED PATH** built. Brief switched to seven days a week |
+| **13 Sep** | Two briefs found missing. **The brief learns to notice its own absence** |
+| **14–16 Sep** | The news question answered by probing it. FRED proved able to say *"came in at"*. Three clean mornings of five |
 
 ---
 
@@ -225,6 +227,114 @@ keyless API.
 - **Fiscal Data returns the string `"null"`**, not JSON null. Every check
   against `None` sees something truthy.
 
+### The week the brief learned to watch itself
+
+On 13 September the inbox was checked instead of the run log, and **two briefs
+were missing** — Saturday the 12th and that Sunday. The project's own delivery
+table had recorded the Saturday as *delivered at 09:20*.
+
+The cause was mundane: the seven-day switch removed a weekend guard from the
+trigger script in the repository, and the copy that actually runs — in a Google
+account, updated by hand — still had it. So it woke up on Saturday, decided it
+was the weekend, and exited without calling GitHub.
+
+**What mattered was that six separate things could have caught it and none was
+looking.**
+
+| | |
+|---|---|
+| Apps Script emails on a throw | a clean exit is not a throw |
+| GitHub shows failed runs | a run nobody requests is not a failed run |
+| The workflow's own crons | still weekday-only in the checkout that ran |
+| The test suite | green — it tests a brief that was never built |
+| `state/latest.json` | held the 11th, and nothing compared it to today |
+| The project file | recorded a delivery, written from intent not inbox |
+
+> **Every guard watched for a failure. This was an absence, and absence needs
+> its own detector.** A brief that is never sent cannot report that it was
+> never sent — so the next one to arrive reports it instead.
+
+Two now exist. The next brief names every day that did not arrive, by comparing
+the date of the last confirmed send against today. And the trigger states its
+own version on each dispatch, so a copy that has drifted from the repository
+says so in red. Neither guesses: no state date, or no version reported, and
+they say nothing at all.
+
+**The gap left a third mark, and it is the one that would have been missed.**
+Sunday's brief read `BTC $76,724, -0.6% vs yesterday`. Right number, wrong
+label — that was the move since **Friday**, because the comparison is drawn
+from the state file while all three callers said "yesterday" regardless. One
+missed brief had quietly turned every day-over-day line into a two-day move
+wearing a one-day label.
+
+**And the sharpest detail came from Google's own dashboard.** The trigger page
+showed the timer had fired that Sunday at 09:20:11, with an error rate of
+**0%** — on a morning with no brief at all. The figure was accurate and
+worthless: *ran without error* and *delivered* are different claims, and only
+one of them matters.
+
+### The news question, answered by probing it rather than arguing about it
+
+Four X accounts were nominated as news sources. X killed its free API tier for
+new developers in February 2026 — pay-per-use at $0.005 a read, roughly
+$23–60/month for this — and Nitter is under cease-and-desist. So X fails the
+zero-cost rule and the reachability bar at the same time.
+
+But X is a *route*, not the fact. Probed at their primary sources:
+
+| Account | Result |
+|---|---|
+| @zerohedge | ✅ live feed, 21.6h window |
+| @WatcherGuru | ❌ 200, well-formed, fully timestamped — and **41.9 hours stale**, carrying equity stories on the crypto beat |
+| @financialjuice | 🟡 no feed advertised at all |
+| @DeItaone | ❌ relays a Bloomberg terminal; no free primary exists by design |
+
+**CNBC, which nobody had suggested, beat three of the four** — 30 items, a
+54.8-hour window, three hours fresh, with a Strait of Hormuz vessel strike in
+it. The accounts were the route someone already knew; probing the fact found a
+better one.
+
+WatcherGuru is the instructive failure. Every freshness check in this project
+measures a *quote's* age. Nothing measured a *feed's*. A 200 with perfectly
+formed, fully timestamped items can still be reporting the day before
+yesterday.
+
+### Can it say what a number *came in* at?
+
+A second daily edition at 14:00 Lisbon — 09:00 New York, thirty minutes after
+the 08:30 prints and thirty before the opening bell — is only worth sending if
+it can report an **actual**. The morning brief cannot: its calendar source is
+schedule-only and carries no such field.
+
+Three probe rounds against FRED settled it.
+
+The key needs a real account, not just an email — but the reachability test ran
+*first*, with a deliberately invalid key, so that nobody signed up for a host
+that might have blocked datacenter IPs the way Farside, Binance and CME all
+did. It answered `400 — "the value for variable api_key is not registered"`,
+which is the good answer: the door opens, only the lock is shut.
+
+Then the shape. FRED can return a value **as first published**, stamped with
+its publication date — proven end to end on the Empire State survey, which had
+published at 08:30 ET and reached FRED about **three minutes later**.
+
+Two traps surfaced on the way, and both would have printed a wrong date:
+
+- **The default "today" wanders.** Three calls across two days returned
+  2026-09-04, 09-11 and 09-15. Every shipped request now names its own window.
+- **The release calendar lists things that have not happened.** Asking for
+  future dates returned 2,965 of them, and the FOMC release comes back dated
+  every day from 26 to 31 December — for something that occurs eight times a
+  year. *A calendar tells you what is planned; only the data tells you what
+  happened.*
+
+One test also came within a single field of proving nothing. Comparing a figure
+as-first-published against as-it-stands-today returned the same number twice —
+equally consistent with *never revised* and with *my parameters were silently
+ignored*. What separated them was metadata nobody was comparing.
+
+> **A test whose pass and fail look identical is not a test.**
+
 ### The failure mode nobody tests for
 
 On 10 September Kabil asked why the brief said nothing about Treasury tripling
@@ -273,27 +383,34 @@ were reasoned the same way as the two retracted verdicts, and are now marked
 
 | | |
 |---|---|
-| Delivery | 09:20 Lisbon on three weekday mornings; **no weekend brief until the trigger is re-pasted** |
+| Delivery | **09:20 Lisbon, three mornings of five** — each read from the inbox before the run log |
+| Dispatch | 08:20:13 UTC on all three days. The same second |
 | Schedule | Seven days a week |
 | Cost | Zero |
-| Sources live | ~15, each degrading independently |
-| Code | ~2,900 lines across fetchers, renderer, orchestration, state |
-| Tests | 1,064 lines, offline, gating every send |
-| Commits | 52 |
+| Sources live | ~18, each degrading independently |
+| Code | ~4,200 lines across fetchers, renderer, orchestration, state, self-checks |
+| Tests | 1,176 lines, offline, gating every send |
+| Commits | 68 |
 
-**Two things need Kabil:**
+**Nothing needs Kabil.** The FRED key is in place, ZeroHedge is decided, the
+script is re-pasted and the timer is confirmed. The one item still owed is the
+one owed since the beginning: **the events he already trades around**, which
+only he knows. The curated half of the radar is empty of everything he has not
+named.
 
-1. **Re-paste the Apps Script** — two minutes, and nothing else is blocked
-   behind it. The copy in Google still carries the weekend guard, so until then
-   there is no weekend brief at all. The walkthrough is in
-   `docs/trigger-setup.md`; the checkpoint is that the code shows
-   `SCRIPT_VERSION = '7'` and a test run logs `(trigger v7)`.
-2. **7 November** — the trigger token expires. The brief counts down to its own
-   maintenance in `data/watchlist.txt`.
+**Ready and deliberately unbuilt:**
 
-**And one measurement still open:** five clean mornings. The count stands at
-**zero** — three were recorded, a fourth was recorded and never happened, and a
-record that cannot tell those apart is not a measurement. It restarts once the
-trigger is re-pasted. The old schedule was also punctual for two days before
-degrading to eleven hours, which is exactly why one good morning proves
-nothing.
+- The **14:00 Lisbon edition**, designed, costed, approved — and not written.
+- **FRED**, probed across three rounds with its method settled — and not wired.
+- **The news set** — ZeroHedge as marked commentary, CNBC as the wire.
+
+All three touch the path that produces the 09:20 brief, and two mornings of the
+measurement remain. **A bug there costs a morning and resets the count.**
+
+> Everything the next phase needs is proven. What is not yet proven is that the
+> thing already working keeps working. **This is a sequencing problem, not a
+> capability problem** — and the discipline being tested is whether a finished
+> improvement can wait behind an unfinished measurement.
+
+**7 November** remains dated: the trigger token expires, and the brief counts
+down to its own maintenance in `data/watchlist.txt`.
