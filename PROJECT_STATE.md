@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: 2 of 5 clean** (was: 1 of 5 at rev 11) |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: 3 of 5 clean** (was: 2 of 5 at rev 12) |
 | **Last updated** | 2026-09-13 |
-| **Revision** | 15 (was: 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 16 (was: 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -180,7 +180,7 @@ round** (§3.17, §8).
 |---|---|---|---|---|---|---|
 | 1 | Mon 2026-09-14 | **09:20 LIS** (08:20:37Z) | ✅ 5 min early | #65 `workflow_dispatch` **08:20:13Z** — the Google timer | none | `+0.8% vs yesterday`, state dated 09-13 ✅ |
 | 2 | Tue 2026-09-15 | **09:20 LIS** (08:20:38Z) | ✅ 5 min early | #68 `workflow_dispatch` **08:20:13Z** | none | `-1.2% vs yesterday`, state dated 09-14 ✅ |
-| 3 | Wed 2026-09-16 | — | — | — | — | — |
+| 3 | Wed 2026-09-16 | **09:20 LIS** (08:20:29Z) | ✅ 5 min early | #71 `workflow_dispatch` **08:20:13Z** | none | `-1.8% vs yesterday`, state dated 09-15 ✅ |
 | 4 | Thu 2026-09-17 | — | — | — | — | — |
 | 5 | Fri 2026-09-18 | — | — | — | — | — |
 
@@ -202,6 +202,31 @@ is far tighter in practice than its own documentation promises. **Two samples
 are not a claim** — this gets revisited at day 5, and if it holds, the setup
 doc's "expect the brief between roughly 09:10 and 09:40" is understated and
 should be corrected rather than left as a safe over-estimate.
+
+**Day 3 was the FOMC, and it is the best evidence yet that the sections do
+their job.** Both legs of the policy radar fired on the same event and agreed:
+the ForexFactory calendar made *Federal Funds Rate 19:00* the top USD risk, and
+the hand-kept watchlist entry reached T-0 as `TODAY FOMC decision + SEP / dot
+plot`. **Both appear in the subject line**, so the inbox list alone said the
+decision was today at 19:00 before anything was opened.
+
+FED PATH resolved the countdown correctly — `Priced for the next decision
+(TODAY, settles Wed 16 Sep) — Hike 25bps 86% · Fed maintains rate 12%` — and
+the odds had moved from 80% on 13 Sep, so the figure is live rather than
+carried. RISK WINDOWS listed all four components separately (19:00 projections,
+statement and rate; 19:30 presser) rather than collapsing them into one line.
+
+**And the ETF sign-flip flag fired correctly, on a real reversal:** `+175, -47,
+-120, -283, -13, +160 — FLAG: sign flipped after 4 consecutive sessions of
+outflow`. That detector is the one the synopsis records as having once been
+inverted — counting the current streak instead of comparing against the prior
+one, so it fired on steady runs and stayed silent on reversals. **This is the
+first time in this run of sessions it has been observed firing on an actual
+flip**, which is the case it was rewritten to catch.
+
+Macro quotes were also `as of 09:10 LIS` — minutes old, against the 40-hour
+stamps a weekend brief carries. The age-stamp machinery is doing what §2.3
+recorded, in both directions.
 
 The AHEAD countdown also reached **T-0 for the first time this session**: the
 Canada tariff scope change, tracked since T-2, surfaced in Tuesday's subject
@@ -734,6 +759,34 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 16 · 2026-09-16 · Day 3, the FOMC, and a detector caught doing its job
+**Sections touched:** header, §2.1h
+**Type:** DATA
+
+**Evidence:** Gmail `2026-09-16T08:20:29Z`. Actions run #71,
+`workflow_dispatch`, `2026-09-16T08:20:13Z`, head `ed91482`. Subject:
+`Market Brief - 16 Sep · BTC 75.4k -0.2% · Federal Funds Rate 19:00 · TODAY
+FOMC decision + SEP / dot plo…`.
+
+| Field | Was | Now |
+|---|---|---|
+| Five clean mornings | 2 of 5 | **3 of 5** |
+| Dispatch second | 08:20:13Z twice | **08:20:13Z three times** — still not claimed; five samples first |
+| FOMC rendering | untested on a live decision day | ✅ both radar legs agreed, all four windows listed separately, countdown resolved to `TODAY` |
+| Kalshi odds | 80% on 13 Sep | 86% — the figure is live, not carried |
+| ETF sign-flip flag | rewritten after being inverted; never seen firing on a real reversal | ✅ **fired correctly** after four outflow sessions |
+
+**Why:** Day 3 of the measurement, and the one day this week where a
+section-quality failure would have been expensive.
+
+**Impact on prior conclusions:** None. Three of five is not five.
+
+**Not changed, deliberately:** no trading content of any kind. Kabil scoped
+this chat to the brief on 13 Sep and the FOMC does not reopen it — the decision
+is a thing the brief must *render correctly*, which is what was checked, and
+nothing more. The dispatch-precision observation also stays unclaimed at three
+matching samples for the same reason it stayed unclaimed at two.
 
 ## rev 15 · 2026-09-15 · Round 16 — proven on a release that landed this morning
 **Sections touched:** header, §3.23 (new), §12.2, §12.10 (new)
