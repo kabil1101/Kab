@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: 3 of 5 clean** (was: 2 of 5 at rev 12) |
-| **Last updated** | 2026-09-16 |
-| **Revision** | 17 (was: 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: 4 of 5 clean** (was: 3 of 5 at rev 16) |
+| **Last updated** | 2026-09-17 |
+| **Revision** | 18 (was: 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -200,7 +200,7 @@ round** (§3.17, §8).
 | 1 | Mon 2026-09-14 | **09:20 LIS** (08:20:37Z) | ✅ 5 min early | #65 `workflow_dispatch` **08:20:13Z** — the Google timer | none | `+0.8% vs yesterday`, state dated 09-13 ✅ |
 | 2 | Tue 2026-09-15 | **09:20 LIS** (08:20:38Z) | ✅ 5 min early | #68 `workflow_dispatch` **08:20:13Z** | none | `-1.2% vs yesterday`, state dated 09-14 ✅ |
 | 3 | Wed 2026-09-16 | **09:20 LIS** (08:20:29Z) | ✅ 5 min early | #71 `workflow_dispatch` **08:20:13Z** | none | `-1.8% vs yesterday`, state dated 09-15 ✅ |
-| 4 | Thu 2026-09-17 | — | — | — | — | — |
+| 4 | Thu 2026-09-17 | **09:20 LIS** (08:20:36Z) | ✅ 5 min early | #74 `workflow_dispatch` **08:20:13Z** | none | `+1.3% vs yesterday`, state dated 09-16 ✅ |
 | 5 | Fri 2026-09-18 | — | — | — | — | — |
 
 **Day 1 carried more than a tick.** Run #65 executed at `616aaaf` — the head
@@ -221,6 +221,29 @@ is far tighter in practice than its own documentation promises. **Two samples
 are not a claim** — this gets revisited at day 5, and if it holds, the setup
 doc's "expect the brief between roughly 09:10 and 09:40" is understated and
 should be corrected rather than left as a safe over-estimate.
+
+**Day 4 answered the question day 3 raised: does the brief move on?** It does.
+`Priced for the next decision (T-41, settles Wed 28 Oct) — Fed maintains rate
+56% · Hike 25bps 46%`. The countdown re-pointed at October and Kalshi rolled to
+the next meeting's contracts without intervention. POLICY DESK also picked up
+both of yesterday's Fed releases from the RSS leg — the statement and the
+economic projections — so the decision is recorded as history in the right
+section rather than lingering as a forecast in the wrong one.
+
+**And the announced-buyback rebuild fired on a live operation.** The section
+led with `⚠ ANNOUNCED — buyback TODAY · 18:40–19:00 LIS · up to $4.0bn · 7Y to
+10Y · settles 18 Sep`, and the same operation appeared in RISK WINDOWS at
+18:40. That is §3.9's fix working on a real announcement — the failure mode
+being a $6bn operation rendered as two blank amounts under a completed-looking
+line on 10 Sep. **Worded as forthcoming, carrying its cap and its Lisbon
+window, leading the section.** First time it has been observed doing that
+outside a dry-run.
+
+⚠ **One item not verified:** the `Target …% · EFFR …` line sits above the
+portion of the run log that was read, so whether the target range reflects
+yesterday's decision is **unchecked, not confirmed**. Day 5 reads it. Saying
+"it moved on correctly" on the strength of the line below it would be exactly
+the §3.17 error.
 
 **Day 3 was the FOMC, and it is the best evidence yet that the sections do
 their job.** Both legs of the policy radar fired on the same event and agreed:
@@ -567,7 +590,7 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
   than a pinned deployment, so the re-paste is live for tomorrow without any
   further step (§2.1g).
 - ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings — now seven-day.
-  Running count: 3 of 5** (was: 2 of 5 at rev 12; 1 of 5 at rev 11; 0 of 5 at
+  Running count: 4 of 5** (was: 3 of 5 at rev 16; 2 of 5 at rev 12; 1 of 5 at rev 11; 0 of 5 at
   rev 9; 4 of 5, wrongly, at rev 6 — see §2.1d). Live table in §2.1h.
   Read the `built HH:MM LIS` line each day and compare against 09:25. Nothing
   else in this file matters until that number exists. The old schedule was ~40
@@ -802,6 +825,36 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 18 · 2026-09-17 · Day 4 — the brief moves on, and a rebuilt feature fires live
+**Sections touched:** header, §2.1h, §5
+**Type:** DATA
+
+**Evidence:** Gmail `2026-09-17T08:20:36Z`. Actions run #74,
+`workflow_dispatch`, `2026-09-17T08:20:13Z`, head `7ea885c`. FED PATH:
+`Priced for the next decision (T-41, settles Wed 28 Oct)`. POLICY DESK:
+`⚠ ANNOUNCED — buyback TODAY · 18:40–19:00 LIS · up to $4.0bn · 7Y to 10Y`.
+
+| Field | Was | Now |
+|---|---|---|
+| Five clean mornings | 3 of 5 | **4 of 5** |
+| Dispatch second | 08:20:13Z three times | **four times** — claimed at five, not before |
+| FED PATH after a decision | untested | ✅ re-pointed to 28 Oct, T-41; Kalshi rolled contracts unaided |
+| Yesterday's FOMC | — | captured by the RSS leg as POLICY DESK history, not left as a stale forecast |
+| Announced-buyback rebuild (§3.9) | fixed and dry-run only | ✅ **fired on a live $4.0bn operation** — led the section, cap and window carried, and in RISK WINDOWS |
+| Target range after the decision | — | ⚠ **not read.** Above the log window inspected. Unchecked, not confirmed |
+
+**Why:** Day 3 left one open question — whether a brief that renders a decision
+correctly also stops counting down to it once it has happened. It does.
+
+**Impact on prior conclusions:** None. Four of five is not five.
+
+**Not changed, deliberately:** the target-range line is recorded as **unread**
+rather than inferred from the Kalshi line beneath it, which plainly had rolled.
+The inference is probably right and it is still an inference — and §3.17 exists
+because this file once wrote down a plausible expectation as an observation.
+The dispatch-second observation also stays unclaimed at four samples for the
+same reason it stayed unclaimed at two and three.
 
 ## rev 17 · 2026-09-16 · Housekeeping pass — the narrative sections had drifted
 **Sections touched:** header, §1, §5, §6, §9, §10
