@@ -8,7 +8,7 @@
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟡 **round 17 probed: 4 pass, 2 fail, 3 inconclusive (§12.11)** · 📋 **build order in §13** |
 | **Last updated** | 2026-09-18 |
-| **Revision** | 24 (was: 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 25 (was: 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -1071,9 +1071,16 @@ Revised order in §13.
   changed since yesterday's PM"* and which therefore cannot exist before the
   PM edition does.
 - ✅ **The batched probe round — DONE 2026-09-18** (§12.11).
-- 🟠 **Commits 2–5** — zero-cost data lines · probed sources wired (FRED as
-  BACKDROP, CNBC, ZeroHedge, Kalshi midterms) · the PM edition with the state
-  bundle · timing and health.
+- ✅ **Commit 2 — DONE 2026-09-18.** Seven lines, every one out of a payload
+  already fetched: annualised carry, perp basis, top-3 OI strikes a side,
+  stablecoin supply and dominance, ETF streak, the cross-asset direction line.
+  409 checks. **Deferred to Commit 4 with the state bundle**, because they
+  need history the state file does not hold: range position 7d/30d,
+  days-since counters, volume vs 30-day average, stablecoin 7-day change and
+  BTC.D deltas.
+- 🟠 **Commits 3–5** — probed sources wired (FRED as BACKDROP, CNBC,
+  ZeroHedge, Kalshi midterms) · the PM edition with the state bundle · timing
+  and health.
 - ✅ **CLOSED 2026-09-18: the nine probe targets are probed (§12.11).** Four
   pass, two fail, three inconclusive. Government hosts did **not** block the
   runner, which was the round's flagged risk. What remains open from it:
@@ -1184,11 +1191,11 @@ the whole brief.
 
 | Section | Content | Source |
 |---|---|---|
-| CRYPTO | BTC/ETH/SOL with deltas, ranges, VWAP; options max pain and OI | Kraken + Deribit |
-| FLOWS | BTC ETF net flow, per-fund, 6-day run with sign-flip flag | TFTC (CC BY 4.0) |
-| DERIVATIVES | Perp funding and OI, flagged when elevated or negative | Deribit, single venue, labelled |
-| SENTIMENT | Fear & Greed with day and week deltas; total mcap and dominance | alternative.me + CoinGecko |
-| MACRO & EQUITIES | DXY, 10Y, gold, WTI, VIX, S&P and Nasdaq futures, each with an age stamp | Yahoo chart API ⚠ §3.28 |
+| CRYPTO | BTC/ETH/SOL with deltas, ranges, VWAP; max pain and **the top three OI strikes a side, with contract counts** | Kraken + Deribit |
+| FLOWS | BTC ETF net flow, per-fund, 6-day run with sign-flip flag **and the streak in days** | TFTC (CC BY 4.0) |
+| DERIVATIVES | Perp funding, **the same rate as an annual carry**, **basis against the index**, and OI | Deribit, single venue, labelled |
+| SENTIMENT | Fear & Greed with day and week deltas; total mcap and dominance; **stablecoin supply *and* dominance (D24)** | alternative.me + CoinGecko |
+| MACRO & EQUITIES | **One line of directions**, then DXY, 10Y, gold, WTI, VIX, S&P and Nasdaq futures, each with an age stamp | Yahoo chart API ⚠ §3.28 |
 
 **TIER 3 — the horizons.**
 
@@ -1289,6 +1296,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 24 | 2026-09-18 | **Commit 2 — seven lines, no new requests.** Funding restated as an annual carry (a rate per 8h is abstract; the same number annualised is money), perp basis pulled from a ticker field that was always in the payload and never returned, three OI strikes a side instead of one, stablecoin supply *and* dominance enforcing D24 in code, the ETF streak, and a cross-asset direction line. Three tests exist only to keep interpretation out: the options line may not say pin/target/support/resistance/expect, MACRO may not say risk-on or bearish, and dominance may not appear on a line without supply |
 | 23 | 2026-09-18 | **Commit 1 — the brief gets a shape.** Three tiers, CLOCKS, CYCLE, TODAY (CALENDAR + RISK WINDOWS merged), AHEAD to a year in five buckets, watchlist `class` and `lead`, EXPECTATIONS. **§3.24 fixed** and folded in as the plan said it should be — though the NY Fed caught up before it shipped, so it has not been seen firing. Two defects found by building rather than reading: `date` was missing from `render.py`'s import, which would have raised `NameError` on the first FOMC morning; and the offline suite had been opening a **live SMTP connection to Gmail on every CI run** (§3.29), which is why it took 170 seconds and now takes 0.17 |
 | 22 | 2026-09-18 | **Probe round 17 — nine targets, one dispatch, five seconds.** Four pass (White House feed 30/30 dated; Kraken 721 daily candles giving a **2.43% 14-day ADR**, which unblocks threshold v2; CoinGecko already carrying `usdt`/`usdc`; CourtListener keyless over 1,355 dockets). Two fail. Three inconclusive — including two Yahoo `429`s that tested nothing about IBIT or Brent but revealed **eleven shipping lines on one rate-limiting host** (§3.28). Polymarket returned a well-formed 200 answering a different question: `tag=fed` silently ignored, an Ethiopian election market returned under `closed=false` three months after it closed (§3.27). And the probe's own parser wrongly reported the Senate feed as unreadable — logged as a probe bug, not a dead source |
 | 21 | 2026-09-18 | **First build since the gate cleared.** The `health.py` latency banner shipped and fired live on run #78 — `BRIEF LATE — built 12:56 Lisbon, 3h31m past the 09:25 target` — closing §3.26 the same day it was recorded. D25 locked: a detector may only claim what it can tell apart, which is why the dispatch branch says *"unless this brief was pulled by hand"* and the fallback branch does not. Kabil ordered §3.25's task deleted outright rather than rewritten; done, with its prompt preserved. Probe round 17 dispatched: nine targets, one run |
@@ -1326,6 +1334,70 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 25 · 2026-09-18 · Commit 2 — seven lines, and three tests that exist to keep opinions out
+
+**Sections touched:** header, §5, §7, §10, §13
+**Type:** DATA
+**Evidence:** `sources.py` `perp_stats`, `options.summarise`,
+`coingecko_global`; `render.py` `_annualised`, `_basis`, `_strike_list`,
+`_streak`, `_cross_asset_line`; 409 offline checks.
+
+| Field | Was | Now |
+|---|---|---|
+| Perp funding | a rate per 8h | **plus the same rate as an annual carry** |
+| Perp basis | in the payload, never returned | **printed, and labelled live against funding's lag** |
+| Options OI | one strike a side | **three a side, with contract counts** |
+| Stablecoins | absent | **supply and dominance together (D24)** |
+| ETF flows | a 6-day run | **plus the streak in days** |
+| Cross-asset | five rows | **one direction line above the five rows** |
+| New requests | — | **none** |
+
+**Why:** All seven were on the plan's zero-cost list, and probe round 17 moved
+stablecoins onto it by finding `usdt` and `usdc` already inside the `/global`
+call. Line count is the real cost, not code: **Kabil's worst bug was data that
+was present, correct and unread**, so each line had to justify itself before
+it was printed.
+
+**Impact on prior conclusions:** None reversed. D24 moves from a written rule
+to an asserted one — a test now fails if dominance is ever printed on a line
+without supply beside it.
+
+**And the 365-day horizon earned itself on its first live run.** Run #84's
+AHEAD carried a **6 months** bucket containing *"T-144 · Tue 09 Feb —
+Adjusting Imports of Unmanned Aircraft Systems … Into the United States"*. At
+the old 130-day horizon that entry did not exist. A Section 232 action with a
+dated effective day, 144 days out, was invisible to the brief yesterday and is
+in it today — which is the whole argument for a year of range, made by the
+data rather than by me.
+
+The same run confirmed D11's per-class horizons working as designed: the two
+hand-entered dates (Trump–Xi, OpenAI) render `⚠ never confirmed`, while the
+midterms — `statutory`, verified the same day — render clean. *Evidence: run
+#84, 2026-09-18 22:02:18Z, success.*
+
+**Three of the new tests exist only to keep interpretation out**, which is the
+part worth recording. The options line may not contain *pin*, *target*,
+*support*, *resistance* or *expect*. MACRO may not contain *risk-on*,
+*risk-off*, *bullish* or *bearish*. Annualised funding may not be described as
+projected. **D3 and D9 were prose; they are now executable.** The temptation
+they guard against is real and specific: the cross-asset line assembles five
+moves into one glance, and naming that glance *"risk-on"* would have been the
+brief's first opinion about the market.
+
+**Not changed, deliberately:** two things.
+
+**Five lines were deferred, not dropped** — range position 7d/30d, days-since
+counters, volume against a 30-day average, stablecoin 7-day change, BTC.D
+deltas. Every one needs history `state/latest.json` does not carry. The plan
+puts that schema change in Commit 4 and bundles four features behind it, and
+shipping a state change early for a feature that produces nothing for a month
+is the wrong trade.
+
+**Nothing from round 17 was wired here either.** Commit 2 is defined as
+output-only; the probed sources are Commit 3.
+
+---
 
 ## rev 24 · 2026-09-18 · Commit 1 — the brief gets a shape, and two defects fall out of building it
 
@@ -2571,9 +2643,9 @@ The plan's §9 is sound and Gate 0 no longer blocks it. Two changes:
 | ~~1~~ | ~~`health.py` latency banner (§3.26)~~ | ✅ **DONE 2026-09-18, proven live on run #78.** §2.5 |
 | ~~2~~ | ~~The batched probe round — 9 targets, 1 dispatch~~ | ✅ **RUN 2026-09-18.** Four passes, two failures, three inconclusive, two findings nobody asked for. §12.11 |
 | ~~3~~ | ~~Commit 1 — three tiers — with the §3.24 fix in it~~ | ✅ **DONE 2026-09-18.** 381 checks |
-| **4** | **Commit 2 — the zero-cost data lines** | Next. All output-only: BTC.D promoted, funding annualised carry, range position 7d/30d, cross-asset one-liner, perp basis, top-3 OI strikes, expiry naming |
-| **5** | Commit 3 — probed sources wired | Four passed round 17 and **none is wired**; the White House feed needs §3.6's word list first |
-| **6** | Commits 4–5, in the plan's order | PM edition + state bundle, then timing and health |
+| ~~4~~ | ~~Commit 2 — the zero-cost data lines~~ | ✅ **DONE 2026-09-18.** 409 checks |
+| **5** | **Commit 3 — probed sources wired** | Next. Four passed round 17 and **none is wired**; the White House feed needs §3.6's word list first, and State, the Senate schema and the two Yahoo targets need a second probe round |
+| **6** | Commits 4–5, in the plan's order | PM edition + state bundle (which unblocks the five deferred lines), then timing and health |
 | — | ~~Renew the trigger token, late October~~ | **Not a commit — an action only Kabil can take**, and it must happen before 25 Oct |
 
 ### The fragile fortnight, now with four entries
