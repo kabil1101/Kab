@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟡 **round 17 probed: 4 pass, 2 fail, 3 inconclusive (§12.11)** · 📋 **build order in §13** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 📋 **build order in §13** |
 | **Last updated** | 2026-09-18 |
-| **Revision** | 26 (was: 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 27 (was: 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -523,6 +523,41 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.31 — The "no free liquidation source" verdict was wrong, and it was
+wrong in exactly the shape this file has a section about.** Probe round 18,
+target 1:
+
+```
+https://www.okx.com/api/v5/public/liquidation-orders
+HTTP 200 · 767 bytes · application/json   ← no key, no signup
+{"code":"0","data":[{"details":[
+  {"posSide":"short","side":"buy","sz":"9.4",  "bkPx":"81347.5","ts":"1789758976511"},
+  {"posSide":"short","side":"buy","sz":"146.2","bkPx":"81224.6","ts":"1789758961329"},
+  ...], "totalLoss":..., "instId":..., "uly":...}]}
+```
+
+Every field the claim needs is there: **a size (`sz`), a timestamp (`ts`), and
+which side was liquidated (`posSide`)**. The round's pass test was deliberately
+strict — *a 200 is not enough* — and this clears it.
+
+**§12.2 has carried `CoinGlass · S2 · no free tier, $29/mo` since rev 1**, and
+§12.4a is the section about precisely this mistake: **CoinGlass being paid is
+a property of that route, not a property of the world.** The register itself
+marked the verdict *"unconfirmed rather than settled"*. It took one call to
+settle it the other way.
+
+**Why this one matters more than the other seven.** Kabil's own framework
+opens with *"liquidation cascades, not support/resistance magic"*, and the
+brief has never carried a single liquidation figure — not the level, not the
+24h total, not the clusters. `docs/BUILD_PLAN_ADDENDUM_1.md` §6 calls it *"the
+largest single gap between the stated framework and the system"*. That gap is
+now a wiring job rather than a paid subscription.
+
+**What it does not yet establish.** One call returned five rows of a single
+`uly`. Nobody has checked the window it reaches back over, whether an
+aggregate 24h total is derivable without paging, or how it behaves on a quiet
+day. That is round 19's work, and none of it is wired.
+
 **§3.30 — The first live NEWS run proved D16's marking necessary within
 three headlines.** ZeroHedge was admitted (D16) as commentary *on the
 condition that it is visibly marked*, because §12.8 warned it *"mixes market
@@ -600,7 +635,24 @@ self-inflicted by probing twice.
 answered. Recorded as **inconclusive**, because "I could not reach it once" is
 not "it does not work" — the mistake §12.4a cost two wrong verdicts to learn.
 
-**What it IS a verdict on is the host.** Yahoo already carries DXY, 10Y, gold,
+> ⚠ **CORRECTED 2026-09-18 by round 18 — and the correction is mine.** Round
+> 18 re-probed all three symbols on `query2` and drew `429` again. Same
+> result, different host — which looks like confirmation until you notice
+> that **the brief's own Yahoo calls succeeded in runs #82, #83, #84 and #86,
+> minutes either side of both probes.** Seven symbols, no failures.
+>
+> The difference is not the host and is probably not the runner. It is the
+> headers: `sources.py` sends `{"User-Agent": UA, "Accept": "*/*"}`, and both
+> probe rounds sent a **browser-shaped** User-Agent with a JSON `Accept`.
+> A browser fingerprint on an API endpoint is a normal thing to rate-limit.
+>
+> So the conclusion below is **overstated**. What is established: *this
+> probe's client* draws a 429 from Yahoo. What is **not** established: that
+> Yahoo rate-limits the brief. Round 19 repeats the call with
+> `sources.HEADERS` and settles it. IBIT and Brent remain untested either way.
+
+**What it MAY be a verdict on is the host — pending the correction above.**
+Yahoo already carries DXY, 10Y, gold,
 WTI, VIX, S&P futures, Nasdaq futures, Nikkei, Hang Seng, USDJPY and CNH —
 eleven shipping lines, thirteen once IBIT and Brent land, **with no fallback on
 any of them.** The 09:20 brief has never seen a 429, but nothing about 08:20
@@ -1385,6 +1437,66 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 27 · 2026-09-18 · A verdict carried since rev 1 falls to one keyless call
+
+**Sections touched:** header, §3.28 (corrected), §3.31 (new), §12.2, §12.12 (new)
+**Type:** CORRECTION / DATA
+**Evidence:** probe run #18, job 105783755564, 2026-09-18 22:32:54–57Z.
+
+| Field | Was | Now |
+|---|---|---|
+| Liquidations | `S2` — no free source, $29/mo, since rev 1 | 🟢 **free, keyless, with size, timestamp and side (§3.31)** |
+| Bybit | never tried | ⚫ `S1` — **fourth geo/datacenter block** |
+| Bitget | never tried | 🟡 ticker carries funding **and** OI — a second venue |
+| Kalshi midterms | *"needs no probe"* (the plan) | ⚫ `S8` — four guessed tickers, four empty 200s |
+| State Department | ⚫ excluded on three guessed URLs | 🟡 **20 real feeds, off its own index** |
+| Senate schema | *"no items parsed"* | 🟡 **known** — and round 17's verdict was my parser |
+| §3.28 Yahoo | *"rate-limits an Actions runner"* | ⚠ **overstated — probably my headers** |
+
+**Why:** §12.4a says a verdict is a claim and claims decay. Three of this
+round's eight results overturn something this file previously asserted, and
+**two of the three were my own mistakes rather than the world's.**
+
+**Impact on prior conclusions:** one reversal, one correction, one assumption
+disproven.
+
+**The reversal is the big one.** `CoinGlass · S2 · no free tier` has sat in
+§12.2 since rev 1 and the register itself flagged it *unconfirmed rather than
+settled*. One keyless call to OKX returned liquidation rows with sizes,
+timestamps and `posSide`. **The largest gap between Kabil's stated framework
+and this system — his own first principle is "liquidation cascades, not
+support/resistance magic" — is now a wiring job, not a subscription.**
+
+**The correction is mine, and it cuts against a finding I wrote this
+morning.** §3.28 claimed Yahoo rate-limits Actions runners, on two rounds of
+`429`. Round 18 re-probed on a second host and drew `429` again, which looks
+like confirmation — until you notice the brief's own Yahoo calls succeeded in
+four runs minutes either side of both probes, seven symbols, no failures. The
+probe sends a browser User-Agent with a JSON `Accept`; `sources.py` sends
+`{"User-Agent": UA, "Accept": "*/*"}`. **A browser fingerprint on an API
+endpoint is an ordinary thing to rate-limit.** §3.28 is marked overstated
+rather than deleted, and round 19 settles it by repeating the call with the
+brief's own headers.
+
+**The disproven assumption is the plan's.** *"Kalshi needs no probe — already
+LIVE and keyless"* is true of `KXFEDDECISION` and false of the midterm
+contracts: four guessed series tickers, four `200 {"markets":[]}`. **An empty
+list at 200 is the quietest failure available** — no error, no 404 — and a
+fetcher written on that assumption would have printed an empty block every
+morning with nothing to distinguish *no markets* from *wrong ticker*.
+
+**Not changed, deliberately:** two things.
+
+**Nothing was wired.** OKX passed a strict test on one call returning five
+rows of one underlying. The window it reaches, whether a 24h aggregate is
+derivable without paging, and how it reads on a quiet day are all unexamined.
+§12.3 has not moved.
+
+**§3.28 was corrected, not deleted.** The `429`s happened and are recorded.
+What changed is the claim built on them.
+
+---
 
 ## rev 26 · 2026-09-18 · Commit 3 — and a warning that arrived as evidence three headlines in
 
@@ -2443,6 +2555,15 @@ them before the trigger is installed would leave no delivery path at all.
 | `zerohedge.com/fullrss2.xml` | `S3` | ⚫ EXCLUDED | 404. Feedburner is the live path |
 | `watcher.guru/news/feed` (= `/feed`) | `S5` | ⚫ EXCLUDED | `200`, well-formed, 10 items, all timestamped — and **newest item 41.9h old**, carrying equity stories on the crypto beat. The site feed does not carry what the X account posts. §3.20 |
 | CNBC `combinedcms` top news | `S0` | 🟢 **BEST OF ROUND** | `200`, 30 items, all timestamped, newest 3.1h old, **54.8h window**. Real wire content — the Strait of Hormuz vessel strike was in it |
+| **OKX `public/liquidation-orders`** | `S0` | 🟢 **PASS — round 18. THE FINDING.** `200`, **keyless**, rows carrying `sz`, `ts`, `posSide` and `bkPx`, plus `totalLoss`. Closes the largest gap between Kabil's framework and this system. **Not wired**; window and aggregation unexamined (§3.31) |
+| ~~CoinGlass / "no free liquidation source"~~ | ~~`S2`~~ | ❌ **VERDICT WRONG — round 18** | was: "no free tier, $29/mo", carried since rev 1 and already marked *unconfirmed rather than settled*. **CoinGlass being paid was a property of that route, not of the world** (§12.4a, third occurrence) |
+| Bybit v5 | `S1` | ⚫ **EXCLUDED — round 18** | `403 "The Amazon CloudFront distribution is configured to block access from your country"`. **Fourth geo/datacenter block** after Farside, Binance and CME |
+| Bitget mix ticker | `S0` | 🟡 **PROBED — round 18** | `200` carrying `fundingRate` **and** `holdingAmount`. A second venue for the two figures DERIVATIVES currently labels "single venue". Not wired |
+| `bitget /mix/market/liquidation-orders` | `S3` | ⚫ **EXCLUDED — round 18** | `404 {"code":"40404","msg":"Request URL NOT FOUND"}`. A guessed path, not a Bitget limitation |
+| Coinalyze API | `S0`* | 🟡 **PROBED — round 18** | `401 "Invalid/Missing API key"` — auth is the only barrier, the FRED shape. D2-compatible. **Superseded by OKX, which needs no key.** Distinct from the coinalyze *pages*, which stay `S6` |
+| Kalshi midterm series | `S8` | ⚫ **EXCLUDED — round 18** | `KXHOUSE`, `KXSENATE`, `KXMIDTERMS`, `KXHOUSECONTROL` all return `200 {"markets":[]}`. **An empty list at 200 is the quietest possible failure.** Discover the series, never guess the ticker |
+| **`state.gov/rss-feed/…` (singular)** | `S0` | 🟡 **PROBED — round 18** | 20 feeds listed on the department's own index, including `press-releases`, `collected-department-releases` and the regional desks. **Round 17's exclusions were about URLs I invented**, not about State |
+| `senate.gov hearings.xml` | `S0` | 🟡 **PROBED — round 18, verdict corrected** | Root `<css_meetings_scheduled>`, 19 × `<meeting>` with `date_iso_8601`, `time`, `committee`, `type`, `room`. Round 17 called it unreadable; that was my parser. ⚠ blank fields occur |
 | **White House `presidential-actions/feed/`** | `S0` | 🟡 **PROBED — round 17** | `200`, `application/rss+xml`, 30 items, **30/30 dated**, newest 14.5h, 35-day window. **No datacenter block** — the round's flagged `S1` risk did not materialise. Not wired: the top three items were saltwater angling, hunting heritage and Senate withdrawals. Needs §3.6's two-tier word list before it renders |
 | `state.gov/rss-feeds/press-releases/feed/` | `S5` | ⚫ **EXCLUDED — round 17** | `200` serving **`content-type: image/png`**, 663KB, at a feed URL. Not a feed by any reading |
 | `state.gov/rss-feeds/secretary-of-state/feed/` | `S3` | ⚫ **EXCLUDED — round 17** | `404` (dressed as `application/rss+xml`, 156KB — a styled error page) |
@@ -2575,6 +2696,70 @@ Also unresolved: `releases/dates` listed *"FOMC Press Release, 2026-09-15"* on
 a day the FOMC decision is still **tomorrow**. Whether a listed date means
 *published* or *scheduled* decides whether the PM edition can say "released
 this morning" at all. Same round.
+
+### §12.12 Round 18 — the liquidation question, answered in one call
+
+| # | Target | Result |
+|---|---|---|
+| 1 | **OKX liquidation orders** | 🟢 **PASS, and the round's answer.** 200, keyless, `sz` + `ts` + `posSide`. §3.31 |
+| 2 | Bybit | ⚫ **`S1`** — `403 "The Amazon CloudFront distribution is configured to block access from your country"`. **Fourth geo/datacenter block**, after Farside, Binance and CME |
+| 3 | Bitget | 🟡 **half** — the ticker answers 200 with `fundingRate` *and* `holdingAmount`; the guessed `liquidation-orders` path is `404` |
+| 4 | Coinalyze API | 🟡 **`401 "Invalid/Missing API key"`** — auth is the only barrier, the FRED shape. Free tier behind a free signup, so D2-compatible. **Now unnecessary: OKX needs no key at all** |
+| 5 | Kalshi midterms | ❌ **FAIL, and it disproves a plan assumption** |
+| 6 | State Department | 🟢 **SOLVED by reading instead of guessing** |
+| 7 | Senate schema | 🟢 **SOLVED — and round 17's verdict was my parser's fault** |
+| 8 | Yahoo ×3 | ⚠ **429 again — and the re-probe corrected §3.28 rather than confirming it** |
+
+#### Bitget is a second venue for something the brief already labels
+
+The ticker call that was only meant to prove the host answers came back with
+`fundingRate: 0.000016` and `holdingAmount: 33649.42`. DERIVATIVES currently
+prints Deribit funding and OI with the honest caveat *"single venue"*. **A
+second venue is now one already-verified call away** — not wired, not
+probed for shape beyond this one response, but no longer hypothetical.
+
+#### Kalshi: the plan said it needed no probe. It does.
+
+`docs/BUILD_PLAN.md` §9: *"Kalshi needs no probe — already LIVE and
+keyless."* True of `KXFEDDECISION`. All four guessed midterm series —
+`KXHOUSE`, `KXSENATE`, `KXMIDTERMS`, `KXHOUSECONTROL` — returned
+`200 {"cursor":"","markets":[]}`.
+
+**An empty list at 200 is the quietest possible failure**: no error, no 404,
+nothing to catch. A fetcher written on the plan's assumption would have
+printed an empty midterm block every morning and nobody would have known
+whether that meant *no markets* or *wrong ticker*. The series must be
+discovered from Kalshi's own series endpoint, not guessed.
+
+#### State: the guess was one character out
+
+Round 17 tried `state.gov/rss-feeds/press-releases/feed/` and got a `200`
+serving a PNG. The index lists **`rss-feed`** — singular:
+
+```
+https://www.state.gov/rss-feed/press-releases/feed/
+https://www.state.gov/rss-feed/collected-department-releases/feed/
+https://www.state.gov/rss-feed/near-east/feed/          (+ 17 more)
+```
+
+Twenty feeds, including regional desks. **Rubio is trackable after all**, and
+round 17's `⚫ EXCLUDED` verdicts were about URLs I invented rather than about
+the State Department.
+
+#### Senate: the schema, and why round 17 could not read it
+
+```
+root <css_meetings_scheduled> · 19 × <meeting>
+  cmte_code · committee · type · date · date_iso_8601 · day_of_week
+  · time · room · AssociatedDocument
+```
+
+Not RSS, not Atom. Round 17's parser looked for `item`/`entry` and found
+neither, then reported *"no items parsed"* — which reads as a dead source and
+was a bug in my code. `date_iso_8601` and `time` are exactly what a forward
+calendar needs. ⚠ One caution for whoever wires it: **the first record came
+back with `committee`, `type` and `room` all empty**, so the fetcher must
+tolerate blank fields rather than assume a well-formed record.
 
 ### §12.11 Round 17 — nine targets, one dispatch, and two findings nobody asked for
 
