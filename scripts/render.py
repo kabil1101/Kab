@@ -1460,3 +1460,223 @@ def _h_table(headers, rows):
 
 def _h_close():
     return "</body></html>"
+
+
+# ============================== THE PM EDITION ==============================
+#
+# D17: a delta, not a second brief. A fixed spine that always prints, plus a
+# body that only exists when something is in it. The reasoning is structural
+# rather than aesthetic - a standalone scan duplicates the morning and grows
+# with every source added, which is the path to an email he stops opening. A
+# delta stays short permanently and cannot duplicate the AM by construction.
+#
+# D19: the thresholds are numeric and live in ONE block, not scattered through
+# the fetchers. v1 is fixed percentages and that is regime-blind by
+# acknowledged compromise: +-1.0% on BTC is a shrug at 60 vol and an event at
+# 25. Probe round 18... 17 measured the scale that replaces it - Kraken's
+# 14-day average daily range came back at 2.43%, which makes this +-1.0% about
+# 41% of an average day. The v2 rule is "more than 40% of ADR", so v1 is
+# accidentally right in this regime and will be wrong in the next one.
+THRESHOLDS = {
+    "btc": 1.0,          # per cent since the 09:20 brief
+    "eth": 1.0,
+    "dxy": 0.3,          # per cent, like the two above
+    # BASIS POINTS on the yield itself, not a per-cent change in it. Those are
+    # different units and mixing them was a live bug for one commit: a +0.30%
+    # session on a 4.70 yield is 1.4bp, and comparing 0.30 against a 0.05
+    # threshold fired the body on almost every ordinary afternoon. 5bp is
+    # where rates desks reprice rather than where they shrug.
+    "us10y_bp": 5.0,
+    "fed_odds": 5.0,     # points; below this is book noise on a thin market
+    "btc_dom": 0.3,      # percentage points
+    "stable_supply": 0.5,
+}
+
+
+def _pm_move(am, key, current):
+    """Percent move since the morning snapshot, or None."""
+    if current is None:
+        return None
+    was = (am or {}).get(key)
+    if not isinstance(was, (int, float)) or was == 0:
+        return None
+    return (current - was) / was * 100.0
+
+
+def pm_spine(ctx):
+    """About six lines, always printed, even on the quietest afternoon.
+
+    The spine is what makes the edition worth opening on a day when nothing
+    happened: a real overview rather than an empty page. It is capped by
+    design, and the body below only exists when there is something in it, so
+    the edition cannot grow into a second brief.
+    """
+    am = state.am_baseline(ctx.get("prev") or {})
+    now = ctx["now"]
+    out, suppressed = [], not am
+
+    c = ctx.get("crypto")
+    if c and c["ok"]:
+        for p in c["data"]["pairs"]:
+            if p["symbol"] not in ("BTC", "ETH"):
+                continue
+            key = p["symbol"].lower()
+            line = f"**{p['symbol']}** ${p['last']:,.2f}"
+            mv = _pm_move(am, key, p["last"])
+            if mv is not None:
+                line += f" · {mv:+.2f}% since 09:20"
+            elif suppressed:
+                # D21. Never fall back to yesterday's close: that is exactly
+                # the bug that printed a two-day move labelled as one day.
+                line += " · no morning baseline, so no delta"
+            out.append(line)
+    elif c:
+        out.append(f"Prices unavailable — {c['error']}")
+
+    ca = ctx.get("cross_asset")
+    if ca and ca["ok"]:
+        bits = []
+        for label in ("DXY", "US 10Y", "S&P 500 fut", "Nasdaq fut"):
+            q = (ca["data"]["quotes"] or {}).get(label)
+            if not q:
+                continue
+            bits.append(f"{label} {q['last']:,.2f}"
+                        + (f" ({q['pct_change']:+.2f}%)"
+                           if q.get("pct_change") is not None else ""))
+        if bits:
+            out.append(" · ".join(bits))
+    elif ca:
+        out.append(f"Cross-asset unavailable — {ca['error']}")
+
+    radar = radar_events(ctx, now.date())
+    if radar:
+        e = radar[0]
+        days = (e["date"] - now.date()).days
+        out.append(f"**Next dated** — {_tminus(days)} · {e['date']:%a %d %b} "
+                   f"· {e['title'][:110]}")
+
+    # What is still to come today, from the same merged list the AM uses.
+    windows = [w for w in _risk_windows(ctx, now.date(), now)
+               if w.startswith("**")]
+    out.append(f"**Still ahead today** — {windows[0]}" if windows
+               else "**Still ahead today** — nothing scheduled.")
+    return out, suppressed
+
+
+def pm_body(ctx):
+    """Only what crossed a threshold. Empty is the common case and is fine.
+
+    Returns (lines, shadow) - shadow is every measured move whether or not it
+    crossed, which is D20: retrofitting the log throws away the most valuable
+    data this edition will ever produce, and two weeks of it is what sets the
+    v2 thresholds.
+    """
+    am = state.am_baseline(ctx.get("prev") or {})
+    lines, shadow = [], {}
+    if not am:
+        return lines, shadow
+
+    c = ctx.get("crypto")
+    if c and c["ok"]:
+        for p in c["data"]["pairs"]:
+            key = p["symbol"].lower()
+            if key not in ("btc", "eth"):
+                continue
+            mv = _pm_move(am, key, p["last"])
+            if mv is None:
+                continue
+            shadow[key] = round(mv, 4)
+            if abs(mv) >= THRESHOLDS[key]:
+                lines.append(f"**{p['symbol']} {mv:+.2f}%** since the "
+                             f"09:20 brief")
+
+    g = ctx.get("global_mcap")
+    if g and g["ok"]:
+        d = g["data"]
+        was = am.get("btc_dom")
+        if isinstance(was, (int, float)) and d.get("btc_dominance") is not None:
+            move = d["btc_dominance"] - was          # points, not per cent
+            shadow["btc_dom"] = round(move, 4)
+            if abs(move) >= THRESHOLDS["btc_dom"]:
+                lines.append(f"**BTC dominance {move:+.2f}pp** to "
+                             f"{d['btc_dominance']:.1f}%")
+        mv = _pm_move(am, "stable_supply", d.get("stable_supply_usd"))
+        if mv is not None:
+            shadow["stable_supply"] = round(mv, 4)
+            if abs(mv) >= THRESHOLDS["stable_supply"]:
+                lines.append(f"**Stablecoin supply {mv:+.2f}%** to "
+                             f"${d['stable_supply_usd']/1e9:,.0f}bn")
+
+    ca = ctx.get("cross_asset")
+    if ca and ca["ok"]:
+        quotes = ca["data"]["quotes"] or {}
+        q = quotes.get("DXY")
+        if q and q.get("pct_change") is not None:
+            shadow["dxy"] = round(q["pct_change"], 4)
+            if abs(q["pct_change"]) >= THRESHOLDS["dxy"]:
+                lines.append(f"**DXY {q['pct_change']:+.2f}%** on the session")
+        q = quotes.get("US 10Y")
+        if q and q.get("pct_change") is not None and q.get("last"):
+            # Convert the per-cent change into a move in the yield itself.
+            bp = q["last"] * q["pct_change"] / 100.0 * 100.0
+            shadow["us10y_bp"] = round(bp, 2)
+            if abs(bp) >= THRESHOLDS["us10y_bp"]:
+                lines.append(f"**US 10Y {bp:+.0f}bp** to {q['last']:.2f}%")
+    return lines, shadow
+
+
+def pm_build(ctx) -> tuple[str, str]:
+    """The PM edition: spine, then body only if the body has something."""
+    now = ctx["now"]
+    md, html = [], []
+    title = f"PM DELTA — {now.strftime('%A, %d %B %Y')}"
+    md.append(f"# {title}\n")
+    md.append(f"*Pre-NY-open scan — built {_hhmm(now)} LIS.*\n")
+    html.append(_h_open(title, f"Pre-NY-open scan — built {_hhmm(now)} LIS."))
+
+    for note in ctx.get("health") or []:
+        md.append(f"> **⚠ {note}**\n")
+        html.append(f"<p class='warn'>⚠ {_esc(note)}</p>")
+
+    spine, suppressed = pm_spine(ctx)
+    md.append("## SINCE 09:20\n")
+    html.append(_h_section("Since 09:20"))
+    for l in spine:
+        md.append(f"- {l}")
+    md.append("")
+    html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in spine) + "</ul>")
+    if suppressed:
+        n = ("No 09:20 brief was recorded today, so every delta above is "
+             "suppressed rather than measured against yesterday. The morning "
+             "brief is the baseline; a missing one is already a red banner.")
+        md.append(f"> **⚠ {n}**\n")
+        html.append(f"<p class='warn'>⚠ {_esc(n)}</p>")
+
+    body, _ = pm_body(ctx)
+    md.append("## MATERIAL CHANGE\n")
+    html.append(_h_section("Material Change"))
+    if body:
+        for l in body:
+            md.append(f"- {l}")
+        html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in body)
+                    + "</ul>")
+    else:
+        # The common case, and it is a real answer rather than an empty
+        # section. Saying so is the point of a delta edition.
+        line = "No material change since 09:20."
+        md.append(f"- {line}")
+        html.append(f"<ul><li>{_hb(line)}</li></ul>")
+    md.append("")
+    html.append(_h_close())
+    return "\n".join(md), "\n".join(html)
+
+
+def pm_subject(ctx) -> str:
+    """`Market Brief - ` stays: the prefix is load-bearing for the chat-side
+    Mode Check (§7) and must not change. `PM ·` makes the inbox sort them
+    apart without opening either."""
+    now = ctx["now"]
+    head = f"Market Brief - PM · {now:%d %B %Y}"
+    body, _ = pm_body(ctx)
+    return f"{head} · {len(body)} change{'s' if len(body) != 1 else ''}" \
+        if body else f"{head} · quiet"

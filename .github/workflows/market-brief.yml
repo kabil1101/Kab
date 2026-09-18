@@ -23,6 +23,12 @@ on:
         description: "Build and log the brief without emailing it"
         type: boolean
         default: false
+      edition:
+        # `pm` builds the delta edition instead of the morning brief. Absent
+        # or `am` is every existing caller, unchanged.
+        description: "am (default) or pm"
+        type: string
+        default: ""
       debug:
         description: "Dump today's raw calendar rows to the log"
         type: boolean
@@ -76,6 +82,7 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           SKIP_EMAIL: ${{ inputs.skip_email && '1' || '' }}
           BRIEF_DEBUG: ${{ inputs.debug && '1' || '' }}
+          BRIEF_EDITION: ${{ inputs.edition }}
           TRIGGER_VERSION: ${{ inputs.trigger_version }}
           # BACKDROP reads three FRED series. Absent, sources.backdrop raises
           # and the section degrades to a named `unavailable` like any other -

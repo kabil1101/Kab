@@ -12,9 +12,13 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import main  # noqa: E402
+import copy  # noqa: E402
+import json  # noqa: E402
+
 import cycles  # noqa: E402
 import render  # noqa: E402
 import sources  # noqa: E402
+import state  # noqa: E402
 import watchlist  # noqa: E402
 
 LISBON = ZoneInfo("Europe/Lisbon")
@@ -247,6 +251,172 @@ check_true("an exhausted forward view is explained, not shown empty",
            "publishes only the current week" in md3, md3)
 check_true("it does not claim a broken feed",
            "unavailable" not in md3.split("Next 5 sessions")[1][:300].lower(), md3)
+
+print("\n-- the state bundle: one schema change, several features --")
+def _snap_ctx(day, btc, **extra):
+    c = {"now": datetime(2026, 9, day, 9, 20, tzinfo=LISBON),
+         "crypto": {"ok": True, "error": None, "data": {"pairs": [
+             {"symbol": "BTC", "last": btc, "vol_24h": extra.get("vol", 1000.0)}]}},
+         "fear_greed": {"ok": True, "error": None,
+                        "data": {"today": {"value": extra.get("fng", 56)}}},
+         "global_mcap": {"ok": True, "error": None, "data": {
+             "btc_dominance": extra.get("dom", 58.5),
+             "stable_supply_usd": extra.get("stable", 2.6e11)}},
+         "perp_btc": {"ok": True, "error": None,
+                      "data": {"open_interest": extra.get("oi", 7.8e8)}}}
+    return c
+
+_s1 = state.snapshot(_snap_ctx(14, 80000.0), sent_on=date(2026, 9, 14), prev={})
+check_true("the new figures are stored",
+           _s1["btc_dom"] == 58.5 and _s1["oi_btc"] == 7.8e8, sorted(_s1))
+# Kraken calls it vol_24h, not volume_24h. A wrong key here stores nothing and
+# fails silently, so assert the value rather than the key.
+check("volume is stored under the name Kraken actually uses",
+      _s1["vol_btc"], 1000.0)
+check("the history starts with one day", len(_s1["history"]), 1)
+check_true("and the morning baseline is captured", _s1["am"]["btc"] == 80000.0)
+
+_prev = _s1
+for _d, _p in ((15, 81000.0), (16, 79000.0), (17, 82000.0), (18, 83000.0)):
+    _prev = state.snapshot(_snap_ctx(_d, _p), sent_on=date(2026, 9, _d), prev=_prev)
+check("five days give five history rows", len(_prev["history"]), 5)
+check("oldest first", state.series(_prev, "btc")[0], 80000.0)
+# A manual re-send must not distort an average by counting a day twice.
+_again = state.snapshot(_snap_ctx(18, 83500.0), sent_on=date(2026, 9, 18), prev=_prev)
+check("a second run the same day replaces that day", len(_again["history"]), 5)
+check("with the newer value", state.series(_again, "btc")[-1], 83500.0)
+# Pruning: the window is 30 days and must not creep.
+_long = _prev
+for _i in range(40):
+    _long = state.snapshot(_snap_ctx(18, 80000.0 + _i), sent_on=None, prev=_long)
+    _long["history"][-1]["date"] = f"2026-10-{(_i % 28) + 1:02d}"
+check_true("the history never exceeds 30 days",
+           len(_long["history"]) <= state.HISTORY_DAYS, len(_long["history"]))
+
+# An average of two points is not an average, and a number that pretends to be
+# one for the first month after shipping is worse than no number.
+check("a thin window yields no average",
+      state.average({"history": [{"btc": 1.0}, {"btc": 2.0}]}, "btc"), None)
+check("five points is enough", round(state.average(_prev, "btc")), 81000)
+check("an old state file yields nothing at all", state.average({}, "btc"), None)
+check("and no series", state.series({}, "btc"), [])
+check("range position needs a window too",
+      state.range_position({"history": [{"btc": 1.0}]}, "btc", 2.0, 30), None)
+check("a flat window has no position in it",
+      state.range_position({"history": [{"btc": 5.0}] * 10}, "btc", 5.0, 30),
+      None)
+check("top of the range reads 100",
+      state.range_position({"history": [{"btc": 1.0}, {"btc": 2.0},
+                                        {"btc": 3.0}, {"btc": 4.0}]},
+                           "btc", 9.0, 7), 100.0)
+check("days_since counts back from today",
+      state.days_since({"history": [{"btc": 1.0}, {"btc": 9.0}, {"btc": 2.0}]},
+                       "btc", lambda v: v > 5), 1)
+# "Not in the window" is a different statement from "a long time ago".
+check("and says nothing when it is not in the window",
+      state.days_since({"history": [{"btc": 1.0}]}, "btc", lambda v: v > 5),
+      None)
+
+print("\n-- the PM edition cannot corrupt the morning --")
+# This is the single most important test in the file. If the PM overwrote the
+# daily baseline, tomorrow's "vs yesterday" would compare 09:20 against this
+# afternoon: a nineteen-hour move labelled as a daily one, which is §3.18 and
+# cost a correction once already.
+_am_state = copy.deepcopy(_prev)
+_after_pm = state.pm_mark(_am_state, date(2026, 9, 18))
+_diff = {k for k in set(_after_pm) | set(_am_state)
+         if _after_pm.get(k) != _am_state.get(k)}
+check("the PM changes exactly one key", _diff, {"last_sent_pm_date"})
+check_true("the daily baseline is byte-identical",
+           json.dumps(_after_pm["history"], sort_keys=True)
+           == json.dumps(_am_state["history"], sort_keys=True))
+check_true("and so is the morning snapshot",
+           _after_pm["am"] == _am_state["am"])
+check("and `date` is untouched", _after_pm["date"], _am_state["date"])
+
+# Separate markers, or the PM would be suppressed every day by the morning's.
+_both = dict(_after_pm, last_sent_date="2026-09-18")
+check_true("the AM guard sees the AM marker",
+           state.already_sent_today(_both, date(2026, 9, 18)))
+check_true("the PM guard sees its own",
+           state.already_sent_pm_today(_both, date(2026, 9, 18)))
+check_true("a morning send alone does not suppress the PM",
+           not state.already_sent_pm_today({"last_sent_date": "2026-09-18"},
+                                           date(2026, 9, 18)))
+
+print("\n-- the PM edition: spine always, body only when there is one --")
+def _pm_ctx(btc, am=None, **kw):
+    c = dict(healthy)
+    c["now"] = datetime(2026, 9, 18, 13, 0, tzinfo=LISBON)
+    c["crypto"] = {"ok": True, "error": None, "data": {"pairs": [
+        {"symbol": "BTC", "last": btc, "vol_24h": 1000.0, "day_open": btc,
+         "pct_since_utc_midnight": 0.0, "high_24h": btc, "low_24h": btc,
+         "vwap_24h": btc},
+        {"symbol": "ETH", "last": kw.get("eth", 2500.0), "vol_24h": 1.0,
+         "day_open": 2500.0, "pct_since_utc_midnight": 0.0,
+         "high_24h": 2500.0, "low_24h": 2500.0, "vwap_24h": 2500.0}]}}
+    c["prev"] = {"am": am} if am else {}
+    c["health"] = []
+    return c
+
+_quiet = _pm_ctx(80050.0, am={"btc": 80000.0, "eth": 2500.0})
+_qmd, _qhtml = render.pm_build(_quiet)
+check_true("the spine prints on a quiet day", "## SINCE 09:20" in _qmd, _qmd[:300])
+check_true("with the move since the morning", "+0.06% since 09:20" in _qmd, _qmd)
+# The common case, and a real answer rather than an empty section.
+check_true("and the body says so plainly",
+           "No material change since 09:20." in _qmd, _qmd)
+check("a quiet subject says quiet",
+      render.pm_subject(_quiet).endswith("· quiet"), True)
+check_true("the subject keeps the load-bearing prefix",
+           render.pm_subject(_quiet).startswith("Market Brief - PM"),
+           render.pm_subject(_quiet))
+
+_loud = _pm_ctx(82000.0, am={"btc": 80000.0, "eth": 2500.0})
+_lmd, _ = render.pm_build(_loud)
+check_true("a 2.5% move crosses the 1.0% threshold",
+           "**BTC +2.50%** since the 09:20 brief" in _lmd, _lmd)
+check_true("and the subject counts it",
+           "1 change" in render.pm_subject(_loud), render.pm_subject(_loud))
+
+# D21. A missing AM baseline suppresses deltas ENTIRELY - it never falls back
+# to yesterday's close, which is the bug that printed a two-day move as one.
+_orphan = _pm_ctx(80050.0, am=None)
+_omd, _ = render.pm_build(_orphan)
+check_true("with no morning baseline the delta is suppressed",
+           "no morning baseline, so no delta" in _omd, _omd)
+check_true("and the reason is banner-level, not a footnote",
+           "⚠" in _omd and "suppressed rather than measured" in _omd, _omd)
+check_true("no percentage is invented", "since 09:20" not in _omd.split("MATERIAL")[0]
+           or "no morning baseline" in _omd, _omd)
+
+# D20: the shadow log records the move whether or not it printed.
+_, _shadow_quiet = render.pm_body(_quiet)
+check_true("a suppressed move is still measured",
+           abs(_shadow_quiet["btc"] - 0.0625) < 0.001, _shadow_quiet)
+_, _shadow_loud = render.pm_body(_loud)
+check("and so is a printed one", round(_shadow_loud["btc"], 2), 2.5)
+check("no baseline means nothing to shadow", render.pm_body(_orphan)[1], {})
+check_true("the thresholds live in one block, not in the fetchers",
+           set(render.THRESHOLDS) >= {"btc", "eth", "dxy", "us10y_bp",
+                                      "btc_dom", "stable_supply"},
+           sorted(render.THRESHOLDS))
+# A per-cent change and a basis-point move are different units, and comparing
+# one against the other fired the body on almost every ordinary afternoon.
+_bp = dict(healthy)
+_bp["now"] = datetime(2026, 9, 18, 13, 0, tzinfo=LISBON)
+_bp["prev"] = {"am": {"btc": 80000.0}}
+_bp["cross_asset"] = {"ok": True, "error": None, "data": {"quotes": {
+    "US 10Y": {"last": 4.70, "pct_change": 0.30, "as_of": None}}, "errors": {}}}
+_, _sh = render.pm_body(_bp)
+check("a 0.30% session on a 4.70 yield is 1.4bp, not 30",
+      _sh["us10y_bp"], 1.41)
+check("and 1.4bp does not cross a 5bp threshold",
+      [l for l in render.pm_body(_bp)[0] if "10Y" in l], [])
+_bp["cross_asset"]["data"]["quotes"]["US 10Y"]["pct_change"] = 2.0   # ~9bp
+check_true("9bp does", any("10Y" in l for l in render.pm_body(_bp)[0]),
+           render.pm_body(_bp)[0])
+
 
 print("\n-- BACKDROP: slow numbers, each carrying the day it was observed --")
 _BD = {"ok": True, "error": None, "data": {"series": [

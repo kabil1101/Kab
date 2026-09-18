@@ -20,6 +20,7 @@ in fetched content. There is no cc and no bcc.
 
 from __future__ import annotations
 
+import json
 import os
 import smtplib
 import sys
@@ -41,6 +42,73 @@ RECIPIENT = "kabil.dh@gmail.com"   # locked - see module docstring
 # One definition of "on time", shared with the latency check, so the slot
 # guard below and the banner in the brief can never disagree about it.
 TARGET_HOUR = health.TARGET_HOUR   # 09:xx Lisbon local
+
+# The PM edition anchors to NEW YORK, not Lisbon (D18). The Lisbon-NY gap is
+# 4, 5 or 6 hours depending on the week, so two Lisbon cron slots are
+# registered and the job checks which one lands on the target New York hour -
+# the same D5 pattern the morning brief already uses, and for the same reason.
+PM_TARGET_HOUR_NY = 8              # 08:xx New York
+NEW_YORK = ZoneInfo("America/New_York")
+SHADOW_PATH = (state.STATE_PATH.parent / "shadow.jsonl")
+
+
+def edition() -> str:
+    """`am` (the default, and every existing caller) or `pm`."""
+    return "pm" if (os.environ.get("BRIEF_EDITION") or "").strip().lower() \
+        == "pm" else "am"
+
+
+def should_run_pm(now: datetime, prev: dict | None = None) -> bool:
+    """Whether this run is the PM slot that owns today.
+
+    Its own duplicate marker, never the morning's: by the time the PM runs,
+    `last_sent_date` is today for the ordinary reason that the morning brief
+    went out, and sharing the guard would suppress the PM edition every day.
+    """
+    schedule = (os.environ.get("BRIEF_SCHEDULE") or "").strip()
+    if prev and state.already_sent_pm_today(prev, now.date()):
+        print(f"A PM edition for {now:%Y-%m-%d} was already sent. Exiting.",
+              file=sys.stderr)
+        return False
+    if not schedule:
+        return True
+    parts = schedule.split()
+    try:
+        minute, hour = int(parts[0]), int(parts[1])
+    except (ValueError, IndexError):
+        print(f"Unparseable schedule {schedule!r}; proceeding.", file=sys.stderr)
+        return True
+    slot_ny = now.astimezone(UTC).replace(
+        hour=hour, minute=minute, second=0, microsecond=0).astimezone(NEW_YORK)
+    if slot_ny.hour != PM_TARGET_HOUR_NY:
+        print(f"Schedule {schedule!r} maps to {slot_ny:%H:%M} New York "
+              f"({slot_ny.tzname()}); the other slot owns today. Exiting.",
+              file=sys.stderr)
+        return False
+    print(f"Schedule {schedule!r} -> {slot_ny:%H:%M} New York. Proceeding.",
+          file=sys.stderr)
+    return True
+
+
+def write_shadow(now, shadow: dict, body_count: int) -> None:
+    """D20: record what the body WOULD have said, whether or not it said it.
+
+    Ships in the same commit as the edition on purpose. Retrofitting it throws
+    away the only evidence that can replace v1's fixed thresholds with
+    range-scaled ones, and about two weeks of it is what that needs.
+    """
+    if not shadow:
+        return
+    row = {"at": now.isoformat(), "printed": body_count, "moves": shadow,
+           "thresholds": render.THRESHOLDS}
+    try:
+        SHADOW_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(SHADOW_PATH, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, sort_keys=True) + "\n")
+    except OSError as exc:
+        print(f"::warning::could not append the shadow log "
+              f"({type(exc).__name__}); thresholds stay on v1 longer",
+              file=sys.stderr)
 
 
 def safe(fn, *args, **kwargs):
@@ -188,7 +256,11 @@ def should_run(now: datetime, prev: dict | None = None) -> bool:
 def main() -> int:
     now = datetime.now(LISBON)
     prev = state.load()
-    if not should_run(now, prev):
+    mode = edition()
+    if mode == "pm":
+        if not should_run_pm(now, prev):
+            return 0
+    elif not should_run(now, prev):
         return 0
 
     sending = os.environ.get("SKIP_EMAIL", "").lower() not in ("1", "true", "yes")
@@ -217,7 +289,12 @@ def main() -> int:
         # Also surfaces on the Actions run page, so a gap is visible to
         # whoever opens GitHub as well as to whoever opens Gmail.
         print(f"::warning::{note}", file=sys.stderr)
-    markdown, html = render.build(ctx)
+    if mode == "pm":
+        markdown, html = render.pm_build(ctx)
+        _, shadow = render.pm_body(ctx)
+        write_shadow(now, shadow, len(render.pm_body(ctx)[0]))
+    else:
+        markdown, html = render.build(ctx)
 
     print(markdown)  # lands in the Actions log for debugging
 
@@ -230,7 +307,7 @@ def main() -> int:
         print("SKIP_EMAIL set - not sending.", file=sys.stderr)
         return 0
 
-    subject = render.subject(ctx)
+    subject = render.pm_subject(ctx) if mode == "pm" else render.subject(ctx)
     sys.stdout.flush()   # keep the failure below the brief, not buried above it
     try:
         send_email(subject, markdown, html)
@@ -245,8 +322,18 @@ def main() -> int:
     # Only after a confirmed send. `last_sent_date` means sent, not built, or
     # the duplicate guard above would suppress a brief that never arrived.
     try:
-        state.save(state.snapshot(ctx, sent_on=now.date()))
-        print("State written for tomorrow's deltas.", file=sys.stderr)
+        if mode == "pm":
+            # The one exception to "the PM writes no state". Everything else
+            # in the file belongs to the morning: if the PM overwrote the
+            # daily baseline, tomorrow's "vs yesterday" would compare 09:20
+            # against this afternoon - a nineteen-hour move labelled as a
+            # daily one, which is §3.18 and cost a correction once already.
+            state.save(state.pm_mark(prev, now.date()))
+            print("PM marker written; the daily baseline is untouched.",
+                  file=sys.stderr)
+        else:
+            state.save(state.snapshot(ctx, sent_on=now.date(), prev=prev))
+            print("State written for tomorrow's deltas.", file=sys.stderr)
     except Exception as exc:  # noqa: BLE001
         print(f"::warning::could not write state ({type(exc).__name__}); "
               f"tomorrow's brief will have no deltas", file=sys.stderr)
