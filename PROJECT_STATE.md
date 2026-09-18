@@ -8,7 +8,7 @@
 | **Session 1** | 2026-08-21 |
 | **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟡 **round 17 probed: 4 pass, 2 fail, 3 inconclusive (§12.11)** · 📋 **build order in §13** |
 | **Last updated** | 2026-09-18 |
-| **Revision** | 25 (was: 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 26 (was: 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -522,6 +522,40 @@ permission is silently dropped**, producing a token that reads fine and cannot
 dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
+
+**§3.30 — The first live NEWS run proved D16's marking necessary within
+three headlines.** ZeroHedge was admitted (D16) as commentary *on the
+condition that it is visibly marked*, because §12.8 warned it *"mixes market
+stories with political commentary"* and an opinion typeset like a fetched
+number is §3.9 inverted.
+
+Run #86, the first live render, returned exactly that mix:
+
+```
+- **2h ago** — The Pathocracy Of Women In The Democratic Party
+  · **ZeroHedge — commentary, not a wire**
+- **2h ago** — Midwest Braces For Diesel Crisis After Exxon's Joliet
+  Refinery Suffers Disruption · **ZeroHedge — commentary, not a wire**
+- **3h ago** — US Drops Venezuela From List Of Countries Failing To
+  Combat Drug-Trafficking · **ZeroHedge — commentary, not a wire**
+```
+
+**The marking works.** It is bold, it is adjacent, and no reader would mistake
+those lines for the wire.
+
+**And one of the three is a culture-war headline with no market content at
+all.** The second is a genuine refinery-disruption story and the third is a
+sanctions-adjacent one; the first is noise in a document where every other
+line is a fetched number.
+
+So the marking is doing its job and the signal-to-noise is still poor. That is
+**a decision for Kabil, not a bug to fix**: D16 is his, taken with the warning
+in front of him. The options, in the order I would take them: keep it and
+accept a third of the slot being noise; **filter it with §3.6's two-tier word
+list**, the same machinery that stopped `trade` matching `Trademark`; or drop
+it and let CNBC carry the section alone. Recorded so the choice is made on
+evidence rather than on the memory of a probe. *Evidence: run #86,
+2026-09-18 22:23:07Z.*
 
 **§3.29 — The offline test suite was not offline, and had been opening a
 real connection to Gmail on every run.** Found 2026-09-18 while wondering why
@@ -1078,9 +1112,21 @@ Revised order in §13.
   need history the state file does not hold: range position 7d/30d,
   days-since counters, volume vs 30-day average, stablecoin 7-day change and
   BTC.D deltas.
-- 🟠 **Commits 3–5** — probed sources wired (FRED as BACKDROP, CNBC,
-  ZeroHedge, Kalshi midterms) · the PM edition with the state bundle · timing
-  and health.
+- ✅ **Commit 3 — DONE 2026-09-18.** BACKDROP (FRED, round 16's explicit
+  realtime window in code rather than only in this file) and NEWS (CNBC as the
+  wire, ZeroHedge marked as commentary). 430 checks. Live on run #86.
+- 🟠 **Commits 4–5** — the PM edition with the state bundle (which unblocks
+  the five deferred lines and, per the addendum, a sixth) · timing and health.
+- ⏳ **Kalshi midterm contracts, deliberately not built.** The plan says Kalshi
+  needs no probe because it is already LIVE and keyless. That is true of
+  `KXFEDDECISION`; **the midterm control tickers are different contracts and
+  nobody has looked at them.** §12.3 applies to them like anything else.
+- 🟡 **`docs/BUILD_PLAN_ADDENDUM_1.md` — OPEN, and nothing in it is built.**
+  Its own §1: *"a queue, not an instruction set."* Three additions (OI change
+  against price, FRED liquidity plumbing, the CME weekend gap) plus three
+  candidates recorded as proposed-and-not-taken. **The largest of those is
+  liquidations** — see §12.2's `unconfirmed rather than settled` verdict and
+  §12.4a.
 - ✅ **CLOSED 2026-09-18: the nine probe targets are probed (§12.11).** Four
   pass, two fail, three inconclusive. Government hosts did **not** block the
   runner, which was the round's flagged risk. What remains open from it:
@@ -1155,6 +1201,8 @@ docs/trigger-setup.md      its walkthrough, checkpoint by checkpoint
 docs/retired-cowork-relay.md  the scheduled task deleted 2026-09-18, its
                            prompt kept verbatim so deleting the job did not
                            delete what it knew
+docs/BUILD_PLAN_ADDENDUM_1.md  the 2026-09-18 addendum. **OPEN** — a queue,
+                           not a spec, and nothing in it is built
 docs/BUILD_PLAN.md         the 2026-09-17 plan, verbatim, with a dated
                            reconciliation preamble. Nothing in it is built
 docs/SYNOPSIS.md           the narrative account — the story, not the system
@@ -1204,6 +1252,8 @@ the whole brief.
 | **AHEAD** | The forward calendar, then every dated policy event — **365 days in five buckets**, each entry appearing once inside its own `lead` | ForexFactory + Federal Register + watchlist |
 | **EXPECTATIONS** *(was FED PATH)* | Target range **with a supersession flag (§3.24)**, EFFR, priced odds, CPI/core/PPI | NY Fed + Kalshi + BLS |
 | **POLICY DESK** | Warsh remarks and FOMC releases; buyback sizes; coupon auction calendar | Fed RSS + Fiscal Data + TreasuryDirect |
+| **BACKDROP** | Unemployment, the 10Y–2Y spread, CPI as y/y **and 3-month annualised** — each with the day it was observed | FRED, explicit realtime window (§12.10) |
+| **NEWS** | Four headlines a source over an 18h window, newest first, each with its age. **A ZeroHedge item is marked commentary, not a wire (D16)** | CNBC + ZeroHedge |
 
 **The calendar carries no `actual`.** `sources.py:143`: *"ForexFactory weekly
 feeds. Schedule-only: there is no `actual` field."* So the brief can print what
@@ -1296,6 +1346,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 25 | 2026-09-18 | **Commit 3 — BACKDROP and NEWS.** The FRED work repurposed from release-minute actuals to the economic picture, with round 16's explicit realtime window written into the fetcher rather than only into this file. NEWS ships CNBC as the wire and ZeroHedge marked as commentary — and the first live run returned three ZeroHedge items of which one was a culture-war headline with no market content, which is D16's warning arriving as evidence (§3.30). Two of my own mistakes: the commit message claimed 443 checks when the suite reports **430**, and `FRED_API_KEY` had been wired into `probe.yml` and never into the job that builds the brief, so BACKDROP would have degraded to `unavailable` every morning — caught by dispatching rather than by reading |
 | 24 | 2026-09-18 | **Commit 2 — seven lines, no new requests.** Funding restated as an annual carry (a rate per 8h is abstract; the same number annualised is money), perp basis pulled from a ticker field that was always in the payload and never returned, three OI strikes a side instead of one, stablecoin supply *and* dominance enforcing D24 in code, the ETF streak, and a cross-asset direction line. Three tests exist only to keep interpretation out: the options line may not say pin/target/support/resistance/expect, MACRO may not say risk-on or bearish, and dominance may not appear on a line without supply |
 | 23 | 2026-09-18 | **Commit 1 — the brief gets a shape.** Three tiers, CLOCKS, CYCLE, TODAY (CALENDAR + RISK WINDOWS merged), AHEAD to a year in five buckets, watchlist `class` and `lead`, EXPECTATIONS. **§3.24 fixed** and folded in as the plan said it should be — though the NY Fed caught up before it shipped, so it has not been seen firing. Two defects found by building rather than reading: `date` was missing from `render.py`'s import, which would have raised `NameError` on the first FOMC morning; and the offline suite had been opening a **live SMTP connection to Gmail on every CI run** (§3.29), which is why it took 170 seconds and now takes 0.17 |
 | 22 | 2026-09-18 | **Probe round 17 — nine targets, one dispatch, five seconds.** Four pass (White House feed 30/30 dated; Kraken 721 daily candles giving a **2.43% 14-day ADR**, which unblocks threshold v2; CoinGecko already carrying `usdt`/`usdc`; CourtListener keyless over 1,355 dockets). Two fail. Three inconclusive — including two Yahoo `429`s that tested nothing about IBIT or Brent but revealed **eleven shipping lines on one rate-limiting host** (§3.28). Polymarket returned a well-formed 200 answering a different question: `tag=fed` silently ignored, an Ethiopian election market returned under `closed=false` three months after it closed (§3.27). And the probe's own parser wrongly reported the Senate feed as unreadable — logged as a probe bug, not a dead source |
@@ -1334,6 +1385,60 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 26 · 2026-09-18 · Commit 3 — and a warning that arrived as evidence three headlines in
+
+**Sections touched:** header, §3.30 (new), §5, §6, §7, §10, §13
+**Type:** DATA / CORRECTION
+**Evidence:** run #86 `workflow_dispatch` 2026-09-18 22:23:07Z, success, no
+`Degraded this run:` line — so both new fetchers returned. 430 offline checks.
+
+| Field | Was | Now |
+|---|---|---|
+| BACKDROP | designed, FRED probed three rounds, unwired | **live** — UNRATE, 10Y–2Y, CPI y/y and 3m annualised |
+| NEWS | decided (D16, §12.8), unwired | **live** — CNBC wire, ZeroHedge marked commentary |
+| §12.10's rule | written in this file | **written in the fetcher** |
+| D16's marking | a decision | **proven necessary on its first run (§3.30)** |
+| Sections | thirteen | **fifteen** |
+
+**Why:** Commit 3 is where the probe rounds finally buy something. Rounds
+14–16 cost four dispatches and settled a method for a question that was then
+cancelled; BACKDROP is that work repurposed rather than discarded.
+
+**Impact on prior conclusions:** None reversed. §12.8's caution about
+ZeroHedge is upgraded from a caution to an observation (§3.30) — one of three
+live items was a culture-war headline. The marking held; the noise is real;
+the choice is Kabil's.
+
+**Two of my own errors, logged per §8.**
+
+**The commit message for Commit 3 claims 443 checks. The suite reports 430.**
+I wrote the number before the last test run rather than after it. The code is
+unaffected and the message is now wrong in the history; correcting it here
+rather than rewriting a pushed commit.
+
+**`FRED_API_KEY` was wired into `probe.yml` and never into `market-brief.yml`.**
+BACKDROP would have printed `unavailable — FRED_API_KEY is not set` every
+morning: honest, correct, and useless. Found by dispatching a run rather than
+by reading the workflow, which is §8's dry-run rule earning itself again.
+
+**Not changed, deliberately:** three things.
+
+**Kalshi midterms were not built.** The plan calls Kalshi probe-free because
+it is already LIVE — true of `KXFEDDECISION` and unexamined for the midterm
+control tickers, which are different contracts. Wiring them on that assumption
+is exactly the shape §12.4a warns about.
+
+**Nothing from the addendum was built.** It is marked OPEN by its own author
+and says *"a queue, not an instruction set."* Two of its three additions
+target Commits 1 and 3, both of which shipped today without them; they are
+additive and land cleanly later.
+
+**The White House feed is still unwired.** Round 17 passed it on mechanics and
+its three newest items were saltwater angling, hunting heritage and Senate
+withdrawals. It wires behind §3.6's word list or not at all.
+
+---
 
 ## rev 25 · 2026-09-18 · Commit 2 — seven lines, and three tests that exist to keep opinions out
 
@@ -2644,8 +2749,10 @@ The plan's §9 is sound and Gate 0 no longer blocks it. Two changes:
 | ~~2~~ | ~~The batched probe round — 9 targets, 1 dispatch~~ | ✅ **RUN 2026-09-18.** Four passes, two failures, three inconclusive, two findings nobody asked for. §12.11 |
 | ~~3~~ | ~~Commit 1 — three tiers — with the §3.24 fix in it~~ | ✅ **DONE 2026-09-18.** 381 checks |
 | ~~4~~ | ~~Commit 2 — the zero-cost data lines~~ | ✅ **DONE 2026-09-18.** 409 checks |
-| **5** | **Commit 3 — probed sources wired** | Next. Four passed round 17 and **none is wired**; the White House feed needs §3.6's word list first, and State, the Senate schema and the two Yahoo targets need a second probe round |
-| **6** | Commits 4–5, in the plan's order | PM edition + state bundle (which unblocks the five deferred lines), then timing and health |
+| ~~5~~ | ~~Commit 3 — probed sources wired~~ | ✅ **DONE 2026-09-18.** BACKDROP and NEWS, live on run #86 |
+| **6** | **Commit 4 — the PM edition and the state bundle** | Next, and **the single largest change on the delivery path**. Unblocks six deferred lines |
+| **7** | Commit 5 — timing and health | The Apps Script edit, then the five-dispatch observation |
+| — | **Probe round 18** | Still owed: the White House word filter, State's real feed URLs, the Senate schema, the two Yahoo `429`s, Kalshi's midterm tickers, and — if the addendum closes — CME futures and the unprobed liquidation APIs |
 | — | ~~Renew the trigger token, late October~~ | **Not a commit — an action only Kabil can take**, and it must happen before 25 Oct |
 
 ### The fragile fortnight, now with four entries
