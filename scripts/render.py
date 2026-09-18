@@ -1552,14 +1552,22 @@ def pm_spine(ctx):
     if radar:
         e = radar[0]
         days = (e["date"] - now.date()).days
+        title = e["title"]
+        if len(title) > 110:
+            title = title[:109].rstrip() + "\u2026"
         out.append(f"**Next dated** — {_tminus(days)} · {e['date']:%a %d %b} "
-                   f"· {e['title'][:110]}")
+                   f"· {title}")
 
-    # What is still to come today, from the same merged list the AM uses.
+    # What is still to come TODAY, from the same merged list the AM uses.
+    # `_risk_windows` appends untimed radar entries for today AND tomorrow at
+    # the end of its list, and those open with "**Tomorrow**" - so matching on
+    # a leading "**" picked one up and printed it under a heading that says
+    # "today". Live on run #87 for one commit. Only timed windows qualify, and
+    # every one of those opens with a clock.
     windows = [w for w in _risk_windows(ctx, now.date(), now)
-               if w.startswith("**")]
+               if re.match(r"\*\*\d{2}:\d{2}\*\*", w)]
     out.append(f"**Still ahead today** — {windows[0]}" if windows
-               else "**Still ahead today** — nothing scheduled.")
+               else "**Still ahead today** — nothing further scheduled.")
     return out, suppressed
 
 

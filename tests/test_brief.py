@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import main  # noqa: E402
 import copy  # noqa: E402
 import json  # noqa: E402
+import re  # noqa: E402
 
 import cycles  # noqa: E402
 import render  # noqa: E402
@@ -366,6 +367,20 @@ check_true("with the move since the morning", "+0.06% since 09:20" in _qmd, _qmd
 # The common case, and a real answer rather than an empty section.
 check_true("and the body says so plainly",
            "No material change since 09:20." in _qmd, _qmd)
+# Live on run #87: "Still ahead today" printed a TOMORROW item, because
+# _risk_windows appends untimed radar entries at the end and those open with
+# "**Tomorrow**". Only a clock qualifies.
+_ahead_line = [l for l in render.pm_spine(_quiet)[0]
+               if l.startswith("**Still ahead today**")][0]
+check_true("the still-ahead line never carries a tomorrow item",
+           "Tomorrow" not in _ahead_line, _ahead_line)
+check_true("it is a clock time or an explicit nothing",
+           re.search(r"\*\*\d{2}:\d{2}\*\*", _ahead_line)
+           or "nothing further scheduled" in _ahead_line, _ahead_line)
+check_true("a long next-dated title is cut with an ellipsis, not mid-word",
+           all(len(l) < 190 for l in render.pm_spine(_quiet)[0]),
+           render.pm_spine(_quiet)[0])
+
 check("a quiet subject says quiet",
       render.pm_subject(_quiet).endswith("· quiet"), True)
 check_true("the subject keeps the load-bearing prefix",
