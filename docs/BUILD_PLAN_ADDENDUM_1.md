@@ -4,33 +4,37 @@
 
 ---
 
-> ### ⚠ THIS DOCUMENT IS OPEN — added on commit, 2026-09-18. Not part of it.
+> ### ✅ CLOSED AND BUILT — 2026-09-18. Added on commit; not part of it.
 >
-> **Nothing here has been built, and nothing here should be built yet.** Its
-> own §1 says so: *"Do not treat it as a complete spec … build from the
-> original handoff; this one is a queue, not an instruction set."* Kabil will
-> say when it is closed.
+> **Kabil closed it on 2026-09-18 and all three additions are built.** Its §1
+> asked for exactly this signal before anything was built from it, and nothing
+> was until it came.
 >
-> It is committed anyway so the queue lives with the code rather than in a
-> chat. Two notes for whoever picks it up:
+> | Addition | Built as |
+> |---|---|
+> | **A** — OI change against price change | DERIVATIVES, both deltas adjacent, **no label on the pair** (D22) |
+> | **B** — liquidity plumbing | BACKDROP: reverse repo, TGA, bank reserves. **No net-liquidity composite**, and the brief says why |
+> | **C part 1** — CME weekend note | CYCLE, date math |
+> | **C part 2** — the gap measurement | CYCLE, and **probe target 10 passed** — `BTC=F` returns on the same call shape as every other Yahoo symbol |
+> | PM threshold | OI ±3%, in the same config block, shadow-logged |
 >
-> 1. **Two of its three additions target commits that are already done.**
->    Addition B (FRED liquidity plumbing) was placed in Commit 3, and
->    Addition C Part 1 (the CME weekend calendar note) in Commit 1. Both those
->    commits shipped on 2026-09-18 **without** these additions, because this
->    document was open. They are additive and land cleanly on top.
-> 2. **Its §6 answers a question this project has asked four times** — what
->    Kabil checks every morning that the brief does not carry — and then says
->    plainly that the answer came *"from inference, not by him from
->    observation"*. That honesty is worth preserving: the list in §6 is a good
->    list, and it is still not his list.
+> **Its §4 correction was right to make.** Calling the gap "zero cost" would
+> have been wrong: the calendar note is date math and the measurement needed a
+> price feed nobody had probed. It got probed, and it passed.
 >
-> The single largest item in it is **liquidations** (§6), recorded there as
-> *"the largest single gap between the stated framework and the system"*.
-> `PROJECT_STATE.md` §12.2 marks the no-free-source verdict `unconfirmed
-> rather than settled`, and §12.4a is exactly about this shape: CoinGlass
-> being paid is a property of that **route**, not of the world. Bitget, Bybit
-> and OKX all run public APIs and **none has been probed.**
+> **Its §6 was right about the biggest thing.** *"The largest single gap
+> between the stated framework and the system"* was liquidations — and probe
+> round 18 found OKX answers keyless, overturning a `no free source` verdict
+> this project had carried since rev 1. That is now live.
+>
+> **Its §6 was also honest about its own limits**, which is why the answer it
+> gave is recorded and the question stays open: the list came *"from
+> inference, not by him from observation."* Two of its three
+> proposed-and-not-taken candidates remain untaken — session levels and the
+> overnight sweep, and overnight movers.
+>
+> The body below is unedited. Where it says a thing is unbuilt or unprobed,
+> read it as the state on 2026-09-18 before the work, not as the state now.
 
 **This is an addendum to "Daily Market Brief — Handoff to Claude Code", which is already transferred and under build. It adds to that plan; it does not replace or revise it.** Read the original first — every decision, gate and constraint in it still holds.
 

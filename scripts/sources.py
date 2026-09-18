@@ -1325,17 +1325,36 @@ BACKDROP_SERIES = (
 
 
 def _fred_obs(series_id: str, key: str, limit: int, today: date):
-    """Latest observations for a series, on today's vintage explicitly."""
-    data = _json(FRED_BASE, params={
+    """Latest observations for a series, on today's vintage explicitly.
+
+    FRED answers a bad request with `400` **and a plain-English
+    `error_message`** explaining exactly what it objected to. `_get` raises on
+    the status and throws the body away, which turned a six-series failure
+    into six identical "HTTP 400" lines that said nothing. Read the body.
+    """
+    params = {
         "series_id": series_id,
         "api_key": key,
         "file_type": "json",
-        "limit": limit,
+        "limit": str(limit),
         "sort_order": "desc",
         # The whole of §12.10 in two parameters.
         "realtime_start": today.isoformat(),
         "realtime_end": today.isoformat(),
-    })
+    }
+    r = requests.get(FRED_BASE, params=params, headers=HEADERS,
+                     timeout=TIMEOUT)
+    if r.status_code != 200:
+        why = ""
+        try:
+            why = (r.json() or {}).get("error_message") or ""
+        except Exception:  # noqa: BLE001
+            why = " ".join(r.text.split())[:120]
+        # Never echo the key: an Actions log is readable, and a key that
+        # reaches one has to be rotated.
+        raise RuntimeError(f"HTTP {r.status_code}"
+                           + (f" — {why.replace(key, '***')}" if why else ""))
+    data = r.json()
     out = []
     for row in data.get("observations") or []:
         raw = row.get("value")
