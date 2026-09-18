@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🔴 **§3.24 still open: FED PATH printed a superseded target range for a third day** · 🟡 **round 17 probed: 4 pass, 2 fail, 3 inconclusive (§12.11)** · 📋 **build order in §13** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟡 **round 17 probed: 4 pass, 2 fail, 3 inconclusive (§12.11)** · 📋 **build order in §13** |
 | **Last updated** | 2026-09-18 |
-| **Revision** | 23 (was: 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 24 (was: 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -523,6 +523,39 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.29 — The offline test suite was not offline, and had been opening a
+real connection to Gmail on every run.** Found 2026-09-18 while wondering why
+the suite had started timing out locally at 170 seconds when the same suite
+finishes in two on a runner.
+
+`tests/test_brief.py` opens with *"No network. Everything here must pass
+before the workflow is trusted."* One test called `main.send_email()` with a
+deliberately fake App Password to check that a **spaced** password is not
+mistaken for a missing one. `send_email` opens `SMTP_SSL("smtp.gmail.com",
+465)` and calls `login()`. So the check passed by **making a real connection
+and a real failed authentication attempt against Kabil's account**, every CI
+run, from a shared GitHub runner address.
+
+Two costs, and the second is the one that matters:
+
+1. **Speed.** Wherever SMTP is blocked the connection hangs to its 60-second
+   timeout. That is the entire reason the suite was slow — with the call
+   removed it runs in **0.17 seconds**, from over 170.
+2. **Repeated failed auth from CI is how an account gets throttled.** Nothing
+   had gone wrong yet. It was a live risk sitting inside the gate that
+   protects every send.
+
+The fix is a split, not a mock: `main.credentials()` now owns the validation
+and `send_email` calls it. The test calls `credentials()` and never touches a
+socket.
+
+**The general form.** A test suite that promises no network and makes a
+network call is a **gate reporting a property it does not have** — the same
+shape as §3.24's docstring, which claimed the target range was the decision
+itself. Both were true of the intent and false of the code. *Evidence: suite
+runtime 170s+ → 0.17s with the call removed; `main.send_email` opened
+`SMTP_SSL` before this change.*
+
 **§3.28 — Yahoo rate-limits an Actions runner, and thirteen live lines sit on
 it.** Probe round 17 asked Yahoo for IBIT and for Brent. Both returned
 **`HTTP 429 · 19 bytes · Too Many Requests`** — not a block, a rate limit, and
@@ -697,6 +730,28 @@ stamp does not say *"this range predates a decision that has already
 happened"*, and that is the whole difference. **§3.9 again — present, sourced,
 correctly stamped, and materially misleading.** *Evidence: brief runs #74 and
 #77; FOMC statement 2026-09-16; `sources.py` `policy_rate`.*
+
+> ✅ **FIXED 2026-09-18 — rev 24.** The brief now cross-checks the range's
+> `as_of` against the most recent **FOMC statement**, which POLICY DESK
+> already fetches, so the check costs no request. A statement in that feed is
+> evidence a decision *landed* — §3.23's distinction, which round 16 paid for.
+> A scheduled watchlist date would not do: a meeting can move, and a statement
+> cannot publish early. `as_of` **equal** to the decision date counts as
+> stale, because the decision lands 19:00 Lisbon and the rate in force for
+> almost all of that day is still the old one.
+>
+> **It flags; it does not fabricate.** The new range is in the statement prose
+> and parsing that is separate work, so the marker sits beside the number and
+> the note points at POLICY DESK where the statement already is. A test
+> asserts the marker is within 60 characters of the range — §3.9's lesson,
+> that a qualification the eye does not reach is not a qualification.
+>
+> ⚠ **Not yet seen firing in production.** By the time it shipped, the New
+> York Fed had caught up: run #82 printed `Target 3.75–4.00% · EFFR 3.88% · as
+> of 17 Sep`, which is correct and therefore silent. 17 offline tests cover
+> it, including the rendered markdown and the HTML. **The first live proof is
+> 28–29 October**, and recording that as pending rather than proven is the
+> whole of §3.17.
 
 **§3.23 — A calendar tells you what is planned; only the data tells you what
 happened.** FRED's `releases/dates` returns the FOMC press release dated
@@ -924,7 +979,12 @@ something visible.
   reader the same day. §2.5 has the run. The fallback wording — the one
   7 November will actually produce — is offline-tested only, and §2.5 records
   that rather than counting it as proven.
-- 🔴 **HIGHEST-VALUE ITEM: FED PATH's target range is stale for 1–2 days
+- ✅ **CLOSED 2026-09-18: §3.24 is fixed.** Shipped with 17 tests. **Not yet
+  seen firing live** — the NY Fed caught up before it shipped, so the first
+  real proof is 28–29 October. Recorded as pending, not as proven.
+- ✅ **CLOSED 2026-09-18: the offline suite really is offline now (§3.29).**
+  It had been opening a live SMTP connection to Gmail on every run. 170s → 0.17s.
+- ⏳ *(was: HIGHEST-VALUE ITEM: FED PATH's target range is stale for 1–2 days
   after every FOMC (§3.24).** Found the morning the measurement closed. It is
   in the shipping brief, it recurs eight times a year, and **the next FOMC is
   28 October**. Cheapest fix uses data already fetched: the watchlist knows the
@@ -1003,12 +1063,14 @@ no longer a list — they are distributed across the five commits in
 `docs/BUILD_PLAN.md` §9, and the 14:00 edition itself is reversed (§4.4).
 Revised order in §13.
 
-- 🟠 **Commit 1 — AM reorganisation into three tiers.** Zero new sources, zero
-  probes; all rendering and date math against feeds already live. **Fold the
-  §3.24 fix in here** — it rewrites that section anyway.
-- 🟠 **The batched probe round — nine targets, one dispatch.** Off the delivery
-  path entirely, so it runs in parallel with Commits 1 and 2. The only work in
-  the plan that produces new *facts* rather than new plans.
+- ✅ **Commit 1 — DONE 2026-09-18.** Three tiers; CLOCKS; CYCLE with six
+  expiry rules and a derived US holiday table; CALENDAR + RISK WINDOWS merged
+  into TODAY; AHEAD to 365 days in five buckets; watchlist `class` and `lead`;
+  FED PATH renamed EXPECTATIONS; the §3.24 fix folded in as planned. 381
+  checks. **Deferred from it:** OVERNIGHT, whose own definition is *"what
+  changed since yesterday's PM"* and which therefore cannot exist before the
+  PM edition does.
+- ✅ **The batched probe round — DONE 2026-09-18** (§12.11).
 - 🟠 **Commits 2–5** — zero-cost data lines · probed sources wired (FRED as
   BACKDROP, CNBC, ZeroHedge, Kalshi midterms) · the PM edition with the state
   bundle · timing and health.
@@ -1065,7 +1127,11 @@ scripts/
   render.py    (1030)      markdown + HTML; every unavailability handled explicitly
   main.py       (230)      run guard, orchestration, SMTP, recipient lock
   state.py      (102)      day-over-day memory + duplicate-send guard
-  watchlist.py   (98)      the curated half of the policy radar
+  watchlist.py  (150)      the curated half of the policy radar; `class` and
+                           `lead` per entry (was: 98 lines, five fields)
+  cycles.py     (205)      recurring expiries and US market holidays, all by
+                           rule. Nothing here makes a request, so it is right
+                           a year out and never wrong because a feed was down
   health.py     (200)      does the brief itself still work — missed days,
                            stale trigger, and late arrival. The only module
                            that checks the system rather than the market
@@ -1093,24 +1159,44 @@ PROJECT_STATE.md           this file
 
 ## §7 · THE BRIEF IN BRIEF
 
-Nine sections, in order, all Lisbon-time:
+**Three tiers** *(was, rev 1–23: a flat list of nine, then eleven,
+sections)*, all Lisbon-time. The diagnosis behind the change: the brief did
+not lack sections, it lacked hierarchy, and eleven sections typeset with equal
+authority is the condition that let a $6bn buyback read as broken data (§3.9).
+**If Tier 1 does not work as a standalone first screen, the redesign has
+failed regardless of Tiers 2 and 3.**
 
 Seven days a week since 2026-09-12 (D14). A weekend brief carries no
 cash-session windows and states that, rather than printing an open and a close
 that will not happen.
 
+**TIER 1 — the first screen.** About fifteen lines, and most mornings it is
+the whole brief.
+
 | Section | Content | Source |
 |---|---|---|
+| **CLOCKS** | LIS · UTC · NY · TYO, plus the state of three sessions — *"New York opens in 5h10m"*. Every offset from the zone database, never assumed | derived, no fetch |
 | THE SETUP | Three lines: BTC with day-over-day delta and range position, top USD risk today, latest ETF flow | derived |
-| CALENDAR | Today's High/Medium events with **forecast and previous**; forward view to end of week | ForexFactory JSON |
-| **AHEAD** | Countdown to every dated policy/geopolitical event, repeated daily until it passes | Federal Register + watchlist |
-| **POLICY DESK** | Warsh remarks and FOMC releases; buyback sizes; coupon auction calendar | Fed RSS + Fiscal Data + TreasuryDirect |
+| **TODAY** | **CALENDAR and RISK WINDOWS merged** — every event and window still ahead, in one chronological list, with forecast and previous riding the line. Weekends and **US market holidays** suppress the cash session | ForexFactory + derived |
+| **CYCLE** | Six recurring expiries, each inside its own lead window; **silent most mornings by design**. Names the front-expiry roll on Deribit settlement days | derived, no fetch |
+
+**TIER 2 — the standing picture.**
+
+| Section | Content | Source |
+|---|---|---|
 | CRYPTO | BTC/ETH/SOL with deltas, ranges, VWAP; options max pain and OI | Kraken + Deribit |
 | FLOWS | BTC ETF net flow, per-fund, 6-day run with sign-flip flag | TFTC (CC BY 4.0) |
 | DERIVATIVES | Perp funding and OI, flagged when elevated or negative | Deribit, single venue, labelled |
 | SENTIMENT | Fear & Greed with day and week deltas; total mcap and dominance | alternative.me + CoinGecko |
-| MACRO & EQUITIES | DXY, 10Y, gold, WTI, VIX, S&P and Nasdaq futures, each with an age stamp | Yahoo chart API |
-| RISK WINDOWS | Only windows still ahead; weekends suppress the cash session; a policy date landing today appears here | derived |
+| MACRO & EQUITIES | DXY, 10Y, gold, WTI, VIX, S&P and Nasdaq futures, each with an age stamp | Yahoo chart API ⚠ §3.28 |
+
+**TIER 3 — the horizons.**
+
+| Section | Content | Source |
+|---|---|---|
+| **AHEAD** | The forward calendar, then every dated policy event — **365 days in five buckets**, each entry appearing once inside its own `lead` | ForexFactory + Federal Register + watchlist |
+| **EXPECTATIONS** *(was FED PATH)* | Target range **with a supersession flag (§3.24)**, EFFR, priced odds, CPI/core/PPI | NY Fed + Kalshi + BLS |
+| **POLICY DESK** | Warsh remarks and FOMC releases; buyback sizes; coupon auction calendar | Fed RSS + Fiscal Data + TreasuryDirect |
 
 **The calendar carries no `actual`.** `sources.py:143`: *"ForexFactory weekly
 feeds. Schedule-only: there is no `actual` field."* So the brief can print what
@@ -1203,6 +1289,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 23 | 2026-09-18 | **Commit 1 — the brief gets a shape.** Three tiers, CLOCKS, CYCLE, TODAY (CALENDAR + RISK WINDOWS merged), AHEAD to a year in five buckets, watchlist `class` and `lead`, EXPECTATIONS. **§3.24 fixed** and folded in as the plan said it should be — though the NY Fed caught up before it shipped, so it has not been seen firing. Two defects found by building rather than reading: `date` was missing from `render.py`'s import, which would have raised `NameError` on the first FOMC morning; and the offline suite had been opening a **live SMTP connection to Gmail on every CI run** (§3.29), which is why it took 170 seconds and now takes 0.17 |
 | 22 | 2026-09-18 | **Probe round 17 — nine targets, one dispatch, five seconds.** Four pass (White House feed 30/30 dated; Kraken 721 daily candles giving a **2.43% 14-day ADR**, which unblocks threshold v2; CoinGecko already carrying `usdt`/`usdc`; CourtListener keyless over 1,355 dockets). Two fail. Three inconclusive — including two Yahoo `429`s that tested nothing about IBIT or Brent but revealed **eleven shipping lines on one rate-limiting host** (§3.28). Polymarket returned a well-formed 200 answering a different question: `tag=fed` silently ignored, an Ethiopian election market returned under `closed=false` three months after it closed (§3.27). And the probe's own parser wrongly reported the Senate feed as unreadable — logged as a probe bug, not a dead source |
 | 21 | 2026-09-18 | **First build since the gate cleared.** The `health.py` latency banner shipped and fired live on run #78 — `BRIEF LATE — built 12:56 Lisbon, 3h31m past the 09:25 target` — closing §3.26 the same day it was recorded. D25 locked: a detector may only claim what it can tell apart, which is why the dispatch branch says *"unless this brief was pulled by hand"* and the fallback branch does not. Kabil ordered §3.25's task deleted outright rather than rewritten; done, with its prompt preserved. Probe round 17 dispatched: nine targets, one run |
 | 20 | 2026-09-18 | Kabil shared `docs/BUILD_PLAN.md` — a full redesign produced in a separate planning chat on 17 Sep against rev 17. It reverses the 14:00 data-actuals edition (§4.4), reorganises the AM brief into three tiers, extends AHEAD to 365 days with a `lead` field, and adds D17–D24 plus a D11 amendment. Two of its claims were checked against the code before being recorded: **the token-expiry blind spot is real (§3.26); the `muteHttpExceptions` hole it describes was closed in v5 and needed no work.** Gate 0, which the plan assumed stood at 3 of 5, had cleared the same morning |
@@ -1239,6 +1326,62 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 24 · 2026-09-18 · Commit 1 — the brief gets a shape, and two defects fall out of building it
+
+**Sections touched:** header, §3.24, §3.29 (new), §5, §6, §7 (rewritten), §10, §13
+**Type:** STRUCTURE / CORRECTION
+**Evidence:** commits on `claude/daily-market-brief-kvfi35`; run #82
+`workflow_dispatch` 2026-09-18 18:46:57Z, success; 381 offline checks.
+
+| Field | Was | Now |
+|---|---|---|
+| Brief structure | eleven flat sections | **three tiers, thirteen sections** |
+| CALENDAR + RISK WINDOWS | two lists of the same day, in two places | **merged into TODAY**, one chronological list |
+| AHEAD horizon | 130 days, three buckets | **365 days, five buckets, per-entry `lead`** |
+| Watchlist fields | five | **seven** — `class` and `lead`, both optional |
+| D11 confirmation horizon | 75 days for everything | **per class** (§4.2, now implemented) |
+| US market holidays | not detected; a holiday printed an NYSE open and close | **derived by rule** in `cycles.py` |
+| Deribit 08:00 UTC roll | invisible | **named on the morning it happens** |
+| FED PATH | a stale range with no flag | **EXPECTATIONS, with a supersession flag** |
+| The offline suite | opened a live SMTP connection to Gmail | **offline. 170s → 0.17s** |
+| Curated events Kabil trades around | four, none in the file | **four, in the file** |
+
+**Why:** The plan's diagnosis was right and worth implementing exactly as
+written: the brief did not lack sections, it lacked hierarchy. Adding three
+more to a flat list of eleven would have made the $6bn-buyback failure more
+likely, not less.
+
+**Impact on prior conclusions:** §7 is rewritten rather than amended — it
+described a nine-section flat list that no longer exists. §5's oldest open
+question, the AHEAD horizon, is closed in code as well as on paper.
+
+**Two defects surfaced by building rather than by reading**, which is the
+argument for §8's rule about dry-running against live data:
+
+- `date` was absent from `render.py`'s `datetime` import. The new §3.24 check
+  uses `isinstance(when, date)`, so **the first FOMC morning would have raised
+  `NameError` inside the renderer.** The offline suite was green, because the
+  branch is unreachable without an FOMC statement in the feed. Caught by
+  exercising the path, not by reading it.
+- §3.29, the live SMTP connection. Found by asking why the suite had got slow
+  rather than raising the timeout, which is what the schedule wanted.
+
+**Not changed, deliberately:** three things.
+
+**OVERNIGHT was not built.** Its definition is *"what changed since
+yesterday's PM"*, and there is no PM edition. Building it against yesterday's
+morning instead would be a different section wearing the same name.
+
+**Nothing from probe round 17 was wired.** Four targets passed. §12.3 puts
+🟡 PROBED before 🟠 WIRED, and the White House feed is the argument for the
+gap: it passes every mechanical test and its three newest items were about
+saltwater angling, hunting and Senate withdrawals.
+
+**The §3.24 fix is not recorded as proven.** It shipped, 17 tests cover it,
+and it has never been seen firing in a delivered brief. 28–29 October.
+
+---
 
 ## rev 23 · 2026-09-18 · Nine probes, and the two most useful answers were to questions nobody asked
 
@@ -2427,8 +2570,10 @@ The plan's §9 is sound and Gate 0 no longer blocks it. Two changes:
 |---|---|---|
 | ~~1~~ | ~~`health.py` latency banner (§3.26)~~ | ✅ **DONE 2026-09-18, proven live on run #78.** §2.5 |
 | ~~2~~ | ~~The batched probe round — 9 targets, 1 dispatch~~ | ✅ **RUN 2026-09-18.** Four passes, two failures, three inconclusive, two findings nobody asked for. §12.11 |
-| **3** | Commit 1 — three tiers — **with the §3.24 fix in it** | New. The plan has Commit 1 rewriting FED PATH into EXPECTATIONS; fixing the stale range there costs one extra field and no new source |
-| **4** | Commits 2–5, in the plan's order | Unchanged |
+| ~~3~~ | ~~Commit 1 — three tiers — with the §3.24 fix in it~~ | ✅ **DONE 2026-09-18.** 381 checks |
+| **4** | **Commit 2 — the zero-cost data lines** | Next. All output-only: BTC.D promoted, funding annualised carry, range position 7d/30d, cross-asset one-liner, perp basis, top-3 OI strikes, expiry naming |
+| **5** | Commit 3 — probed sources wired | Four passed round 17 and **none is wired**; the White House feed needs §3.6's word list first |
+| **6** | Commits 4–5, in the plan's order | PM edition + state bundle, then timing and health |
 | — | ~~Renew the trigger token, late October~~ | **Not a commit — an action only Kabil can take**, and it must happen before 25 Oct |
 
 ### The fragile fortnight, now with four entries

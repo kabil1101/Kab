@@ -425,6 +425,50 @@ reason to check.
 The plan is in the repository as `BUILD_PLAN.md`, verbatim, with a note at the
 top saying what has moved since. **None of it is built.**
 
+### And then it was built
+
+The plan sat unbuilt for one day. On 18 September the gate cleared, and the
+first three things on its list went in.
+
+**The brief has a shape now.** It used to be eleven sections of equal weight,
+one after another, and the reader had to find what mattered. It is now three
+tiers. The first is about fifteen lines and answers most mornings on its own:
+four clocks and where each session is, the three-line setup, everything still
+to come today, and any recurring expiry close enough to matter. The rest is
+there when it is wanted.
+
+Two lists became one. The calendar said what was scheduled and the risk
+windows said when the market opened, in two different places, and the reader
+had to interleave them by hand to answer the only question a 09:20 brief is
+for: **what is still coming today.** Now that is one list.
+
+The brief also learned some things it can work out for itself and never needs
+to ask anyone: when the US market is shut, when options expire, and that on
+the last Friday of every month the expiry it quotes has already settled twenty
+minutes before the brief was built. That last one had been quietly wrong every
+month.
+
+**The stale Fed rate is fixed** — and here honesty costs something. By the
+time the fix shipped, the New York Fed had caught up on its own and the number
+was correct again. So the flag is written, tested seventeen ways, and **has
+never been seen doing its job.** The next chance is 28 October. Writing that
+down, rather than counting it as done, is the same discipline that caught the
+missing briefs in the first place.
+
+**Two bugs fell out of building rather than reading**, which is the argument
+for building. One would have crashed the renderer on the first Fed morning —
+a missing import on a line that no test could reach without an FOMC in the
+data. The other was older and stranger: the test suite that guards every send
+opens with *"No network"*, and one of its tests had been **opening a real
+connection to Gmail and attempting a real login, on every run, for weeks.** It
+never broke anything. It was also the entire reason the suite took three
+minutes instead of a fifth of a second.
+
+> A test suite that promises no network and makes a network call is a gate
+> reporting a property it does not have — the same shape as the Fed rate
+> docstring that claimed to be the decision itself. Both were true of the
+> intention and false of the code.
+
 ---
 
 ## 6 · What it deliberately will not do
