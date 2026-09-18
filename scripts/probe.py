@@ -93,12 +93,21 @@ def main() -> int:
 
     # ---- 1-3. can OKX support a 24h aggregate? --------------------------
     for n, params, note in (
-        (1, {"instType": "SWAP", "uly": "BTC-USD", "limit": "100"},
+        # `state` is REQUIRED and round 19's first attempt dropped it, so
+        # targets 1-3 tested nothing and returned `50014 Parameter state can
+        # not be empty`. Third probe bug of mine in three rounds, after the
+        # Senate parser and the Yahoo headers. Logged rather than quietly
+        # fixed - a probe that fails because of its own client looks exactly
+        # like a source that does not work.
+        (1, {"instType": "SWAP", "uly": "BTC-USD", "state": "filled",
+             "limit": "100"},
          "coin-margined BTC, the biggest page OKX allows"),
-        (2, {"instType": "SWAP", "uly": "BTC-USDT", "limit": "100"},
+        (2, {"instType": "SWAP", "uly": "BTC-USDT", "state": "filled",
+             "limit": "100"},
          "USDT-margined BTC - a different book, usually the deeper one"),
-        (3, {"instType": "SWAP", "limit": "100"},
-         "no underlying at all - does it return the whole venue?"),
+        (3, {"instType": "SWAP", "instFamily": "ETH-USDT", "state": "filled",
+             "limit": "100"},
+         "ETH, to see whether one call per underlying is the shape"),
     ):
         head(n, f"OKX liquidations · {note.split(' - ')[0]}",
              "Round 18 proved the endpoint answers. This asks whether one "
