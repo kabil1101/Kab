@@ -86,7 +86,16 @@ def gather(now):
     return ctx
 
 
-def send_email(subject: str, text: str, html: str) -> None:
+def credentials() -> tuple[str, str]:
+    """The SMTP login, or a RuntimeError naming exactly what is missing.
+
+    Split out of `send_email` so it can be tested without opening a socket.
+    It was not, and the test that covered it made a real connection to Gmail
+    and a real failed login attempt on every run - in a suite whose own
+    docstring promises no network. That is slow wherever SMTP is blocked, and
+    a repeated failed auth from a shared CI address is a good way to get an
+    account throttled.
+    """
     user = (os.environ.get("GMAIL_USER") or "").strip()
     # Google displays App Passwords in four space-separated groups
     # ("abcd efgh ijkl mnop"). People paste them exactly as shown, so strip
@@ -104,6 +113,11 @@ def send_email(subject: str, text: str, html: str) -> None:
             f"Add them at Settings -> Secrets and variables -> Actions with "
             f"exactly these names. See README.md."
         )
+    return user, password
+
+
+def send_email(subject: str, text: str, html: str) -> None:
+    user, password = credentials()
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject

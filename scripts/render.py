@@ -641,7 +641,10 @@ def _setup_bullets(ctx):
 # How far ahead the radar looks. Beyond about four months a date is not
 # something to prepare for, it is trivia, and a section nobody reads is worse
 # than one that does not exist.
-RADAR_HORIZON_DAYS = 130
+# 365, up from 130. §5's oldest open question - "is the AHEAD horizon right?"
+# - is answered by giving each entry its own `lead` instead of one horizon for
+# everything, so a year of range costs nothing in noise.
+RADAR_HORIZON_DAYS = 365
 
 
 def _bn(v):
@@ -916,6 +919,10 @@ def radar_events(ctx, today):
 
     wl = ctx.get("watchlist") or {"events": []}
     for e in wl["events"]:
+        # An entry outside its own lead window is not due yet. This is what
+        # lets the horizon reach a year without the section flooding.
+        if not watchlist.within_lead(e, today):
+            continue
         merged.append({**e, "origin": "watchlist",
                        "label": e.get("tag") or "event",
                        "stale": watchlist.is_stale(e, today)})
@@ -961,13 +968,23 @@ def _tminus(days: int) -> str:
     return "TODAY" if days == 0 else f"T-{days}"
 
 
+RADAR_BUCKETS = (("Now", 7), ("This month", 31), ("3 months", 92),
+                 ("6 months", 183), ("12 months", 365))
+
+
 def _radar_groups(events, today):
-    """Split into the three horizons the reader actually acts on."""
-    buckets = [("This week", []), ("Next 30 days", []), ("Later", [])]
+    """Split into the five horizons the reader acts on.
+
+    Was three, capped at 130 days. An empty bucket is not printed, so a quiet
+    year costs nothing.
+    """
+    buckets = [(name, []) for name, _ in RADAR_BUCKETS]
     for e in events:
         days = (e["date"] - today).days
-        idx = 0 if days <= 7 else (1 if days <= 30 else 2)
-        buckets[idx][1].append((days, e))
+        for idx, (_, limit) in enumerate(RADAR_BUCKETS):
+            if days <= limit:
+                buckets[idx][1].append((days, e))
+                break
     return [(name, rows) for name, rows in buckets if rows]
 
 

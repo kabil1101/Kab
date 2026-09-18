@@ -3,20 +3,32 @@
 # The brief counts down to every line here, every morning, until the date
 # passes. Then it disappears on its own; there is nothing to clean up.
 #
-# ONE EVENT PER LINE, five fields separated by | :
+# ONE EVENT PER LINE, fields separated by | . The first three are required
+# and the rest are optional, so a short line is still a valid line:
 #
-#   date | tag | what happens | source link | date you last checked it
-#   ----   ---   ------------   -----------   ------------------------
-#   YYYY-MM-DD                  optional      optional but read the note
+#   date | tag | what happens | source link | last checked | class | lead
+#   ----   ---   ------------   -----------   ------------   -----   ----
+#   YYYY-MM-DD                  optional      see below      opt.    opt.
 #
 # Example:
 #   2026-09-29 | tariff | Pharma tariff takes effect | https://x.com/y | 2026-09-05
 #
+# CLASS decides how quickly an entry goes "unconfirmed" (see below):
+#   policy     75 days   the default. Summits, FOMC, tariffs, announcements
+#   statutory  365 days  fixed in law. It cannot move
+#   holiday    365 days  announced annually, then fixed
+#   unlock      30 days  reserved; no free source, so nothing uses it yet
+#
+# LEAD is how many days before the date it starts appearing, so a year-long
+# horizon does not flood the section. Leave it blank to show it the whole way
+# out. Rough guide: a summit or election 60, an FOMC 21, an expiry 14, a
+# holiday 7.
+#
 # Tags are free text and only used for grouping. Useful ones: tariff, fed,
 # geopolitics, election, court, energy, crypto, earnings.
 #
-# ABOUT THE LAST FIELD. An entry nobody has re-checked in 75 days gets marked
-# "unconfirmed" in the brief rather than trusted. That is deliberate: dates
+# ABOUT "LAST CHECKED". An entry nobody has re-checked within its class's
+# horizon gets marked "unconfirmed" in the brief rather than trusted. That is deliberate: dates
 # announced by press conference move all the time, and a stale line that looks
 # confident is how a wrong date ends up in front of a position. When you
 # confirm an entry still stands, change that date to today.
@@ -55,3 +67,7 @@
 # Properties → GITHUB_TOKEN.
 2026-09-19 | admin | FRED API maintenance 14:30–16:00 LIS (08:30–10:00 CT) — release actuals degrade to unavailable inside that window | https://fred.stlouisfed.org/docs/api/api_key.html | 2026-09-15
 2026-11-07 | admin | GitHub trigger token expires — renew it or the brief stops arriving on time (see docs/trigger-setup.md) | https://github.com/settings/personal-access-tokens | 2026-09-08
+2026-09-24 | geopolitics | Trump–Xi meeting on AI — scope and any export-control announcement · CONFIRM, supplied by hand and not yet verified against a primary source | https://www.whitehouse.gov/presidential-actions/feed/ | | policy | 30
+2026-10-01 | court | OpenAI court answer due · CONFIRM, supplied by hand and not yet verified against the docket | https://www.courtlistener.com/ | | policy | 30
+2026-11-03 | election | US midterms — House and Senate control. Results arrive overnight NY and close races can take days, so treat it as a window rather than a point | https://www.congress.gov/ | 2026-09-18 | statutory | 60
+2026-11-26 | holiday | Thanksgiving — NYSE shut, ETF creations and redemptions are a true zero. Half-day on the 27th | https://www.nyse.com/markets/hours-calendars | 2026-09-18 | holiday | 7

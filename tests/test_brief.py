@@ -248,6 +248,79 @@ check_true("an exhausted forward view is explained, not shown empty",
 check_true("it does not claim a broken feed",
            "unavailable" not in md3.split("Next 5 sessions")[1][:300].lower(), md3)
 
+print("\n-- the watchlist grows two fields without breaking the old ones --")
+# The file is maintained by hand. A format change that invalidates the lines
+# already in it is a format change that loses them.
+_old = watchlist.parse("2026-11-03 | election | Midterms | https://x | 2026-09-18")
+check("a five-field line still parses", _old["problems"], [])
+check("and defaults to the class D11 always assumed",
+      _old["events"][0]["class"], "policy")
+check("and to a lead that shows it the whole way out",
+      _old["events"][0]["lead"], watchlist.DEFAULT_LEAD_DAYS)
+
+_new = watchlist.parse(
+    "2026-11-03 | election | Midterms | https://x | 2026-09-18 | statutory | 60")
+check("a seven-field line parses", _new["problems"], [])
+check("with its class", _new["events"][0]["class"], "statutory")
+check("and its lead", _new["events"][0]["lead"], 60)
+
+_bad = watchlist.parse(
+    "2026-11-03 | election | Midterms | | | nonsense | soon")
+check_true("an unknown class is a complaint, not a crash",
+           any("class" in p for p in _bad["problems"]), _bad["problems"])
+check_true("and so is a lead that is not a number",
+           any("lead" in p for p in _bad["problems"]), _bad["problems"])
+check("and the entry survives with defaults", _bad["events"][0]["class"], "policy")
+
+# D11 amended: a holiday flagged unconfirmed within 75 days of every refresh
+# would be a flag that always fires, and a flag that always fires is a flag
+# nobody reads.
+_seen = date(2026, 6, 1)
+_hol = {"verified": _seen, "class": "holiday"}
+_pol = {"verified": _seen, "class": "policy"}
+_check_day = date(2026, 9, 18)          # 109 days later
+check_true("a policy date goes unconfirmed after 75 days",
+           watchlist.is_stale(_pol, _check_day))
+check_true("a holiday does not", not watchlist.is_stale(_hol, _check_day))
+check_true("nor does anything fixed in law",
+           not watchlist.is_stale({"verified": _seen, "class": "statutory"},
+                                  _check_day))
+check_true("an entry never confirmed is always stale",
+           watchlist.is_stale({"verified": None, "class": "statutory"},
+                              _check_day))
+
+# lead is about WHEN it appears; class is about when it stops being trusted.
+_far = {"date": date(2026, 11, 26), "lead": 7}
+check_true("an entry outside its lead window is not due",
+           not watchlist.within_lead(_far, date(2026, 9, 18)))
+check_true("and is due once inside it",
+           watchlist.within_lead(_far, date(2026, 11, 20)))
+check_true("an entry today is always due",
+           watchlist.within_lead({"date": date(2026, 9, 18), "lead": 1},
+                                 date(2026, 9, 18)))
+
+check("the horizon reaches a year", render.RADAR_HORIZON_DAYS, 365)
+_buckets = [n for n, _ in render.RADAR_BUCKETS]
+check("in five buckets", _buckets,
+      ["Now", "This month", "3 months", "6 months", "12 months"])
+_grouped = render._radar_groups([
+    {"date": date(2026, 9, 20), "title": "a"},
+    {"date": date(2026, 10, 10), "title": "b"},
+    {"date": date(2027, 8, 1), "title": "c"},
+], date(2026, 9, 18))
+check("an empty bucket is not printed", [n for n, _ in _grouped],
+      ["Now", "This month", "12 months"])
+
+# The real file has to stay valid, or the section it feeds goes quiet.
+_live = watchlist.load()
+check("the shipped watchlist parses clean", _live["problems"], [])
+check_true("and Thanksgiving is hidden until its lead window opens",
+           not any(e["tag"] == "holiday"
+                   and watchlist.within_lead(e, date(2026, 9, 18))
+                   for e in _live["events"]),
+           [e["tag"] for e in _live["events"]])
+
+
 print("\n-- recurring structure, derived and never fetched --")
 check("third Friday of Sep 2026", cycles.monthly_opex(2026, 9), date(2026, 9, 18))
 check("and it is a triple witching",
@@ -346,22 +419,27 @@ check_true("TODAY carries forecast and previous for a data print",
 
 
 print("\n-- app password whitespace tolerance --")
+# This used to call send_email(), which opens a real SMTP_SSL connection to
+# Gmail and attempts a real login. In a suite whose docstring promises no
+# network, on every CI run, from a shared runner address. credentials() is
+# the part actually under test.
 _os.environ["GMAIL_USER"] = "  kabil.dh@gmail.com  "
 _os.environ["GMAIL_APP_PASSWORD"] = "abcd efgh ijkl mnop"
 try:
-    brief_main.send_email("t", "t", "<p>t</p>")
-except Exception as _e:
-    msg = str(_e)
+    _u, _p = brief_main.credentials()
+    check("the address is trimmed", _u, "kabil.dh@gmail.com")
     check_true("spaced app password is not rejected as missing",
-               "missing repository secret" not in msg, msg)
+               _p == "abcdefghijklmnop", _p)
+except Exception as _e:  # noqa: BLE001
+    check_true("spaced app password is not rejected as missing", False, str(_e))
 finally:
     _os.environ.pop("GMAIL_USER", None)
     _os.environ.pop("GMAIL_APP_PASSWORD", None)
 
 _os.environ["GMAIL_USER"] = "u@example.com"
-_os.environ["GMAIL_APP_PASSWORD"] = "   "
+_os.environ["GMAIL_APP_PASSWORD"] = "   "  # whitespace only is still empty
 try:
-    brief_main.send_email("t", "t", "<p>t</p>")
+    brief_main.credentials()
     failures.append("whitespace-only password should still count as missing")
 except Exception as _e:
     check_true("whitespace-only password still counts as missing",
@@ -855,8 +933,14 @@ _ahead = render.build(_radar_ctx([_fr_evt], [_wl_evt]))[0] \
     .split("## AHEAD")[1].split("\n## ")[0]
 check_true("near event counts down in days", "T-3" in _ahead, _ahead)
 check_true("far event counts down too", "T-39" in _ahead, _ahead)
-check_true("nearest is grouped as this week", "This week" in _ahead, _ahead)
-check_true("far one is grouped later", "Later" in _ahead, _ahead)
+# Buckets went from three (capped at 130 days) to five (365). A T-3 event is
+# "Now" and a T-39 one is "3 months" - the names changed with the ranges.
+check_true("nearest is grouped as now", "**Now**" in _ahead, _ahead)
+check_true("far one falls in the three-month bucket",
+           "**3 months**" in _ahead, _ahead)
+check_true("and the buckets it does not need are absent",
+           "**6 months**" not in _ahead and "**12 months**" not in _ahead,
+           _ahead)
 check_true("the primary source is linked", "https://fr.test/doc" in _ahead,
            _ahead)
 check_true("how much was read is stated",
