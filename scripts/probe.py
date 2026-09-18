@@ -1,95 +1,87 @@
 """Reachability probe for candidate data sources.
 
 Run manually from the Probe Sources workflow. Touches nothing the brief uses.
-Probe, read the output, then write a fetcher against what actually came back.
 
-Round 18 — the liquidation question, and five things round 17 left open
-======================================================================
+Round 19 — can OKX carry the claim, and was the Yahoo verdict mine?
+===================================================================
 
-**The headline target is liquidations, and it is the largest single gap
-between Kabil's stated framework and this system.** His framework opens with
-*"liquidation cascades, not support/resistance magic"*, and the brief carries
-no liquidation data at all: not the level, not the 24h total, not the
-clusters.
+Round 18 established that OKX answers keyless with `sz`, `ts` and `posSide`.
+That is enough to know liquidations are reachable and **not** enough to write
+a fetcher: one call returned five rows of one underlying, and the line worth
+printing is *"$X of longs liquidated in the last 24h"*.
 
-The register's verdict is `S2` — CoinGlass, no free tier, $29/mo — and
-PROJECT_STATE §12.2 already marks that *"unconfirmed rather than settled"*.
-§12.4a is precise about the shape: **CoinGlass being paid is a property of
-that route, not a property of the world.** Three large venues run public REST
-APIs and not one has ever been called from here.
+So: how far back does one call reach, how many rows come with it, does the
+USDT-margined book answer the same way, and can a 24-hour total be assembled
+without paging through the night?
 
-Also in this round, because a probe round costs one dispatch whether it
-carries one target or eight (§12.6):
-
-  - **Kalshi's midterm tickers.** The plan calls Kalshi probe-free because it
-    is already LIVE. That is true of `KXFEDDECISION`; the House and Senate
-    control contracts are different tickers nobody has looked at.
-  - **State's real feed URLs**, read off its own index page instead of
-    guessed a fourth time.
-  - **The Senate schema**, which round 17's parser could not read because it
-    looks for RSS `item`/Atom `entry` and the Senate uses neither. That was a
-    probe bug, not a dead source.
-  - **Yahoo IBIT and Brent**, which both returned `429` and therefore tested
-    nothing about either instrument.
-  - **CME BTC futures** — addendum target 10. The addendum is OPEN and says
-    build nothing from it; a probe is not a build, and §12.3 wants the fact
-    on the record before anyone considers it.
+And a correction to check. §3.28 says Yahoo rate-limits an Actions runner, on
+two rounds of `429` across two hosts. But the brief's own Yahoo calls
+succeeded in four runs minutes either side of both probes — seven symbols, no
+failures. The difference is not the host: **the probe sent a browser-shaped
+User-Agent with a JSON `Accept`, and `sources.py` sends a plain one.** This
+round repeats the call with the brief's own headers. If they answer, §3.28 was
+my client and not Yahoo's policy, and IBIT, Brent and CME BTC are all still
+untested rather than blocked.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import re
-import xml.etree.ElementTree as ET
-from collections import Counter
+import sys
 from datetime import datetime, timezone
 
 import requests
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sources  # noqa: E402  - for its real headers, not its fetchers
+
 TIMEOUT = 25
-BROWSER = {
-    "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                   "AppleWebKit/537.36 (KHTML, like Gecko) "
-                   "Chrome/126.0.0.0 Safari/537.36"),
-    "Accept": "application/json,application/xml,*/*;q=0.8",
-    "Cache-Control": "no-cache",
-}
 NOW = datetime.now(timezone.utc)
-SECRETS = [v for v in (os.environ.get("FRED_API_KEY"),) if (v or "").strip()]
+OKX = "https://www.okx.com/api/v5/public/liquidation-orders"
 
 
-def _redact(text: str) -> str:
-    for s in SECRETS:
-        text = text.replace(s, "***REDACTED***")
-    return text
-
-
-def _http(url, note="", params=None):
-    print(f"    {_redact(url)}")
+def _get(url, params=None, headers=None, note=""):
+    print(f"    {url}")
     if note:
         print(f"    ({note})")
     try:
-        r = requests.get(url, headers=BROWSER, params=params, timeout=TIMEOUT)
+        r = requests.get(url, params=params, timeout=TIMEOUT,
+                         headers=headers or sources.HEADERS)
     except Exception as exc:  # noqa: BLE001
-        print(f"    FAILED {type(exc).__name__}: "
-              f"{_redact(' '.join(str(exc).split())[:140])}")
+        print(f"    FAILED {type(exc).__name__}: {str(exc)[:120]}")
         return None
-    ctype = (r.headers.get("content-type") or "?").split(";")[0]
-    print(f"    HTTP {r.status_code} · {len(r.content):,} bytes · {ctype}")
-    return r
-
-
-def _show(r, cap=520):
-    if r is None:
+    print(f"    HTTP {r.status_code} · {len(r.content):,} bytes")
+    if r.status_code != 200:
+        print(f"    body: {r.text[:160]}")
         return None
     try:
-        data = r.json()
+        return r.json()
     except Exception:  # noqa: BLE001
-        print(f"    body: {_redact(' '.join(r.text[:240].split()))}")
+        print(f"    not JSON: {r.text[:160]}")
         return None
-    print(f"    {_redact(' '.join(json.dumps(data)[:cap].split()))}")
-    return data
+
+
+def _rows(payload):
+    """Flatten OKX's per-instrument `details` into one list."""
+    out = []
+    for block in (payload or {}).get("data") or []:
+        for d in block.get("details") or []:
+            d = dict(d)
+            d["instId"] = block.get("instId") or block.get("uly")
+            out.append(d)
+    return out
+
+
+def _span(rows):
+    if not rows:
+        return None
+    ts = sorted(int(r["ts"]) for r in rows if r.get("ts"))
+    if not ts:
+        return None
+    newest = datetime.fromtimestamp(ts[-1] / 1000, timezone.utc)
+    oldest = datetime.fromtimestamp(ts[0] / 1000, timezone.utc)
+    return newest, oldest, (newest - oldest).total_seconds() / 3600
 
 
 def head(n, title, why):
@@ -97,126 +89,76 @@ def head(n, title, why):
 
 
 def main() -> int:
-    print(f"Round 18 · liquidations, and round 17's leftovers · "
-          f"{NOW:%Y-%m-%d %H:%M} UTC\n")
+    print(f"Round 19 · {NOW:%Y-%m-%d %H:%M} UTC · using sources.HEADERS\n")
 
-    # ---- 1. liquidations, three venues, none ever probed -----------------
-    # Pass test is deliberately strict: a 200 is not enough. The payload has
-    # to carry a SIZE and a TIMESTAMP, or it cannot support "$180m of longs
-    # liquidated in the last 24h" - which is the claim worth printing.
-    head(1, "OKX — public liquidation orders",
-         "The most specific documented endpoint of the three. Pass = 200 with "
-         "sized, timestamped rows.")
-    okx = _show(_http("https://www.okx.com/api/v5/public/liquidation-orders",
-                      params={"instType": "SWAP", "state": "filled",
-                              "uly": "BTC-USD", "limit": "5"}))
-    if okx and isinstance(okx.get("data"), list) and okx["data"]:
-        print(f"    rows: {len(okx['data'])} · keys: "
-              f"{sorted(okx['data'][0])[:10]}")
+    # ---- 1-3. can OKX support a 24h aggregate? --------------------------
+    for n, params, note in (
+        (1, {"instType": "SWAP", "uly": "BTC-USD", "limit": "100"},
+         "coin-margined BTC, the biggest page OKX allows"),
+        (2, {"instType": "SWAP", "uly": "BTC-USDT", "limit": "100"},
+         "USDT-margined BTC - a different book, usually the deeper one"),
+        (3, {"instType": "SWAP", "limit": "100"},
+         "no underlying at all - does it return the whole venue?"),
+    ):
+        head(n, f"OKX liquidations · {note.split(' - ')[0]}",
+             "Round 18 proved the endpoint answers. This asks whether one "
+             "call can carry a 24h total, or whether the line has to be "
+             "'recent' instead.")
+        d = _get(OKX, params, note=note)
+        rows = _rows(d)
+        print(f"    flattened rows: {len(rows)}")
+        sp = _span(rows)
+        if sp:
+            newest, oldest, hours = sp
+            print(f"    newest {newest:%Y-%m-%d %H:%M}Z · oldest "
+                  f"{oldest:%Y-%m-%d %H:%M}Z · span {hours:.2f}h")
+            # The claim worth printing needs a notional, so check the pieces
+            # are actually there rather than assuming the shape from one row.
+            longs = [r for r in rows if r.get("posSide") == "long"]
+            shorts = [r for r in rows if r.get("posSide") == "short"]
+            missing = [k for k in ("sz", "bkPx", "ts", "posSide")
+                       if any(k not in r for r in rows)]
+            print(f"    longs {len(longs)} · shorts {len(shorts)} · "
+                  f"missing keys: {missing or 'none'}")
+            try:
+                notional = sum(float(r["sz"]) * float(r["bkPx"]) for r in rows)
+                print(f"    notional across the page: ${notional:,.0f} "
+                      f"(units unverified - sz may be contracts, not coins)")
+            except Exception as exc:  # noqa: BLE001
+                print(f"    could not total: {exc}")
+        if rows[:1]:
+            print(f"    sample row: {json.dumps(rows[0], sort_keys=True)}")
 
-    head(2, "Bybit — recent liquidations",
-         "Second venue. Bybit's v5 REST may only expose liquidations over "
-         "websocket; a 4xx here is a real answer, not a failure.")
-    _show(_http("https://api.bybit.com/v5/market/recent-trade",
-                params={"category": "linear", "symbol": "BTCUSDT",
-                        "limit": "1"},
-                note="trade endpoint first, to prove the host answers at all"))
-    _show(_http("https://api.bybit.com/v5/market/liq-records",
-                params={"category": "linear", "symbol": "BTCUSDT"},
-                note="plausible path, pattern-matched and unverified"))
-
-    head(3, "Bitget — liquidation / long-short data",
-         "Third venue. Same test.")
-    _show(_http("https://api.bitget.com/api/v2/mix/market/ticker",
-                params={"symbol": "BTCUSDT", "productType": "usdt-futures"},
-                note="ticker first, to prove the host answers"))
-    _show(_http("https://api.bitget.com/api/v2/mix/market/liquidation-orders",
-                params={"symbol": "BTCUSDT", "productType": "usdt-futures"},
-                note="plausible path, pattern-matched and unverified"))
-
-    head(4, "Coinalyze — the free tier behind a key",
-         "D2 allows a free tier behind a free signup. The register marks "
-         "coinalyze PAGES as S6 (client-rendered); the API is a different "
-         "thing and has never been tried. A 401 means auth is the only "
-         "barrier - round 14's test for FRED, which is how that key got "
-         "requested.")
-    _show(_http("https://api.coinalyze.net/v1/liquidation-history",
-                params={"symbols": "BTCUSD_PERP.A", "interval": "1hour",
-                        "from": "0", "to": "9999999999"},
-                note="deliberately NO key - what does it say about auth?"))
-
-    # ---- 5. Kalshi midterms ---------------------------------------------
-    head(5, "Kalshi — midterm control tickers",
-         "EXPECTATIONS already reads KXFEDDECISION off this API, keyless. "
-         "House and Senate control are DIFFERENT contracts and nobody has "
-         "looked at them. Pass = a series ticker that resolves to live "
-         "markets with prices.")
-    for series in ("KXHOUSE", "KXSENATE", "KXMIDTERMS", "KXHOUSECONTROL"):
-        d = _show(_http("https://api.elections.kalshi.com/trade-api/v2/markets",
-                        params={"series_ticker": series, "status": "open",
-                                "limit": "3"},
-                        note=f"series_ticker={series}"), cap=300)
-        if d and d.get("markets"):
-            for m in d["markets"][:3]:
-                print(f"      · {m.get('ticker')} — {m.get('title')} "
-                      f"· yes_bid {m.get('yes_bid')} yes_ask {m.get('yes_ask')}")
-
-    # ---- 6. State Department, read rather than guessed -------------------
-    head(6, "State Department — feed URLs off its own index",
-         "Round 17 guessed three URLs: one 404, one 200 serving a PNG, one "
-         "HTML index. Stop guessing and read the index.")
-    idx = _http("https://www.state.gov/rss-feeds/")
-    if idx is not None and idx.status_code == 200:
-        hrefs = sorted(set(re.findall(
-            r'href="([^"]*(?:feed|rss)[^"]*)"', idx.text, re.I)))
-        print(f"    feed-ish links found: {len(hrefs)}")
-        for h in hrefs[:12]:
-            print(f"      · {h}")
-
-    # ---- 7. the Senate schema, which my own parser could not read --------
-    head(7, "Senate hearings — what the XML actually contains",
-         "Round 17 reported 'no items parsed'. The feed answered 200 with "
-         "23KB of XML; the parser looks for RSS item / Atom entry and the "
-         "Senate uses its own schema. My bug, not a dead source.")
-    r = _http("https://www.senate.gov/general/committee_schedules/hearings.xml")
-    if r is not None and r.status_code == 200:
+    # ---- 4. was the Yahoo verdict mine? ---------------------------------
+    head(4, "Yahoo, with the brief's own headers",
+         "§3.28 claims Yahoo rate-limits a runner. Two probe rounds drew 429 "
+         "with a BROWSER user agent; the brief's seven symbols succeeded "
+         "minutes either side with a plain one. If these answer, the finding "
+         "was my client.")
+    for sym, why in (("IBIT", "the ETF's secondary market"),
+                     ("BZ=F", "Brent, for the Brent-WTI spread"),
+                     ("BTC=F", "CME BTC futures - the addendum's target 10")):
+        d = _get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
+                 {"range": "5d", "interval": "1d"}, note=why)
         try:
-            root = ET.fromstring(r.content.lstrip(b"\xef\xbb\xbf"))
-            tags = Counter(el.tag.rsplit("}", 1)[-1] for el in root.iter())
-            print(f"    root: <{root.tag}> · element names: "
-                  f"{tags.most_common(10)}")
-            first = next((el for el in root
-                          if len(list(el))), None)
-            if first is not None:
-                print(f"    first record <{first.tag}>:")
-                for child in list(first)[:8]:
-                    txt = " ".join((child.text or "").split())[:70]
-                    print(f"      · {child.tag.rsplit('}', 1)[-1]}: {txt}")
-        except ET.ParseError as exc:
-            print(f"    XML did not parse: {exc}")
-
-    # ---- 8. Yahoo, which answered nothing last round ---------------------
-    head(8, "Yahoo IBIT / Brent / CME BTC — a second attempt",
-         "Round 17 drew 429 on both, so NEITHER instrument was tested. "
-         "query2 host this time. CME BTC is the addendum's target 10 - "
-         "probing it is not building it.")
-    for sym, note in (("IBIT", "secondary market for the ETF"),
-                      ("BZ=F", "Brent, for the Brent-WTI spread"),
-                      ("BTC=F", "CME BTC futures — addendum target 10")):
-        d = _show(_http(f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}",
-                        params={"range": "5d", "interval": "1d"},
-                        note=note), cap=160)
-        try:
-            meta = d["chart"]["result"][0]["meta"]
-            print(f"      price {meta.get('regularMarketPrice')} · "
+            res = d["chart"]["result"][0]
+            meta = res["meta"]
+            stamps = res.get("timestamp") or []
+            closes = (res["indicators"]["quote"][0].get("close") or [])
+            vols = (res["indicators"]["quote"][0].get("volume") or [])
+            last = (datetime.fromtimestamp(stamps[-1], timezone.utc)
+                    if stamps else None)
+            print(f"    {meta.get('symbol')} {meta.get('regularMarketPrice')} "
                   f"{meta.get('currency')} · {meta.get('fullExchangeName')}")
+            print(f"    bars {len(stamps)} · last bar "
+                  f"{last:%Y-%m-%d %H:%M}Z · close {closes[-1] if closes else None}"
+                  f" · volume {vols[-1] if vols else None}")
         except Exception:  # noqa: BLE001
             pass
 
     print("\n" + "=" * 64)
-    print("A 200 is not a pass. The liquidation targets need a SIZE and a")
-    print("TIMESTAMP in the payload, or they cannot support the only claim")
-    print("worth printing. Write every result into §12.2, dead ones included.")
+    print("If target 4 answered, §3.28 was this probe's headers rather than")
+    print("Yahoo's policy, and IBIT / Brent / CME BTC have never been tested.")
     return 0
 
 
