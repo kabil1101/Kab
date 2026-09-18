@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5 clean mornings** · 🔴 **new content bug: FED PATH carried a superseded target range for two days (§3.24)** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5 clean mornings** · 🔴 **content bug open: FED PATH carried a superseded target range for two days (§3.24)** · 🟠 **a scheduled task outside this repo wakes up 26 Oct (§3.25)** · 📋 **handoff written — read §13 first** |
 | **Last updated** | 2026-09-18 |
-| **Revision** | 19 (was: 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 20 (was: 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -65,22 +65,31 @@ someone asked for. Rev 7 closes that: the next brief to arrive names the days
 that did not, and a stale trigger identifies itself. *(was, rev 7–9: "the
 blocking item is a two-minute re-paste by Kabil" — done the same day, §2.1f.)*
 
-**Where it stands now, 2026-09-16.** The trigger is live at v7 and the timer is
-confirmed. Three mornings of five have landed at 09:20 Lisbon, each read from
-the inbox before the run log. The FOMC on day 3 was the first live test of the
-sections under pressure and they held (§2.1h). FRED is probed across three
-rounds and its method is settled — it can carry *"came in at X"*, which is the
-entire justification for a second edition — and the second edition itself is
-designed, costed and approved.
+**Where it stands now, 2026-09-18 — the measurement is closed.** *(was, rev
+16–19: "Where it stands now, 2026-09-16 … Three mornings of five have landed at
+09:20 Lisbon … Two mornings remain.")* Five mornings of five landed at 09:20
+Lisbon, every one read from the inbox before the run log, against a scheduler
+that was late 13 times out of 13. Delivery is solved (§2.1h). The trigger is
+live at v7, the timer is confirmed, and the dispatch second was identical on
+all five days. FRED's method is settled, the news set is decided, and the
+second edition is designed, costed and approved.
 
-**None of it is built, and that is the point.** Everything the next phase needs
-is proven; what is not yet proven is that the thing already working keeps
-working. Two mornings remain. The plan's own §6 puts the build after the fifth,
-and three decisive probe rounds in one evening did not move that date.
+**And the morning that closed the measurement opened something worse.** FED
+PATH had been printing a target range the Fed superseded two days earlier —
+present, sourced, correctly age-stamped and materially misleading (§3.24). So
+the build queue that five clean mornings was supposed to unlock stays shut,
+because a policy-critical bug in the brief that *ships* outranks three
+additions to it. **The next FOMC is 28 October.**
 
-**This is a sequencing problem, not a capability problem.** The capability is
-demonstrated. The discipline being tested is whether a proven improvement can
-wait behind an unfinished measurement — which is the same discipline §8's
+**A second thing surfaced the same day, from outside the repository.** A
+scheduled Cowork task has been firing every weekday since August and exiting
+fourteen seconds later on a seasonal guard. It stops exiting on 26 October
+(§3.25). Nothing in this file knew it existed, because everything in this file
+measures the repository and **the repository is not the whole system.**
+
+**This is still a sequencing problem, not a capability problem.** The
+capability is demonstrated. The discipline being tested is whether a proven
+improvement can wait behind a known defect — the same discipline §8's
 comfortable-work trap describes, arriving from the opposite direction: not
 "build something easier instead", but "build something ready too early".
 
@@ -470,6 +479,51 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.25 — A scheduled task with the ability to send mail has been firing
+daily outside this repository, and nothing in this file knew it existed.**
+Found 2026-09-18, while checking that no check-in was armed to fire into a chat
+about to be closed.
+
+What is there, read from the Routines listing itself:
+
+| | |
+|---|---|
+| id | `trig_01T37HzNWDCP9qTWkrEgANre` |
+| name | *Market Brief 09:45 LIS — WET slot (winter)* |
+| schedule | `45 9 * * 1-5` — **UTC**, weekdays |
+| created | 2026-08-21 · last edited 2026-09-05 |
+| state | **enabled** |
+| last run | 2026-09-17 09:45:54Z → finished 09:46:08Z, SUCCEEDED |
+
+It carries the v4 chat-era prompt. **MODE A** relays the cloud brief out of
+Gmail into a chat and sends nothing. **MODE B** fires when no cloud brief is
+found: it builds a degraded, search-sourced brief and **emails it to
+`kabil.dh@gmail.com`** with `(local build)` in the subject.
+
+Three things follow, and only the first is comfortable.
+
+1. **It has never produced a brief.** Fourteen seconds from fire to finish is
+   the slot guard exiting, not a build. Lisbon has been on WEST (UTC+1) for
+   every day of this project's measured life, and the guard exits on WEST.
+2. **It is harmless by accident, not by design. Lisbon returns to WET on
+   Sunday 2026-10-25.** From Monday 26 October the guard stops exiting and the
+   task runs for real, weekdays at 09:45 Lisbon — 25 minutes after the cloud
+   brief lands. **28 October, the next FOMC and §3.24's next occurrence, falls
+   inside that window.**
+3. **Its own premise is false.** The prompt states *"two tasks are registered
+   and exactly one owns today."* A full listing — `include_completed: true`,
+   disabled and already-fired Routines included — returns **one**. The summer
+   (WEST) slot does not exist. The pair that made the guard safe is half
+   missing, and the half that survived is the half that wakes up.
+
+The general form is the part worth keeping. `health.py` detects a brief that
+did not arrive. **Nothing detects a second sender that did** — a `(local
+build)` email lands in the same inbox, under a similar subject, built to a
+standard this file has never reviewed, and no check in this repository would
+ever see it. *Evidence: Routines listing 2026-09-18 with `include_completed:
+true`, one enabled entry; its `last_run` SUCCEEDED in 14s; tz database
+Europe/Lisbon, WEST→WET 2026-10-25.*
+
 **§3.24 — The brief carried a superseded policy rate for two mornings, and
 its own docstring claimed it could not.** The FOMC raised the target range to
 **3.75–4.00% on 16 September**. On the 17th and again on the 18th, FED PATH
@@ -643,6 +697,20 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
   28 October**. Cheapest fix uses data already fetched: the watchlist knows the
   decision dates and POLICY DESK sees the statement land, so a range stamped on
   or before the last decision can be flagged as possibly superseded.
+- 🟠 **NEW, and dated: a scheduled task outside this repository wakes up on
+  26 October (§3.25).** It has self-exited every weekday since August on a
+  seasonal guard. When Lisbon returns to winter time the guard stops firing and
+  it runs for real at 09:45 LIS — with the ability to email a second, degraded
+  brief to the same inbox. **Nothing needs doing today; everything needs
+  deciding before the 25th.** Three options, in the order I would take them:
+  **(a) rewrite it as an alarm** — keep the detection, drop the substitute
+  brief, so a missing morning produces a one-line *"no cloud brief today"* mail
+  instead of a search-sourced imitation of one; **(b) disable it** — the cloud
+  path is 5-for-5 and the relay it was built to provide is now redundant;
+  **(c) leave it** and accept a daily relay into a chat nobody reads.
+  **Recommendation: (a), falling back to (b) if that is a week of work nobody
+  wants.** It is his account and his inbox, so it is his call and not one to
+  assume.
 - ⏳ *(was: THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings.
   Running count: 4 of 5)* (was: 3 of 5 at rev 16; 2 of 5 at rev 12; 1 of 5 at rev 11; 0 of 5 at
   rev 9; 4 of 5, wrongly, at rev 6 — see §2.1d). Live table in §2.1h.
@@ -824,8 +892,9 @@ never once arrived on time. **When this file is next read, check §5 before
 8. Weekly: confirm watchlist entries, add events he hears about
 9. New source proposed  ->  PROBE FIRST  ->  §12.2 entry  ->  only then wire
 
-   -- after the fifth clean morning, and not before --
-10. PM edition at 14:00 LIS, read-only against state, actuals from FRED
+   -- the fifth clean morning arrived 2026-09-18; the queue still waits --
+10. Fix §3.24 first: a superseded target range outranks any new section
+11. PM edition at 14:00 LIS, read-only against state, actuals from FRED
 ```
 
 **What success in this phase actually is.** Not a longer brief. A brief that
@@ -848,6 +917,8 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 19 | 2026-09-18 | **Day 5 of five — delivery declared SOLVED.** Five inbox timestamps, all 09:20 LIS; dispatch identical to the second on all five days. The same morning found §3.24 — FED PATH had printed a target range the Fed superseded two days earlier — so the build queue five clean mornings was meant to unlock stayed shut. Closing the session for a handoff then surfaced §3.25: an enabled scheduled task firing daily outside the repository since August, dormant only because of a seasonal guard that stops guarding on 26 October |
+| 18 | 2026-09-17 | Day 4. The brief moved on from the FOMC correctly — the countdown re-pointed at 28 Oct, the radar dropped the spent entry, and the rebuilt ETF sign-flip flag fired live. The `Target X–Y% · EFFR` line was recorded **UNREAD** rather than inferred from the EFFR beneath it, which had plainly updated. That refusal to infer is what produced §3.24 the next morning — the inference would have been wrong |
 | 17 | 2026-09-16 | Day 3 of five, and the FOMC. Both radar legs fired on the same event and agreed; FED PATH resolved its countdown to `TODAY` with Kalshi live at 86% against 80% on the 13th; RISK WINDOWS listed all four components separately. **The ETF sign-flip flag — the detector the synopsis records as inverted at birth — was observed firing correctly on a real reversal for the first time** |
 | 16 | 2026-09-15 | Probe rounds 15 and 16. FRED can carry *"came in at X"*: `output_type=4` returns the first print with `realtime_start` = its publication date, proven end to end on Empire State, which had published 3 minutes before FRED carried it. Two traps caught — the default realtime window wanders and must never be used, and `releases/dates` lists **scheduled** dates (FOMC projected daily to year end). §3.22 and §3.23 |
 | 15 | 2026-09-15 | Day 2. Kabil added `FRED_API_KEY`; ZeroHedge decided IN as marked commentary (D16). The 14:00 Lisbon second edition designed and approved — corrected from his proposed 13:00, which is 08:00 ET, not 09:00. FRED's own maintenance window (Sat 19 Sep) added to the watchlist so the brief counts down to it |
@@ -879,6 +950,53 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 20 · 2026-09-18 · A scheduled task nobody in this file knew about, and the handoff
+
+**Sections touched:** header, §1, §3.25 (new), §5, §9, §10, §13 (new)
+**Type:** DATA / STRUCTURE
+**Evidence:** Routines listing 2026-09-18 with `include_completed: true` — one
+enabled entry, `trig_01T37HzNWDCP9qTWkrEgANre`, cron `45 9 * * 1-5`, last run
+2026-09-17 09:45:54Z finishing 09:46:08Z; tz database Europe/Lisbon WEST→WET
+2026-10-25.
+
+| Field | Was | Now |
+|---|---|---|
+| Scheduled things outside Actions | none recorded | **one enabled weekday task, able to send mail (§3.25)** |
+| That task's safety | (not known to exist) | **dormant by accident; active from 2026-10-26** |
+| Its stated premise | *"two tasks are registered"* | **one exists; the summer slot is gone** |
+| §10 session log | ends at #17 (2026-09-16) | **#18 and #19 written** |
+| §1 "where it stands" | 2026-09-16, "three of five … two mornings remain" | **2026-09-18, measurement closed** |
+| Handoff | — | **§13, naming what a new chat reads first** |
+
+**Why:** The session is being handed to a new chat, and a handoff that lists
+only the repository would hand over an incomplete system. The task in §3.25
+sends mail to the same inbox as the brief, has been running since before this
+file existed, and has a dated wake-up 38 days out. Recording it late is worse
+than recording it now; not recording it at all is how the 12–13 September gap
+happened.
+
+**Impact on prior conclusions:** None reversed — every measurement in this file
+still stands. But §3.16's scope is now visibly too narrow. *"This project had
+no way to detect its own absence"* was fixed for the repository and is still
+true of everything beside it: `health.py` catches a brief that did not arrive
+and would not notice a second one that did.
+
+**Not changed, deliberately:** three things.
+
+**The task in §3.25 was not disabled.** It is Kabil's account, his inbox and
+his fallback. It can send mail, which makes switching it off an outward-facing
+change, and it cannot fire for another 38 days. Documenting it and recommending
+an option is the correct action today; taking the action is not.
+
+**§3.24 was not fixed.** The recommendation stands and the ordering decision is
+still his. Fixing it unasked would be the same assumption in the opposite
+direction.
+
+**The build queue was not opened.** Unchanged from rev 19, and the reason is
+unchanged with it.
+
+---
 
 ## rev 19 · 2026-09-18 · Delivery is solved — and the same morning found a stale policy rate
 **Sections touched:** header, §2.1, §2.1h, §3.24 (new), §5, §12.2
@@ -1719,6 +1837,68 @@ consent screen.**
 ```
 
 *A longer brief is an output of a brief that arrives, not a substitute for one.*
+
+---
+
+## §13 · HANDOFF — 2026-09-18
+
+This file and `docs/SYNOPSIS.md` are the two documents a new chat opens with.
+Read them in that order. What follows is the short version: what is live, what
+is broken, and what is waiting.
+
+### Read these three first
+
+1. **§3.24 — FED PATH's target range is stale for 1–2 days after every FOMC.**
+   It is in the shipping brief. It recurs eight times a year. **Next occurrence
+   28 October.** No fix is written; the cheapest one uses data the brief
+   already fetches. **This is the highest-value item in the file.**
+2. **§3.25 — the scheduled task that wakes up on 26 October.** Outside the
+   repository, invisible to every check inside it, able to send mail. Decide
+   before the 25th.
+3. **§2.1h — the five clean mornings.** Delivery is solved and does not need
+   re-litigating. A new chat that opens by re-measuring arrival times is
+   spending time that is already spent.
+
+### The build queue, unopened on purpose
+
+Five clean mornings were meant to unlock three things. They arrived, and the
+queue stayed shut, because §3.24 landed the same morning.
+
+| | Ready? | Waiting on |
+|---|---|---|
+| **FRED wiring** | method settled (§12.10), key in place as a repo secret | the ordering decision |
+| **News set** — ZeroHedge + CNBC | decided (D16, §12.8) | the ordering decision |
+| **14:00 LIS "US OPEN" edition** | designed, costed, approved | FRED, then the ordering decision |
+
+**The ordering decision is Kabil's and has not been made.** Three ways to take
+it: **(A)** fix §3.24 first, then build; **(B)** build first and fix §3.24
+before 28 October; **(C)** both, §3.24 first because it is the smaller change.
+**Recommendation: (A).** A bug in the brief that ships outranks three additions
+to it, and the deadline is set by the Fed rather than by preference.
+
+### Dated, in order
+
+| When | What | Where |
+|---|---|---|
+| **Sat 2026-09-19 · 14:30–16:00 LIS** | FRED maintenance. FRED is not wired, so nothing breaks — a free rehearsal for the degradation path if anyone wants one | `data/watchlist.txt` |
+| **Sun 2026-10-25** | Lisbon WEST→WET. The scheduled task's guard stops guarding | §3.25 |
+| **Wed 2026-10-28** | FOMC. §3.24 fires again unless it is fixed | §5 |
+| **Sat 2026-11-07** | The trigger token expires. The brief silently stops arriving on time | §5, `data/watchlist.txt` |
+
+### Still owed by Kabil, and only by him
+
+**The events he already trades around** — summits, court dates, deal deadlines.
+The curated leg of the radar is empty of everything he has not named. **It is
+the one item on this file's list that has not moved since rev 1**, and no
+amount of building substitutes for it.
+
+### What is armed, and what is not
+
+No check-in is scheduled into the chat being closed — the five daily ones all
+fired and are spent. The only live scheduled thing touching this project
+outside GitHub Actions is §3.25's task. **The brief itself needs no chat to
+run:** Apps Script dispatches it, Actions builds it, Gmail delivers it, and
+none of that depends on a conversation being open.
 
 ---
 

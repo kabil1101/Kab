@@ -1,8 +1,8 @@
 # THE DAILY MARKET BRIEF — SYNOPSIS
 
 *A narrative account of how this was built, what it does, what it refuses to
-do, and everything that went wrong on the way. Covers 21 August – 16 September
-2026, seventeen working sessions.*
+do, and everything that went wrong on the way. Covers 21 August – 18 September
+2026, nineteen working sessions.*
 
 *For the operating document — decisions, open questions, the source register —
 see [`PROJECT_STATE.md`](../PROJECT_STATE.md). This is the story; that is the
@@ -355,6 +355,46 @@ looked like broken data, so it was read past.
 Announced operations now lead the section, worded as forthcoming, with the cap,
 the Lisbon operation window, and a flag when the size is a genuine step up.
 
+### The system that was never being measured
+
+The last thing this week found was not in the repository at all.
+
+Closing the session, I went looking for anything scheduled to fire into a chat
+that was about to be shut. What came back instead was a task nobody had
+mentioned in three weeks of notes: **a scheduled job, created on the first day
+of the project and still switched on, that runs every weekday morning and can
+send email to the same inbox as the brief.**
+
+It has never actually produced anything. It opens with a seasonal check —
+*is Lisbon on summer time?* — and if the answer is yes it prints one line and
+stops. Lisbon has been on summer time every single day this project has been
+measured. Fourteen seconds from start to finish, five days a week, since
+August.
+
+**Lisbon goes back to winter time on 25 October.** From the Monday after, the
+check stops stopping it, and the job starts doing what it was written to do: if
+it finds the morning brief in the inbox it relays it into a chat, and **if it
+does not find one, it builds its own from web searches and mails that instead.**
+The next Fed decision is two days later.
+
+Worse, the guard it relies on is half missing. Its own text says two jobs are
+registered — a summer one and a winter one — and exactly one owns each day. A
+full listing returns one. **The summer slot is gone, and the winter slot is the
+one that wakes up.**
+
+Nothing was broken by this. Nothing had to be fixed today. But it is the same
+lesson as the missing weekend briefs, arriving from the other side:
+
+> The brief now notices when it fails to arrive. **Nothing notices a second
+> brief that arrives on its own.** A `(local build)` email would land in the
+> same inbox, under a similar subject, assembled to a standard none of this
+> work has ever reviewed — and every check that exists looks only at the
+> repository.
+
+It was written down, dated, and left switched on, because it belongs to Kabil's
+account and his inbox, it cannot fire for another five weeks, and switching off
+somebody's fallback is not a thing to do on your own initiative.
+
 ---
 
 ## 6 · What it deliberately will not do
@@ -393,11 +433,21 @@ were reasoned the same way as the two retracted verdicts, and are now marked
 | Tests | 1,176 lines, offline, gating every send |
 | Commits | 68 |
 
-**Nothing needs Kabil.** The FRED key is in place, ZeroHedge is decided, the
-script is re-pasted and the timer is confirmed. The one item still owed is the
-one owed since the beginning: **the events he already trades around**, which
-only he knows. The curated half of the radar is empty of everything he has not
-named.
+**Nothing needs Kabil to keep the brief running.** The FRED key is in place,
+ZeroHedge is decided, the script is re-pasted and the timer is confirmed. Two
+things need a decision from him, and neither is urgent this week:
+
+1. **What to build first** — fix the stale target range, or open the build
+   queue. My answer is the fix: a bug in the thing that ships outranks three
+   additions to it, and the Fed sets the deadline, not us.
+2. **What to do with the job that wakes up on 26 October** — switch it off, or
+   cut it back to a one-line alarm that says *no brief arrived today* instead
+   of writing a replacement one. My answer is the alarm, and switching it off
+   if that turns out to be more work than it is worth.
+
+The one item still owed is the one owed since the beginning: **the events he
+already trades around**, which only he knows. The curated half of the radar is
+empty of everything he has not named.
 
 **And on the morning the measurement closed, it found a bug worth more than
 the celebration.** The Fed raised its target range to 3.75–4.00% on
