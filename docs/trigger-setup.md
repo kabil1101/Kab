@@ -174,7 +174,7 @@ cleanly without dispatching. Nothing threw, so Google sent nothing; GitHub was
 never asked to run, so there was no failed run to see. Two briefs went missing
 in complete silence, and one of them was written down as delivered.
 
-So the warning cannot live only in the trigger. Two checks now live in the
+So the warning cannot live only in the trigger. Three checks now live in the
 brief itself:
 
 - **A missed day is named in the next brief that does arrive.** The state file
@@ -185,10 +185,41 @@ brief itself:
   it against `scripts/health.py`. If you edit the file in the repository and
   forget to re-paste it here, the next brief says so — which is exactly the
   mistake that caused the gap above.
+- **A brief that arrives late says so.** More than 30 minutes past 09:25 and
+  the brief opens with `BRIEF LATE`, naming its own build time and how far
+  past target it is.
 
-Neither check can fire on a day with no brief at all. They turn a silent
-failure into a loud one *on the next delivery*, which is the best any
-in-brief check can do.
+### Why the third one exists — the token, on 7 November
+
+The first two checks have a hole between them, and **the token expiry on
+2026-11-07 goes straight through it.** Follow it:
+
+| Step | What happens | Does anything notice? |
+|---|---|---|
+| The token expires | Dispatch returns `401` | ✅ the script throws, Google emails you |
+| No dispatch | No brief at 09:20 | ❌ nothing is watching for a run that never started |
+| The old GitHub cron fires hours later | The brief **does** arrive | ❌ nothing — late is not missing |
+| State is written | `last_sent_date` = today | ❌ no day was missed, so the gap check is silent |
+| The script version is fine | Nothing drifted | ❌ the drift check is silent too |
+
+**Everything would report healthy while the brief quietly went back to
+arriving four hours late** — the exact problem this whole setup exists to fix.
+The latency check closes that, and it is the one warning that fires on the day
+the failure starts rather than the day after.
+
+**What the two wordings mean when you see one:**
+
+- *"No brief had gone out today, so the fallback schedule built this one"* —
+  the trigger did not deliver. **Check the token first.** This is the real
+  alarm.
+- *"The external trigger dispatched late, unless this brief was pulled by
+  hand"* — if you just ran `testNow()`, that is what you are seeing and
+  nothing is wrong. If you did not, the timer's offset has drifted: delete the
+  trigger and install it again (Part 6). A fresh draw costs nothing.
+
+None of the three can fire on a day with no brief at all. They turn a silent
+failure into a loud one *on the next delivery*, which is the best any in-brief
+check can do.
 
 ## Re-pasting after the code changes (about 2 minutes)
 

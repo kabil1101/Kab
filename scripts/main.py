@@ -38,7 +38,9 @@ import watchlist
 LISBON = ZoneInfo("Europe/Lisbon")
 UTC = timezone.utc
 RECIPIENT = "kabil.dh@gmail.com"   # locked - see module docstring
-TARGET_HOUR = 9                    # 09:xx Lisbon local
+# One definition of "on time", shared with the latency check, so the slot
+# guard below and the banner in the brief can never disagree about it.
+TARGET_HOUR = health.TARGET_HOUR   # 09:xx Lisbon local
 
 
 def safe(fn, *args, **kwargs):
@@ -184,8 +186,14 @@ def main() -> int:
     ctx["prev"] = prev          # yesterday's figures, for day-over-day deltas
     # Whether the delivery system itself is healthy. Computed here, not in the
     # renderer, because this is the only layer that can see the environment.
+    # TRIGGER_VERSION is set only by the Apps Script, BRIEF_SCHEDULE only by
+    # the cron fallback. A run carrying neither is a human pressing the
+    # button, which is why both are passed through rather than collapsed into
+    # one flag: the two failures need different words.
     ctx["health"] = health.notes(prev, now.date(),
-                                 os.environ.get("TRIGGER_VERSION"))
+                                 os.environ.get("TRIGGER_VERSION"),
+                                 os.environ.get("BRIEF_SCHEDULE"),
+                                 now=now)
     for note in ctx["health"]:
         # Also surfaces on the Actions run page, so a gap is visible to
         # whoever opens GitHub as well as to whoever opens Gmail.

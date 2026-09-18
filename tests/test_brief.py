@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
+import main  # noqa: E402
 import render  # noqa: E402
 import sources  # noqa: E402
 import watchlist  # noqa: E402
@@ -509,6 +510,86 @@ check("the repo's own script matches what health expects",
       .read_text(encoding="utf-8")
       .split("const SCRIPT_VERSION = '")[1].split("'")[0],
       health.EXPECTED_TRIGGER_VERSION)
+
+
+print("\n-- the brief notices when it arrived late --")
+# The token expires 2026-11-07. When it does, the dispatch dies, the old cron
+# picks the job up hours later, the brief still arrives and last_sent_date is
+# still written - so neither check above says a word. PROJECT_STATE.md §3.26.
+_ON_TIME = datetime(2026, 9, 21, 9, 20, tzinfo=LISBON)     # what normally happens
+
+
+def _lat(hh, mm, version=None, schedule=None):
+    return health.latency_note(
+        datetime(2026, 9, 21, hh, mm, tzinfo=LISBON), version, schedule)
+
+
+check("the normal 09:20 dispatch is silent",
+      health.latency_note(_ON_TIME, "7", None), None)
+check("so is a run five minutes after target", _lat(9, 30, version="7"), None)
+check("and one exactly on the 30-minute line", _lat(9, 55, version="7"), None)
+check("a run before target is not late", _lat(6, 0, version="7"), None)
+check("the cron slot firing on time is silent",
+      _lat(9, 25, schedule="25 8"), None)
+
+# A human pressing "Run workflow" carries neither a version nor a schedule.
+# Deliberate is not late, and absence of evidence is not evidence.
+check("a hand-clicked dispatch makes no claim at any hour",
+      _lat(16, 30), None)
+check("nor does a run with no build time at all",
+      health.latency_note(None, "7", "25 8"), None)
+check("nor one handed a date instead of a datetime",
+      health.latency_note(date(2026, 9, 21), "7", "25 8"), None)
+
+_drift_note = _lat(9, 56, version="7")
+check_true("one minute past the line does fire", _drift_note is not None)
+check_true("and names the build time", "09:56" in _drift_note, _drift_note)
+check_true("and the target", "09:25" in _drift_note, _drift_note)
+# The Apps Script dispatches testNow() through the identical call with the
+# identical version, so a late dispatch and a brief pulled by hand cannot be
+# told apart from here. Say so rather than accusing a working trigger.
+check_true("and admits it cannot rule out a hand-pulled brief",
+           "by hand" in _drift_note, _drift_note)
+
+_cron_note = _lat(13, 7, schedule="25 8")
+check_true("the fallback path fires too", _cron_note is not None)
+check_true("and reports the delay in hours", "3h42m" in _cron_note, _cron_note)
+# This branch IS evidenced: should_run() exits a scheduled run when a brief
+# already went out today, so a cron run that got this far proves none had.
+check_true("and claims only what should_run proved",
+           "No brief had gone out today" in _cron_note, _cron_note)
+check_true("and points at the token, which is the likely cause",
+           "token" in _cron_note, _cron_note)
+check_true("a cron run says nothing about hand-pulling",
+           "by hand" not in _cron_note, _cron_note)
+
+check("a delay under an hour reads in minutes",
+      health._delay(47), "47 min")
+check("a round delay drops the minutes", health._delay(180), "3h")
+check("and a ragged one keeps them", health._delay(222), "3h42m")
+
+# Ordering matters: the latency note is the one that explains why the others
+# look fine. It leads.
+_all = health.notes({"last_sent_date": "2026-09-20"}, date(2026, 9, 21),
+                    "7", "25 8", now=datetime(2026, 9, 21, 13, 7, tzinfo=LISBON))
+check("a late fallback run raises exactly one note", len(_all), 1)
+check_true("and it is the latency one", _all[0].startswith("BRIEF LATE"), _all)
+
+# §3.11: a green unit test over a function nothing calls proves nothing.
+_late_ctx = dict(healthy)
+_late_ctx["health"] = [_cron_note]
+_late_md, _late_html = render.build(_late_ctx)
+check_true("the rendered brief carries the late banner",
+           "BRIEF LATE" in _late_md, _late_md[:400])
+check_true("and the HTML marks it as a warning",
+           "warn" in _late_html and "BRIEF LATE" in _late_html,
+           _late_html[:600])
+
+# main.py resolves which cron slot owns today from TARGET_HOUR, and health.py
+# judges lateness against the same hour. Two definitions would drift.
+check("main and health agree on what on time means",
+      main.TARGET_HOUR, health.TARGET_HOUR)
+check("and the target minute matches both cron slots", health.TARGET_MINUTE, 25)
 
 
 print("\n-- warnings lead the brief, and look like warnings --")
