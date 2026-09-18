@@ -577,6 +577,47 @@ def build(ctx) -> tuple[str, str]:
     md.append(f"*{note}*\n")
     html.append(f"<p class='muted'><em>{_esc(note)}</em></p>")
 
+    # ---- BACKDROP ------------------------------------------------------
+    # Slow-moving series that frame everything above them. A brief is the
+    # right place for numbers that do not move: by the time one has changed,
+    # it has changed quietly, over weeks, and nobody was watching for it.
+    bd = ctx.get("backdrop")
+    if bd is not None:
+        md.append("## BACKDROP\n")
+        html.append(_h_section("Backdrop"))
+        blines = _backdrop_lines(bd, now)
+        for l in blines:
+            md.append(f"- {l}")
+        md.append("")
+        html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in blines)
+                    + "</ul>")
+        if bd["ok"] and bd["data"].get("partial"):
+            p = f"partial: {bd['data']['partial']}"
+            md.append(f"*{p}*\n")
+            html.append(f"<p class='muted'><em>{_esc(p)}</em></p>")
+
+    # ---- NEWS ----------------------------------------------------------
+    # The only section that is not a fetched number, which is why every item
+    # is tagged with its source and its age, and why commentary is marked
+    # apart from a wire (D16).
+    nw = ctx.get("news")
+    if nw is not None:
+        md.append("## NEWS\n")
+        html.append(_h_section("News"))
+        nlines = _news_lines(nw, now)
+        for l in nlines:
+            md.append(f"- {l}")
+        md.append("")
+        html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in nlines)
+                    + "</ul>")
+        if nw["ok"]:
+            sub_ = ("Headlines, not data. A wire item is reported; a "
+                    "ZeroHedge item is commentary and is marked as such.")
+            if nw["data"].get("partial"):
+                sub_ += f" partial: {nw['data']['partial']}"
+            md.append(f"*{sub_}*\n")
+            html.append(f"<p class='muted'><em>{_esc(sub_)}</em></p>")
+
     failed = [k for k, v in ctx.items()
               if isinstance(v, dict) and v.get("ok") is False]
     if failed:
@@ -610,6 +651,61 @@ def _run_note(run):
         note += (f" — FLAG: sign flipped after {streak} consecutive "
                  f"sessions of {was}")
     return f"{note} (latest {word})"
+
+
+def _backdrop_lines(bd, now):
+    """FRED's slow series, each with the date it was actually observed."""
+    if not bd["ok"]:
+        return [f"Backdrop unavailable — {bd['error']}"]
+    out = []
+    for e in bd["data"]["series"]:
+        if e["id"] == "CPIAUCSL":
+            bits = ["**CPI**"]
+            if e["yoy"] is not None:
+                bits.append(f"{e['yoy']:+.1f}% y/y")
+            if e["ann_3m"] is not None:
+                # The three-month annualised turns faster than the yearly
+                # rate, so it is the one that shows a trend changing rather
+                # than a trend that has already changed.
+                bits.append(f"{e['ann_3m']:+.1f}% 3m annualised")
+            bits.append(f"as of {e['as_of']:%b %Y}")
+            out.append(" · ".join(bits))
+            continue
+        bits = [f"**{e['label']}** {e['value']:.2f}{e['unit']}"]
+        if e["prior"] is not None:
+            move = e["value"] - e["prior"]
+            bits.append(f"{move:+.2f} on the prior print")
+        # Two of these are monthly and one is daily with a lag. Without the
+        # date a slow number reads as today's, which is the misleading-because-
+        # present failure rather than the missing-data one.
+        bits.append(f"as of {e['as_of']:%d %b}")
+        out.append(" · ".join(bits))
+    if out:
+        out.append(f"*{bd['data']['source']}*")
+    return out
+
+
+def _news_lines(nw, now):
+    """Headlines, newest first, each carrying its source and its age."""
+    if not nw["ok"]:
+        return [f"News unavailable — {nw['error']}"]
+    items = nw["data"]["items"]
+    if not items:
+        return [f"Nothing on the wire in the last "
+                f"{nw['data']['window_hours']}h."]
+    out = []
+    for i in items:
+        age = (now - i["when"]).total_seconds() / 3600
+        stamp = f"{age:.0f}h ago" if age >= 1 else "under an hour"
+        title = i["title"]
+        if len(title) > 150:
+            title = title[:149].rstrip() + "\u2026"
+        # A commentary headline typeset like a wire item is an opinion wearing
+        # a fetched number's clothes. The tag is the whole of D16.
+        tag = (f"via {i['source']}" if i["kind"] == "wire"
+               else f"**{i['source']} — commentary, not a wire**")
+        out.append(f"**{stamp}** — {title} · {tag}")
+    return out
 
 
 def _cross_asset_line(quotes):

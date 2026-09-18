@@ -74,6 +74,11 @@ def gather(now):
     ctx["policy_rate"] = safe(sources.policy_rate)
     ctx["fed_odds"] = safe(sources.fed_odds, now.date())
     ctx["inflation"] = safe(sources.inflation)
+    # Commit 3. Both degrade to a named `unavailable` like everything else:
+    # backdrop needs FRED_API_KEY and FRED has a scheduled outage in the
+    # watchlist; news is two independent feeds and either can go quiet.
+    ctx["backdrop"] = safe(sources.backdrop, now.date())
+    ctx["news"] = safe(sources.news, now)
     # Not wrapped in safe(): the watchlist reads a local file and already
     # degrades to an empty list, so the only thing left to guard against is a
     # bug in the parser itself.

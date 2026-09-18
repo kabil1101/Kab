@@ -248,6 +248,93 @@ check_true("an exhausted forward view is explained, not shown empty",
 check_true("it does not claim a broken feed",
            "unavailable" not in md3.split("Next 5 sessions")[1][:300].lower(), md3)
 
+print("\n-- BACKDROP: slow numbers, each carrying the day it was observed --")
+_BD = {"ok": True, "error": None, "data": {"series": [
+    {"id": "UNRATE", "label": "Unemployment", "unit": "%",
+     "as_of": date(2026, 8, 1), "value": 4.4, "prior": 4.3,
+     "yoy": None, "ann_3m": None},
+    {"id": "T10Y2Y", "label": "10Y\u20132Y spread", "unit": "pp",
+     "as_of": date(2026, 9, 17), "value": 0.62, "prior": 0.58,
+     "yoy": None, "ann_3m": None},
+    {"id": "CPIAUCSL", "label": "CPI", "unit": "index",
+     "as_of": date(2026, 8, 1), "value": 334.131, "prior": 332.8,
+     "yoy": 3.35, "ann_3m": 4.12},
+], "partial": None, "source": "FRED (St. Louis Fed)"}}
+_bl = render._backdrop_lines(_BD, datetime(2026, 9, 18, 9, 20, tzinfo=LISBON))
+_bt = "\n".join(_bl)
+check_true("unemployment prints with its level", "4.40%" in _bt, _bt)
+check_true("and the move on the prior print", "+0.10 on the prior print" in _bt, _bt)
+check_true("the curve prints too", "0.62pp" in _bt, _bt)
+# Two of the three are monthly and one is daily with a lag. Without the date a
+# slow number reads as today's - misleading because present, not missing.
+check_true("every line carries an as-of",
+           all("as of" in l for l in _bl if l.startswith("**")), _bt)
+check_true("the monthly one names a month, not a day",
+           "as of Aug 2026" in _bt, _bt)
+# The index itself means nothing to a reader; the two rates do. And neither
+# duplicates EXPECTATIONS, which carries the latest m/m print from BLS.
+check_true("CPI is shown as rates, never as the raw index",
+           "334" not in _bt, _bt)
+check_true("year over year", "+3.4% y/y" in _bt, _bt)
+check_true("and the faster three-month cut",
+           "+4.1% 3m annualised" in _bt, _bt)
+check_true("a failed fetch degrades to a named reason",
+           render._backdrop_lines({"ok": False, "error": "FRED_API_KEY is not "
+                                   "set"}, None)[0].startswith("Backdrop "
+                                                               "unavailable"))
+
+print("\n-- NEWS: the only section that is not a number --")
+_now = datetime(2026, 9, 18, 9, 20, tzinfo=LISBON)
+_NW = {"ok": True, "error": None, "data": {"items": [
+    {"title": "Fed officials signal caution on further hikes",
+     "url": "https://cnbc.test/1", "when": _now - timedelta(hours=2),
+     "source": "CNBC", "kind": "wire"},
+    {"title": "Everything you know about the repo market is wrong",
+     "url": "https://zh.test/1", "when": _now - timedelta(hours=5),
+     "source": "ZeroHedge", "kind": "commentary"},
+], "window_hours": 18, "partial": None, "source": "CNBC + ZeroHedge"}}
+_nl = render._news_lines(_NW, _now)
+_nt = "\n".join(_nl)
+check_true("the wire item is attributed", "via CNBC" in _nt, _nt)
+# D16: ZeroHedge is admitted as commentary ON THE CONDITION that it is visibly
+# marked. In a brief where every line is a fetched number with a source and an
+# age stamp, an opinion headline renders with identical authority - §3.9
+# inverted, and it would be the first unsourced claim the brief ever printed.
+check_true("and the commentary item is marked as commentary",
+           "commentary, not a wire" in _nt, _nt)
+check_true("the marking is emphasised, not a quiet suffix",
+           "**ZeroHedge — commentary, not a wire**" in _nt, _nt)
+check_true("every headline carries its age", _nt.count("ago") >= 2, _nt)
+check_true("newest first", _nt.index("Fed officials") < _nt.index("repo market"), _nt)
+check("an empty window says so, and does not imply quiet",
+      render._news_lines({"ok": True, "error": None, "data": {
+          "items": [], "window_hours": 18, "partial": None,
+          "source": "x"}}, _now),
+      ["Nothing on the wire in the last 18h."])
+check_true("a dead feed is named",
+           "unavailable" in render._news_lines(
+               {"ok": False, "error": "feeds.test: timeout"}, _now)[0])
+
+# §3.11 again: both must reach the rendered brief, not just their helpers.
+_c3 = dict(healthy)
+_c3["backdrop"] = _BD
+_c3["news"] = _NW
+_c3_md, _c3_html = render.build(_c3)
+check_true("BACKDROP reaches the brief", "## BACKDROP" in _c3_md, _c3_md[:200])
+check_true("NEWS reaches the brief", "## NEWS" in _c3_md, _c3_md[:200])
+check_true("both sit in tier 3, below the standing picture",
+           _c3_md.index("## BACKDROP") > _c3_md.index("Tier 3"), "order")
+check_true("the commentary marking survives into the HTML",
+           "commentary, not a wire" in _c3_html)
+# A section absent from the context must not render an empty heading.
+_c3_none = dict(healthy)
+_c3_none["backdrop"] = None
+_c3_none["news"] = None
+_none_md = render.build(_c3_none)[0]
+check_true("an unconfigured section prints no heading at all",
+           "## BACKDROP" not in _none_md and "## NEWS" not in _none_md)
+
+
 print("\n-- lines that cost nothing, because the data was already fetched --")
 
 # A rate per eight hours is abstract; the same number as annual carry is

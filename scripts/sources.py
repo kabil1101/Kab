@@ -1304,3 +1304,173 @@ def fed_odds(today: date) -> dict:
         "raw_total": total,
         "source": "Kalshi (prediction market, mid of book)",
     }
+
+
+# ------------------------------------------------------------------ backdrop
+
+FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
+
+# Round 16 settled the method and it is a rule, not a preference: ask with an
+# EXPLICIT realtime window. FRED's default window wanders between calls -
+# round 15 saw two requests seconds apart disagree about what "today" was -
+# and a wandering vintage is how a revised figure gets printed as a first
+# print. Never use `releases/dates` to decide publication either; it lists
+# SCHEDULED dates, which is not the same claim. See PROJECT_STATE §12.10.
+BACKDROP_SERIES = (
+    # id, label, unit, how many observations we need
+    ("UNRATE", "Unemployment", "%", 13),
+    ("T10Y2Y", "10Y–2Y spread", "pp", 30),
+    ("CPIAUCSL", "CPI", "index", 14),
+)
+
+
+def _fred_obs(series_id: str, key: str, limit: int, today: date):
+    """Latest observations for a series, on today's vintage explicitly."""
+    data = _json(FRED_BASE, params={
+        "series_id": series_id,
+        "api_key": key,
+        "file_type": "json",
+        "limit": limit,
+        "sort_order": "desc",
+        # The whole of §12.10 in two parameters.
+        "realtime_start": today.isoformat(),
+        "realtime_end": today.isoformat(),
+    })
+    out = []
+    for row in data.get("observations") or []:
+        raw = row.get("value")
+        if raw in (None, "", "."):        # FRED writes "." for a missing point
+            continue
+        try:
+            out.append((date.fromisoformat(row["date"]), float(raw)))
+        except (ValueError, KeyError, TypeError):
+            continue
+    return out
+
+
+def backdrop(today: date | None = None) -> dict:
+    """The economic backdrop: labour, the curve, and the trend in prices.
+
+    This is the FRED work repurposed. It was probed across rounds 14-16 to
+    answer *"what did CPI come in at this morning"* for a second edition that
+    was then cancelled - Kabil is at the desk when data prints, so a brief
+    reporting the number afterwards tells him what is already on his screens.
+    The method survives; the question changed. These are slow-moving series
+    that frame everything else, and a brief is the right place for them
+    precisely because they do not move.
+
+    **Every line carries its observation date.** Two of the three are monthly
+    and one is daily-with-a-lag, so a number printed without an age reads as
+    today's - which is the present-but-misleading failure (§3.9), not a
+    missing-data one.
+    """
+    key = (os.environ.get("FRED_API_KEY") or "").strip()
+    if not key:
+        raise RuntimeError("FRED_API_KEY is not set")
+    today = today or datetime.now(LISBON).date()
+
+    out, notes = [], []
+    for sid, label, unit, limit in BACKDROP_SERIES:
+        try:
+            obs = _fred_obs(sid, key, limit, today)
+        except Exception as exc:  # noqa: BLE001 - one series, not the section
+            notes.append(f"{label}: {_reason(exc)}")
+            continue
+        if not obs:
+            notes.append(f"{label}: no observations")
+            continue
+        when, value = obs[0]
+        entry = {"id": sid, "label": label, "unit": unit,
+                 "as_of": when, "value": value, "prior": None,
+                 "yoy": None, "ann_3m": None}
+        if len(obs) > 1:
+            entry["prior"] = obs[1][1]
+        if sid == "CPIAUCSL":
+            # The index itself means nothing to a reader. Two cuts do: the
+            # year-over-year rate, and the 3-month annualised, which turns
+            # faster and is the one that shows a trend changing. Neither
+            # duplicates EXPECTATIONS, which carries the latest month-on-month
+            # print from BLS.
+            by_date = dict(obs)
+            def _idx(months_back):
+                for d_, v_ in obs:
+                    if (when.year - d_.year) * 12 + (when.month - d_.month) == months_back:
+                        return v_
+                return None
+            year_ago, three_ago = _idx(12), _idx(3)
+            if year_ago:
+                entry["yoy"] = (value / year_ago - 1) * 100
+            if three_ago:
+                entry["ann_3m"] = ((value / three_ago) ** 4 - 1) * 100
+        out.append(entry)
+
+    if not out:
+        raise RuntimeError("; ".join(notes) or "no series returned")
+    return {"series": out, "partial": "; ".join(notes) or None,
+            "source": "FRED (St. Louis Fed)"}
+
+
+# ---------------------------------------------------------------------- news
+
+# Round 14 probed the four accounts Kabil named at their primary sources and
+# the result inverted the premise: CNBC, which he did not name, beat three of
+# the four. WatcherGuru answered 200 with perfectly formed items whose newest
+# was 41.9 hours old; @DeItaone relays a Bloomberg terminal and has no free
+# primary by design. See §12.8.
+NEWS_FEEDS = (
+    # label, url, kind. `kind` decides how the brief typesets it, and the
+    # distinction is load-bearing: D16 admits ZeroHedge as commentary on the
+    # condition that it is visibly marked as such. In a brief where every line
+    # is a fetched number with a source and an age stamp, an opinion headline
+    # renders with identical authority - §3.9 inverted.
+    ("CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml"
+             "?partnerId=wrss01&id=100003114", "wire"),
+    ("ZeroHedge", "https://feeds.feedburner.com/zerohedge/feed", "commentary"),
+)
+
+# How far back to look. The brief builds at 09:20 Lisbon, so this has to cover
+# the whole US session and the Asian one after it. ZeroHedge's window was
+# measured at only 21.6h in round 14, so asking for more than that would
+# silently return less from one source than the other.
+NEWS_WINDOW_HOURS = 18
+NEWS_PER_SOURCE = 4
+
+
+def news(now: datetime | None = None) -> dict:
+    """Recent headlines, each tagged with where it came from and how old.
+
+    Nothing here is a number, which makes it the only section in the brief
+    that is not a fetched figure. That is exactly why every item carries its
+    source and its age, and why commentary is marked apart from a wire.
+    """
+    now = now or datetime.now(LISBON)
+    cutoff = now - timedelta(hours=NEWS_WINDOW_HOURS)
+    items, notes = [], []
+    for label, url, kind in NEWS_FEEDS:
+        try:
+            parsed = _rss_items(_get(url).content)
+        except Exception as exc:  # noqa: BLE001 - one feed, not the section
+            notes.append(f"{label}: {_reason(exc)}")
+            continue
+        fresh = []
+        for title, link, when in parsed:
+            if when is None:
+                # An undated headline cannot be placed in a window, and
+                # "recent" is the whole claim this section makes.
+                continue
+            when = when.astimezone(LISBON)
+            if when < cutoff:
+                continue
+            fresh.append({"title": title, "url": link, "when": when,
+                          "source": label, "kind": kind})
+        if not fresh:
+            notes.append(f"{label}: nothing in the last {NEWS_WINDOW_HOURS}h")
+        fresh.sort(key=lambda i: i["when"], reverse=True)
+        items.extend(fresh[:NEWS_PER_SOURCE])
+
+    if not items and notes:
+        raise RuntimeError("; ".join(notes))
+    items.sort(key=lambda i: i["when"], reverse=True)
+    return {"items": items, "window_hours": NEWS_WINDOW_HOURS,
+            "partial": "; ".join(notes) or None,
+            "source": "CNBC + ZeroHedge"}
