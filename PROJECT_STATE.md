@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟡 **Measuring: 4 of 5 clean** (was: 3 of 5 at rev 16) |
-| **Last updated** | 2026-09-17 |
-| **Revision** | 18 (was: 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5 clean mornings** · 🔴 **new content bug: FED PATH carried a superseded target range for two days (§3.24)** |
+| **Last updated** | 2026-09-18 |
+| **Revision** | 19 (was: 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -107,7 +107,8 @@ comfortable-work trap describes, arriving from the opposite direction: not
 | Manual dispatch latency | seconds | ✅ CONFIRMED (every dispatch, sessions 6–8, incl. 2026-09-07) |
 | Target | 09:25 Europe/Lisbon | — |
 | Consecutive on-time mornings, confirmed from the inbox | **3** (Wed 9 – Fri 11 Sep), then a 2-day gap | ✅ CONFIRMED (§2.1d, Gmail) |
-| **Delivered-vs-target over a full week with the fix installed** | ❓ UNKNOWN — **restarts once the trigger is re-pasted** (was, rev 3–6: "measurable from 2026-09-09"; the run that would have measured it never fired at weekends) | **the measurement that decides whether this is solved** |
+| **Delivered-vs-target, five consecutive mornings** | **09:20 LIS, 5 of 5, Mon 14 – Fri 18 Sep** (was: ❓ UNKNOWN since rev 1) | ✅ **CONFIRMED — §2.1h, five inbox timestamps** |
+| **Delivered-vs-target over a full week with the fix installed** | ✅ **SOLVED 2026-09-18** (was: ❓ UNKNOWN since rev 1; "restarts once the trigger is re-pasted" at rev 7) | **the measurement that decided it. It is decided** |
 
 The 39-minute figure is the trap: the schedule was near-punctual on its first
 two days and then degraded. **One good morning proves nothing.**
@@ -201,7 +202,21 @@ round** (§3.17, §8).
 | 2 | Tue 2026-09-15 | **09:20 LIS** (08:20:38Z) | ✅ 5 min early | #68 `workflow_dispatch` **08:20:13Z** | none | `-1.2% vs yesterday`, state dated 09-14 ✅ |
 | 3 | Wed 2026-09-16 | **09:20 LIS** (08:20:29Z) | ✅ 5 min early | #71 `workflow_dispatch` **08:20:13Z** | none | `-1.8% vs yesterday`, state dated 09-15 ✅ |
 | 4 | Thu 2026-09-17 | **09:20 LIS** (08:20:36Z) | ✅ 5 min early | #74 `workflow_dispatch` **08:20:13Z** | none | `+1.3% vs yesterday`, state dated 09-16 ✅ |
-| 5 | Fri 2026-09-18 | — | — | — | — | — |
+| 5 | Fri 2026-09-18 | **09:20 LIS** (08:20:33Z) | ✅ 5 min early | #77 `workflow_dispatch` **08:20:13Z** | none | `+1.8% vs yesterday`, state dated 09-17 ✅ |
+
+**5 of 5. The measurement §5 has headed since rev 3 is closed.** Five inbox
+timestamps: `08:20:37Z`, `08:20:38Z`, `08:20:29Z`, `08:20:36Z`, `08:20:33Z` —
+every one 09:20 Lisbon, five minutes ahead of the 09:25 target, against a
+scheduler that was 13-for-13 late with a 4.5-hour median. No banner on any day.
+Every delta label correct.
+
+**Dispatch fired at 08:20:13Z on all five days.** Google documents
+`nearMinute(25)` as ±15 minutes. **The promise in `docs/trigger-setup.md`
+— "expect the brief between roughly 09:10 and 09:40" — is deliberately NOT
+narrowed.** Five samples describe observed behaviour; ±15 minutes is the
+vendor's stated contract, and five observations do not override it. Narrowing
+it would teach Kabil to read a 09:35 arrival as a fault when it would be
+within spec. The observation is recorded; the promise stays wide.
 
 **Day 1 carried more than a tick.** Run #65 executed at `616aaaf` — the head
 holding every change made on 13 Sep: `health.py`, `_vs_label`, the
@@ -455,6 +470,36 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.24 — The brief carried a superseded policy rate for two mornings, and
+its own docstring claimed it could not.** The FOMC raised the target range to
+**3.75–4.00% on 16 September**. On the 17th and again on the 18th, FED PATH
+printed `Target 3.50–3.75% · EFFR 3.63% · as of 16 Sep`.
+
+The mechanism: `policy_rate()` reads `targetRateFrom`/`targetRateTo` off the
+**EFFR row** of the New York Fed's `latest.json`, and the NY Fed publishes EFFR
+one business day in arrears. So the target range inherits EFFR's publication
+lag — **even though a target range is knowable the instant the statement drops,
+and the brief already fetches that statement** (POLICY DESK carried
+`FOMC 16 Sep · Federal Reserve issues FOMC statement` on both days).
+
+The docstring asserts exactly the property the data does not have:
+
+> *"Straight from the New York Fed's own rates endpoint, which is the desk that
+> publishes the effective rate, **so this is the decision itself rather than a
+> report of it**."*
+
+It is not the decision. It is the range that was in force on the last day EFFR
+was published, which trails the decision by one to two business days — **wrong
+for a day or two after every FOMC, eight times a year, on precisely the
+mornings the number matters most.** A reader seeing `Target 3.50–3.75%` on
+Thursday would reasonably conclude the Fed had held.
+
+Not a fabrication: the age stamp is honest and says `as of 16 Sep`. But the
+stamp does not say *"this range predates a decision that has already
+happened"*, and that is the whole difference. **§3.9 again — present, sourced,
+correctly stamped, and materially misleading.** *Evidence: brief runs #74 and
+#77; FOMC statement 2026-09-16; `sources.py` `policy_rate`.*
+
 **§3.23 — A calendar tells you what is planned; only the data tells you what
 happened.** FRED's `releases/dates` returns the FOMC press release dated
 26, 27, 28, 29, 30 and 31 December — every day to year end, for a release that
@@ -589,8 +634,17 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
   09:20:11**. `Head` matters: the trigger runs the newest saved code rather
   than a pinned deployment, so the re-paste is live for tomorrow without any
   further step (§2.1g).
-- ⏳ **THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings — now seven-day.
-  Running count: 4 of 5** (was: 3 of 5 at rev 16; 2 of 5 at rev 12; 1 of 5 at rev 11; 0 of 5 at
+- ✅ **CLOSED 2026-09-18 — FIVE CLEAN MORNINGS. Delivery is solved.** Open in
+  some form since rev 1; the headline item since rev 3. Five inbox timestamps,
+  all 09:20 Lisbon, against a scheduler that was 13-for-13 late. §2.1h.
+- 🔴 **NEW HIGHEST-VALUE ITEM: FED PATH's target range is stale for 1–2 days
+  after every FOMC (§3.24).** Found the morning the measurement closed. It is
+  in the shipping brief, it recurs eight times a year, and **the next FOMC is
+  28 October**. Cheapest fix uses data already fetched: the watchlist knows the
+  decision dates and POLICY DESK sees the statement land, so a range stamped on
+  or before the last decision can be flagged as possibly superseded.
+- ⏳ *(was: THE SINGLE HIGHEST-VALUE OPEN ITEM: five clean mornings.
+  Running count: 4 of 5)* (was: 3 of 5 at rev 16; 2 of 5 at rev 12; 1 of 5 at rev 11; 0 of 5 at
   rev 9; 4 of 5, wrongly, at rev 6 — see §2.1d). Live table in §2.1h.
   Read the `built HH:MM LIS` line each day and compare against 09:25. Nothing
   else in this file matters until that number exists. The old schedule was ~40
@@ -825,6 +879,55 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 19 · 2026-09-18 · Delivery is solved — and the same morning found a stale policy rate
+**Sections touched:** header, §2.1, §2.1h, §3.24 (new), §5, §12.2
+**Type:** DATA + CORRECTION
+
+**Evidence:** five Gmail timestamps — `08:20:37Z`, `08:20:38Z`, `08:20:29Z`,
+`08:20:36Z`, `08:20:33Z`, Mon 14 – Fri 18 Sep, every one 09:20 Lisbon. Five
+`workflow_dispatch` runs (#65, #68, #71, #74, #77) all at `08:20:13Z`. Against:
+FOMC statement 2026-09-16 raising the target range to 3.75–4.00%, and brief
+runs #74 and #77 printing `Target 3.50–3.75% · as of 16 Sep`.
+
+| Field | Was | Now |
+|---|---|---|
+| **Delivered-vs-target** | ❓ UNKNOWN since rev 1 | ✅ **SOLVED — 5 of 5 at 09:20 LIS** |
+| Five clean mornings | 4 of 5 | **5 of 5, closed** |
+| Dispatch precision | unclaimed at 4 samples | 5 of 5 at `08:20:13Z` — **recorded, and the doc's ±15min promise deliberately NOT narrowed** |
+| NY Fed rates | 🟢 LIVE | 🟡 **DEMOTED** — EFFR fine, target range inherits its publication lag |
+| FED PATH target range | assumed current | **stale for 1–2 days after every FOMC** (§3.24) |
+| Highest-value open item | five clean mornings | **§3.24, before anything in the build queue** |
+
+**Why:** The measurement that has headed this file since rev 3 is closed, and
+the morning that closed it also produced the most consequential content bug
+found since the $6bn buyback. Both belong in the same revision because the
+second is the reason the first does not open the build queue as planned.
+
+**Impact on prior conclusions:** §12.2's New York Fed row is corrected — its
+verdict was true of EFFR and false of the target range's timeliness, which is
+§12.4a's shape a third time: a property of one field recorded as a property of
+the row. Nothing about the delivery result is affected; timing and content are
+separate measurements and only one of them was being run this week.
+
+**Not changed, deliberately:** three things.
+
+The `docs/trigger-setup.md` promise of "roughly 09:10 to 09:40" stays wide
+despite five identical dispatch seconds. Five observations describe behaviour;
+±15 minutes is Google's stated contract. Narrowing it would train Kabil to read
+an in-spec 09:35 arrival as a fault.
+
+**The build queue is not opened.** The approved plan put FRED, the news set and
+the PM edition behind the fifth clean morning, and the fifth arrived — but a
+policy-critical bug in the *shipping* brief outranks three additions to it, and
+the next FOMC is 28 October. Re-ordering the queue is Kabil's call, not an
+assumption to act on.
+
+And §3.24 is recorded without a fix attached. It was found by reading a line
+this file had explicitly marked UNREAD the day before rather than inferring it
+(rev 18) — the discipline worked, and shipping a same-morning fix on a Friday
+to the path that just completed a five-day measurement is exactly the trade
+that measurement exists to discourage.
 
 ## rev 18 · 2026-09-17 · Day 4 — the brief moves on, and a rebuilt feature fires live
 **Sections touched:** header, §2.1h, §5
@@ -1437,7 +1540,7 @@ them before the trigger is installed would leave no delivery path at all.
 | AAII sentiment | `S7` | 🟡 PROBED | reachable, not parsed |
 | Kalshi `KXFEDDECISION` | `S0` | 🟢 LIVE | binary contracts per meeting, keyless read API, mid of book. **Prediction-market prices, not futures-implied — the two can disagree and the brief says which it is** |
 | BLS public API v1 | `S0` | 🟢 LIVE | CPI, core CPI, PPI. No key. No calculations on the free tier, so m/m and y/y are computed from the index; `"-"` is a real value (2025 appropriations lapse) |
-| New York Fed rates | `S0` | 🟢 LIVE | target range + EFFR from the desk that publishes them |
+| New York Fed rates | `S0` ⚠ | 🟡 **DEMOTED 2026-09-18** | EFFR is correct and honestly stamped. **The TARGET RANGE rides on the same row and therefore inherits EFFR's one-business-day publication lag**, so it is stale for 1–2 days after every FOMC (§3.24). Needs a second source, or a cross-check against the FOMC statement the brief already fetches (was: 🟢 LIVE, "target range + EFFR from the desk that publishes them" — true of EFFR, false of the range's timeliness) |
 | Polymarket gamma | `S7` | 🟡 PROBED | 200, and far more liquid than Kalshi on the September meeting ($20m/24h). Not wired: its event slugs are per-month strings, where Kalshi's tickers generalise |
 | CME quote service | `S1` | ⚫ EXCLUDED | `403 — "This IP address is blocked due to suspected web scraping activity"`. Farside's lesson, third occurrence |
 | ~~Fed-path odds (any free source)~~ | ~~`S2` `S6`~~ | ❌ **VERDICT WRONG** | was: "needs contract-level Fed Funds settlements". It needs a prediction market, which is free. See rev 5 |

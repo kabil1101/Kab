@@ -66,6 +66,7 @@ sequence that mattered:
 | **12 Sep** | **FED PATH** built. Brief switched to seven days a week |
 | **13 Sep** | Two briefs found missing. **The brief learns to notice its own absence** |
 | **14–16 Sep** | The news question answered by probing it. FRED proved able to say *"came in at"*. Three clean mornings of five |
+| **18 Sep** | **Delivery solved: five mornings of five at 09:20.** The same morning found the policy rate two days stale |
 
 ---
 
@@ -383,8 +384,8 @@ were reasoned the same way as the two retracted verdicts, and are now marked
 
 | | |
 |---|---|
-| Delivery | **09:20 Lisbon, three mornings of five** — each read from the inbox before the run log |
-| Dispatch | 08:20:13 UTC on all three days. The same second |
+| Delivery | ✅ **SOLVED — 09:20 Lisbon, five mornings of five**, each read from the inbox before the run log |
+| Dispatch | 08:20:13 UTC on all five days. The same second, every time |
 | Schedule | Seven days a week |
 | Cost | Zero |
 | Sources live | ~18, each degrading independently |
@@ -398,19 +399,44 @@ one owed since the beginning: **the events he already trades around**, which
 only he knows. The curated half of the radar is empty of everything he has not
 named.
 
+**And on the morning the measurement closed, it found a bug worth more than
+the celebration.** The Fed raised its target range to 3.75–4.00% on
+16 September. For the two mornings after, FED PATH printed
+`Target 3.50–3.75% · as of 16 Sep`.
+
+The cause is narrow and instructive. The target range is read off the *same
+row* as the effective rate, and the New York Fed publishes that rate one
+business day late — so the range inherits a lag it has no reason to have. A
+target range is knowable the second the statement drops, and **the brief was
+already fetching that statement**: it sat two sections below, correctly dated.
+
+The docstring claimed the opposite in as many words — *"this is the decision
+itself rather than a report of it"*. It is not. It is the range that was in
+force on the last day the effective rate was published.
+
+> Present. Sourced. Correctly age-stamped. And materially misleading on the two
+> mornings a year when that number is the one you open the mail for.
+
+It was found because the day before, this file had marked that exact line
+**UNREAD** rather than inferring its value from the line beneath it, which had
+plainly updated. The inference would have been wrong.
+
 **Ready and deliberately unbuilt:**
 
 - The **14:00 Lisbon edition**, designed, costed, approved — and not written.
 - **FRED**, probed across three rounds with its method settled — and not wired.
 - **The news set** — ZeroHedge as marked commentary, CNBC as the wire.
 
-All three touch the path that produces the 09:20 brief, and two mornings of the
-measurement remain. **A bug there costs a morning and resets the count.**
+All three touch the path that produces the 09:20 brief. The measurement is now
+complete — and the queue still does not open, because a policy-critical bug in
+the brief that ships outranks three additions to it. **The next FOMC is
+28 October.**
 
-> Everything the next phase needs is proven. What is not yet proven is that the
-> thing already working keeps working. **This is a sequencing problem, not a
-> capability problem** — and the discipline being tested is whether a finished
-> improvement can wait behind an unfinished measurement.
+> Everything the next phase needs is proven, and the thing already working has
+> now been proven to keep working. **What the week actually demonstrated is
+> that a system can be perfectly punctual and still be wrong** — five flawless
+> deliveries carried a superseded policy rate on two of them. Timing and truth
+> are separate measurements, and only one of them was being run.
 
 **7 November** remains dated: the trigger token expires, and the brief counts
 down to its own maintenance in `data/watchlist.txt`.
