@@ -5,13 +5,14 @@ No network. Everything here must pass before the workflow is trusted.
 """
 
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import main  # noqa: E402
+import cycles  # noqa: E402
 import render  # noqa: E402
 import sources  # noqa: E402
 import watchlist  # noqa: E402
@@ -247,6 +248,103 @@ check_true("an exhausted forward view is explained, not shown empty",
 check_true("it does not claim a broken feed",
            "unavailable" not in md3.split("Next 5 sessions")[1][:300].lower(), md3)
 
+print("\n-- recurring structure, derived and never fetched --")
+check("third Friday of Sep 2026", cycles.monthly_opex(2026, 9), date(2026, 9, 18))
+check("and it is a triple witching",
+      cycles.is_triple_witching(date(2026, 9, 18)), True)
+check("October's is an ordinary opex",
+      cycles.is_triple_witching(cycles.monthly_opex(2026, 10)), False)
+# Quad until single-stock futures were delisted. Two names for one event
+# reads as two events six months later, so the brief uses one.
+check_true("the rendered line says triple, never quad",
+           "Triple witching" in render._cycle_lines(date(2026, 9, 18))[0]
+           and "quad" not in " ".join(
+               render._cycle_lines(date(2026, 9, 18))).lower(),
+           render._cycle_lines(date(2026, 9, 18)))
+check("VIX expiry is 30 days before the NEXT third Friday",
+      cycles.vix_expiry(2026, 10), date(2026, 10, 21))
+check("and that lands on a Wednesday", cycles.vix_expiry(2026, 10).weekday(), 2)
+check("Deribit monthly is the last Friday",
+      cycles.deribit_monthly(2026, 9), date(2026, 9, 25))
+check("September's is a quarterly",
+      cycles.is_deribit_quarterly(date(2026, 9, 25)), True)
+check("October's is not",
+      cycles.is_deribit_quarterly(cycles.deribit_monthly(2026, 10)), False)
+
+check("Good Friday 2027 is found", cycles.easter(2027) - timedelta(days=2),
+      date(2027, 3, 26))
+check("Thanksgiving 2026", cycles.nth_weekday(2026, 11, 3, 4), date(2026, 11, 26))
+check_true("and the holiday table agrees",
+           cycles.us_market_holidays(2026)[date(2026, 11, 26)] == "Thanksgiving")
+# 4 July 2026 is a Saturday, so the NYSE observes it on the Friday.
+check_true("a Saturday holiday is observed on the Friday",
+           date(2026, 7, 3) in cycles.us_market_holidays(2026), 
+           sorted(cycles.us_market_holidays(2026)))
+check_true("an ordinary Wednesday is not a holiday",
+           not cycles.is_us_market_holiday(date(2026, 9, 16)))
+
+# The 08:00 UTC problem: Deribit settles twenty minutes before the brief
+# builds, so on these mornings the options figures have ALREADY rolled.
+check_true("the last Friday of the month is a roll day",
+           cycles.rolled_today(date(2026, 9, 25)))
+check_true("an ordinary Friday is not", not cycles.rolled_today(date(2026, 9, 18)))
+
+_cyc = render._cycle_lines(date(2026, 9, 25))
+check_true("and the brief says so, first", _cyc[0].startswith("\u26a0 **Front expiry rolled today**"), _cyc)
+check_true("naming what the numbers below now refer to",
+           "NEXT expiry" in _cyc[0], _cyc[0])
+# Silent most mornings by design: a section that prints daily stops being read.
+check("a quiet day prints nothing at all",
+      render._cycle_lines(date(2026, 10, 6)), [])
+
+
+print("\n-- four clocks, and the state of three sessions --")
+_c = render._clocks(datetime(2026, 9, 18, 9, 20, tzinfo=LISBON))
+check("the Lisbon time leads", _c[0].split(" \u00b7 ")[0], "**09:20 LIS**")
+check_true("with UTC, New York and Tokyo beside it",
+           "08:20 UTC" in _c[0] and "04:20 NY" in _c[0] and "17:20 TYO" in _c[0], _c[0])
+# The sentence a 09:20 reader actually wants, and the one four numbers do not
+# give at a glance.
+check_true("Tokyo has closed", "Tokyo closed 2h20m ago" in _c[1], _c[1])
+check_true("London is open", "London open 1h20m" in _c[1], _c[1])
+check_true("New York has not opened", "New York opens in 5h10m" in _c[1], _c[1])
+
+# Thanksgiving: New York is shut and the clocks must not offer an open.
+_c_hol = render._clocks(datetime(2026, 11, 26, 14, 0, tzinfo=LISBON))
+check_true("a US holiday shows New York shut", "New York shut" in _c_hol[1], _c_hol[1])
+check_true("and never an opening countdown",
+           "New York opens" not in _c_hol[1], _c_hol[1])
+_c_sat = render._clocks(datetime(2026, 9, 19, 12, 0, tzinfo=LISBON))
+check_true("a Saturday shuts all three",
+           _c_sat[1].count("shut") == 3, _c_sat[1])
+
+
+print("\n-- three tiers, in order --")
+_tier_md = render.build(dict(healthy))[0]
+_order = [l[3:] for l in _tier_md.split("\n") if l.startswith("## ")]
+check("Tier 1 answers the morning first",
+      _order[:3], ["CLOCKS", "THE SETUP", "TODAY"])
+check_true("Tier 2 follows the first screen",
+           _order.index("CRYPTO") > _order.index("TODAY"), _order)
+check_true("and Tier 3 follows Tier 2",
+           _order.index("AHEAD") > _order.index("MACRO & EQUITIES"), _order)
+check_true("the dividers say which tier is which",
+           "*Tier 2 — the standing picture*" in _tier_md
+           and "*Tier 3 — the horizons*" in _tier_md)
+# CALENDAR and RISK WINDOWS were two lists of the same day in two places.
+check_true("CALENDAR is gone, absorbed by TODAY", "## CALENDAR" not in _tier_md)
+check_true("and so is RISK WINDOWS", "## RISK WINDOWS" not in _tier_md)
+check_true("FED PATH is now EXPECTATIONS",
+           "## FED PATH" not in _tier_md and "## EXPECTATIONS" in _tier_md)
+# The forward calendar has to land somewhere, or it is simply lost.
+check_true("the forward calendar survives the merge, under AHEAD",
+           "Next 5 sessions" in _tier_md.split("## AHEAD")[1], _tier_md[-1500:])
+
+_today = _tier_md.split("## TODAY")[1].split("\n## ")[0]
+check_true("TODAY carries forecast and previous for a data print",
+           "F " in _today and "P " in _today, _today)
+
+
 print("\n-- app password whitespace tolerance --")
 _os.environ["GMAIL_USER"] = "  kabil.dh@gmail.com  "
 _os.environ["GMAIL_APP_PASSWORD"] = "abcd efgh ijkl mnop"
@@ -296,7 +394,7 @@ print("\n-- risk windows: only what is still ahead --")
 _late = dict(healthy)
 _late["now"] = datetime(2026, 8, 21, 21, 14, tzinfo=LISBON)
 md_l, _ = render.build(_late)
-_rw = md_l.split("## RISK WINDOWS (LIS)")[1]
+_rw = md_l.split("## TODAY")[1]
 check_true("passed NYSE open is dropped", "NYSE cash open" not in _rw, _rw)
 check_true("passed NYSE close is dropped", "NYSE cash close" not in _rw, _rw)
 check_true("the reader is told windows passed rather than shown nothing",
@@ -304,7 +402,7 @@ check_true("the reader is told windows passed rather than shown nothing",
 
 _early = dict(healthy)
 _early["now"] = datetime(2026, 8, 21, 6, 0, tzinfo=LISBON)
-_rw_e = render.build(_early)[0].split("## RISK WINDOWS (LIS)")[1]
+_rw_e = render.build(_early)[0].split("## TODAY")[1]
 check_true("future NYSE open is kept", "NYSE cash open" in _rw_e)
 check_true("windows are ordered by time",
            _rw_e.index("14:30") < _rw_e.index("21:00"), _rw_e)
@@ -314,7 +412,7 @@ _sat = dict(healthy)
 _sat["now"] = datetime(2026, 8, 22, 13, 0, tzinfo=LISBON)   # Saturday
 _sat["calendar"] = {"ok": True, "error": None,
                     "data": {"events": [], "next_week_error": None, "source": "ff"}}
-_rw_s = render.build(_sat)[0].split("## RISK WINDOWS (LIS)")[1]
+_rw_s = render.build(_sat)[0].split("## TODAY")[1]
 check_true("no NYSE open on a Saturday", "NYSE cash open" not in _rw_s, _rw_s)
 check_true("no NYSE close on a Saturday", "NYSE cash close" not in _rw_s, _rw_s)
 check_true("closure is stated, not left blank", "closed" in _rw_s.lower(), _rw_s)
@@ -769,8 +867,8 @@ _md_today = render.build(_radar_ctx([], [_today_evt]))[0]
 check_true("a date landing today says TODAY, not T-0",
            "TODAY" in _md_today.split("## AHEAD")[1], _md_today[:400])
 check_true("and it also reaches the risk windows",
-           "TODAY" in _md_today.split("## RISK WINDOWS")[1],
-           _md_today.split("## RISK WINDOWS")[1][:400])
+           "TODAY" in _md_today.split("## TODAY")[1],
+           _md_today.split("## TODAY")[1][:400])
 
 _stale_evt = dict(_wl_evt, verified=date(2026, 1, 1))
 _st = render.build(_radar_ctx([], [_stale_evt]))[0].split("## AHEAD")[1]
@@ -952,8 +1050,8 @@ check_true("blank amounts never appear on an announced operation",
 check_true("a completed operation still reports its result",
            "$12.5bn accepted of $28.0bn offered" in _desk_ann, _desk_ann)
 
-print("\n-- an operation running today reaches RISK WINDOWS --")
-_rw = _md_ann.split("## RISK WINDOWS")[1]
+print("\n-- an operation running today reaches TODAY --")
+_rw = _md_ann.split("## TODAY")[1]
 check_true("it is listed as a timed window",
            "Treasury buyback operation" in _rw, _rw)
 check_true("with its size", "up to $6.0bn" in _rw, _rw)
@@ -1192,7 +1290,7 @@ _INFL_OK = {"ok": True, "error": None, "data": {"prints": [
     "partial": None, "source": "BLS public API"}}
 
 _fed = render.build(_fed_ctx(_RATE_OK, _ODDS_OK, _INFL_OK))[0] \
-    .split("## FED PATH")[1].split("\n## ")[0]
+    .split("## EXPECTATIONS")[1].split("\n## ")[0]
 check_true("the target range is stated",
            "Target 3.50\u20133.75%" in _fed, _fed)
 check_true("the effective rate sits beside it", "EFFR 3.63%" in _fed, _fed)
@@ -1268,7 +1366,7 @@ _stale_c["policy_rate"] = {"ok": True, "error": None, "data": dict(
     _RATE_OK["data"], as_of=date(2026, 9, 16))}
 _stale_c["fed_officials"] = _fomc_feed(_STATEMENT)
 _stale_md, _stale_html = render.build(_stale_c)
-_stale_fed = _stale_md.split("## FED PATH")[1].split("\n## ")[0]
+_stale_fed = _stale_md.split("## EXPECTATIONS")[1].split("\n## ")[0]
 check_true("the rendered range carries the warning",
            "may be superseded" in _stale_fed, _stale_fed)
 # §3.9: the marker goes next to the number, not in a footnote. A $6bn buyback
@@ -1289,7 +1387,7 @@ check_true("and it reaches the HTML too",
 # The far more common case: no FOMC in the last three weeks. Silence.
 _ok_c = _fed_ctx(_RATE_OK, _ODDS_OK, _INFL_OK)
 _ok_c["fed_officials"] = _fomc_feed(_SPEECH)
-_ok_fed = render.build(_ok_c)[0].split("## FED PATH")[1].split("\n## ")[0]
+_ok_fed = render.build(_ok_c)[0].split("## EXPECTATIONS")[1].split("\n## ")[0]
 check_true("a normal morning says nothing about supersession",
            "may be superseded" not in _ok_fed, _ok_fed)
 
@@ -1298,13 +1396,13 @@ print("\n-- FED PATH degrades honestly --")
 _wide = {"ok": True, "error": None, "data": dict(
     _ODDS_OK["data"], raw_total=72.0)}
 _w = render.build(_fed_ctx(_RATE_OK, _wide, _INFL_OK))[0] \
-    .split("## FED PATH")[1].split("\n## ")[0]
+    .split("## EXPECTATIONS")[1].split("\n## ")[0]
 check_true("a book that does not sum to 100 is flagged",
            "not ~100%" in _w and "indicative" in _w, _w)
 
 _dead = {"ok": False, "error": "HTTP 429", "data": None}
 _d = render.build(_fed_ctx(_dead, _dead, _dead))[0] \
-    .split("## FED PATH")[1].split("\n## ")[0]
+    .split("## EXPECTATIONS")[1].split("\n## ")[0]
 check_true("each leg names its own failure",
            _d.count("HTTP 429") == 3, _d)
 check_true("and no number is invented", "0%" not in _d, _d)
@@ -1316,7 +1414,7 @@ print("\n-- seven days a week, but Sunday is still Sunday --")
 _sun = dict(dead)
 _sun["now"] = datetime(2026, 9, 13, 9, 20, tzinfo=LISBON)   # a Sunday
 _sun_md = render.build(_sun)[0]
-_sun_rw = _sun_md.split("## RISK WINDOWS")[1].split("\n## ")[0]
+_sun_rw = _sun_md.split("## TODAY")[1].split("\n## ")[0]
 check_true("a weekend brief is still produced",
            _sun_md.startswith("# MARKET BRIEF"), _sun_md[:60])
 check_true("and says the cash market is shut",
@@ -1326,7 +1424,7 @@ check_true("or a close", "NYSE cash close" not in _sun_rw, _sun_rw)
 
 _mon = dict(dead)
 _mon["now"] = datetime(2026, 9, 14, 9, 20, tzinfo=LISBON)   # a Monday
-_mon_rw = render.build(_mon)[0].split("## RISK WINDOWS")[1].split("\n## ")[0]
+_mon_rw = render.build(_mon)[0].split("## TODAY")[1].split("\n## ")[0]
 check_true("a weekday still gets its session windows",
            "NYSE cash open" in _mon_rw, _mon_rw)
 

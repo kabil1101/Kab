@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import health
 import state
+import cycles
 import watchlist
 
 LISBON = ZoneInfo("Europe/Lisbon")
@@ -195,6 +196,21 @@ def build(ctx) -> tuple[str, str]:
         md.append(f"> **⚠ {note}**\n")
         html.append(f"<p class='warn'>⚠ {_esc(note)}</p>")
 
+    # ================= TIER 1 — the first screen =========================
+    # The redesign's whole bet: about fifteen lines that answer most mornings
+    # on their own. Eleven sections typeset with equal authority is the
+    # condition that let a $6bn buyback read as broken data (§3.9), and
+    # adding sections to a flat list makes that worse rather than better.
+
+    # ---- CLOCKS --------------------------------------------------------
+    clocks = _clocks(now)
+    md.append("## CLOCKS\n")
+    html.append(_h_section("Clocks"))
+    for l in clocks:
+        md.append(f"- {l}")
+    md.append("")
+    html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in clocks) + "</ul>")
+
     # ---- THE SETUP -----------------------------------------------------
     setup = _setup_bullets(ctx)
     md.append("## THE SETUP\n")
@@ -205,153 +221,44 @@ def build(ctx) -> tuple[str, str]:
     html.append("<ul>" + "".join(f"<li>{_hb(b)}</li>" for b in setup) + "</ul>")
 
     # ---- CALENDAR ------------------------------------------------------
-    md.append("## CALENDAR\n")
-    html.append(_h_section("Calendar"))
+    # ---- TODAY ---------------------------------------------------------
+    # CALENDAR and RISK WINDOWS merged. They were two lists of the same day
+    # in two places, and the reader had to interleave them by hand to answer
+    # the only question that matters at 09:20: what is still coming.
+    windows = _risk_windows(ctx, today, now)
+    md.append("## TODAY\n")
+    html.append(_h_section("Today"))
     cal = ctx["calendar"]
     if not cal["ok"]:
         line = f"Calendar unavailable — {cal['error']}"
-        md.append(line + "\n")
-        html.append(f"<p><em>{_hb(line)}</em></p>")
-    else:
-        todays = select_today(cal["data"]["events"], today)
-        if not todays:
-            md.append("No High or Medium impact events scheduled today.\n")
-            html.append("<p>No High or Medium impact events scheduled today.</p>")
-        else:
-            md.append("| Time LIS | CCY | Event | F | P | Impact |")
-            md.append("|---|---|---|---|---|---|")
-            rows = []
-            for e in todays:
-                bold = e["impact"].lower() == "high" and e["country"] == "USD"
-                bold = bold or _is_cb_speaker(e["title"])
-                name = f"**{e['title']}**" if bold else e["title"]
-                md.append(
-                    f"| {_hhmm(e['dt_lis'])} | {e['country']} | {name} | "
-                    f"{_dash(e['forecast'])} | {_dash(e['previous'])} | {e['impact']} |"
-                )
-                rows.append((_hhmm(e["dt_lis"]), e["country"], e["title"],
-                             _dash(e["forecast"]), _dash(e["previous"]),
-                             e["impact"], bold))
-            md.append("")
-            html.append(_h_table(
-                ["Time LIS", "CCY", "Event", "F", "P", "Impact"], rows))
-
-        fwd = select_forward(cal["data"]["events"], today)
-        md.append("**Next 5 sessions — High impact**\n")
-        html.append("<p><strong>Next 5 sessions — High impact</strong></p>")
-        if fwd:
-            items = [f"{e['dt_lis'].strftime('%a %d %b')} {_hhmm(e['dt_lis'])} LIS | "
-                     f"{e['country']} | {e['title']}" for e in fwd]
-            for i in items:
-                md.append(f"- {i}")
-            html.append("<ul>" + "".join(f"<li>{_hb(i)}</li>" for i in items) + "</ul>")
-        else:
-            # Distinguish an empty forward view from a dead feed. Printing
-            # "none scheduled" when the fetch failed is the worst outcome:
-            # it reads as an all-clear.
-            # ForexFactory publishes only the current week, so late in the
-            # week the forward view genuinely runs out. Saying that beats an
-            # empty section, which reads as "nothing scheduled".
-            note = ("No further High-impact events this week. ForexFactory "
-                    "publishes only the current week, so next week is not "
-                    "covered." if cal["data"].get("week_only")
-                    else "None scheduled in the forward feed.")
-            md.append(f"- {note}")
-            html.append(f"<ul><li>{_hb(note)}</li></ul>")
-        md.append("")
-
-    # ---- AHEAD ---------------------------------------------------------
-    # Deliberately above CRYPTO: the point of this section is to be seen every
-    # morning for weeks before the date, not to be found by scrolling.
-    radar = radar_events(ctx, today)
-    md.append("## AHEAD — POLICY & GEOPOLITICS\n")
-    html.append(_h_section("Ahead — Policy &amp; Geopolitics"))
-    pr = ctx.get("policy_radar")
-    if radar:
-        for name, rows in _radar_groups(radar, today):
-            md.append(f"**{name}**\n")
-            html.append(f"<p><strong>{_esc(name)}</strong></p>")
-            items = []
-            for days, e in rows:
-                line = _radar_text(days, e)
-                md.append(f"- {line}"
-                          + (f"  \n  {e['url']}" if e.get("url") else ""))
-                link = (f" <a href='{_esc(e['url'])}'>source</a>"
-                        if e.get("url") else "")
-                items.append(_hb(line) + link)
-            html.append("<ul>" + "".join(f"<li>{i}</li>" for i in items)
-                        + "</ul>")
-            md.append("")
-    else:
-        # An empty radar is a real state - most weeks nothing new has been
-        # signed with a future date - but it must not read as "nothing is
-        # coming" when the fetch simply failed.
-        if pr and not pr["ok"]:
-            note = f"Policy radar unavailable — {pr['error']}"
-        else:
-            note = (f"Nothing dated in the next {RADAR_HORIZON_DAYS} days from "
-                    f"either the Federal Register or the watchlist.")
-        md.append(f"- {note}\n")
-        html.append(f"<ul><li>{_hb(note)}</li></ul>")
-
-    # Say how much was actually read, so an empty section can be told apart
-    # from a section that never looked.
-    if pr and pr["ok"]:
-        d = pr["data"]
-        prov = (f"Scanned {d['texts_scanned']} presidential documents "
-                f"(last 90 days) plus rules with a future effective date "
-                f"· {d['source']}")
-        if d.get("partial"):
-            prov += f" · partial: {d['partial']}"
-        md.append(f"*{prov}*\n")
-        html.append(f"<p class='muted'><em>{_esc(prov)}</em></p>")
-    wl_problems = (ctx.get("watchlist") or {}).get("problems") or []
-    if wl_problems:
-        bad = "watchlist.txt: " + "; ".join(wl_problems[:4])
-        md.append(f"*{bad}*\n")
-        html.append(f"<p class='muted'><em>{_esc(bad)}</em></p>")
-
-    # ---- FED PATH ------------------------------------------------------
-    # Above POLICY DESK: the rate and what is priced against it frame
-    # everything underneath, including the buyback and supply lines.
-    fed_lines, fed_notes = _fed_path(ctx, today)
-    md.append("## FED PATH\n")
-    html.append(_h_section("Fed Path"))
-    for l in fed_lines:
-        md.append(f"- {l}")
-    html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in fed_lines)
-                + "</ul>")
-    md.append("")
-    if fed_notes:
-        note = " · ".join(fed_notes)
-        md.append(f"*{note}*\n")
-        html.append(f"<p class='muted'><em>{_esc(note)}</em></p>")
-
-    # ---- POLICY DESK ---------------------------------------------------
-    # Warsh and Bessent, the two people whose decisions Kabil trades around.
-    # Warsh is tracked by name off the Fed's own feeds. Bessent has no feed at
-    # all - Treasury publishes none - so he is tracked through the operations
-    # he controls: buybacks and the coupon calendar.
-    fed_lines, ops_lines, desk_notes = _policy_desk(ctx, today)
-    md.append("## POLICY DESK\n")
-    html.append(_h_section("Policy Desk"))
-    for label, lines in (("Fed \u00b7 Warsh & FOMC", fed_lines),
-                         ("Treasury \u00b7 buybacks & supply", ops_lines)):
-        if not lines:
-            continue
-        md.append(f"**{label}**\n")
-        html.append(f"<p><strong>{_hb(label)}</strong></p>")
-        for l in lines:
-            md.append(f"- {l}")
-        html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in lines)
+        md.append(f"- {line}")
+        html.append(f"<ul><li><em>{_hb(line)}</em></li></ul>")
+        for w in windows:
+            md.append(f"- {w}")
+        html.append("<ul>" + "".join(f"<li>{_hb(w)}</li>" for w in windows)
                     + "</ul>")
+    else:
+        for w in windows:
+            md.append(f"- {w}")
+        html.append("<ul>" + "".join(f"<li>{_hb(w)}</li>" for w in windows)
+                    + "</ul>")
+    md.append("")
+
+    # ---- CYCLE ---------------------------------------------------------
+    # Silent most mornings by design. Prints only when a recurring expiry is
+    # inside its own lead window, which is what keeps a 365-day horizon from
+    # flooding the page.
+    cyc = _cycle_lines(today)
+    if cyc:
+        md.append("## CYCLE\n")
+        html.append(_h_section("Cycle"))
+        for l in cyc:
+            md.append(f"- {l}")
         md.append("")
-    note = ("Treasury publishes no press feed, so the secretary is tracked "
-            "through operations rather than remarks.")
-    if desk_notes:
-        note += " " + " ".join(desk_notes)
-    md.append(f"*{note}*\n")
-    html.append(f"<p class='muted'><em>{_esc(note)}</em></p>")
+        html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in cyc)
+                    + "</ul>")
+
+    _tier(md, html, "Tier 2 — the standing picture")
 
     # ---- CRYPTO --------------------------------------------------------
     md.append("## CRYPTO\n")
@@ -503,14 +410,132 @@ def build(ctx) -> tuple[str, str]:
         md.append(line + "\n")
         html.append(f"<p>{_hb(line)}</p>")
 
-    # ---- RISK WINDOWS --------------------------------------------------
-    windows = _risk_windows(ctx, today, now)
-    md.append("## RISK WINDOWS (LIS)\n")
-    html.append(_h_section("Risk Windows (LIS)"))
-    for w in windows:
-        md.append(f"- {w}")
-    html.append("<ul>" + "".join(f"<li>{_hb(w)}</li>" for w in windows) + "</ul>")
+    _tier(md, html, "Tier 3 — the horizons")
+
+    # ---- AHEAD ---------------------------------------------------------
+    # Tier 3. It used to sit above CRYPTO so it could not be missed; the tier
+    # structure does that job now, and forward-looking things belong together.
+    radar = radar_events(ctx, today)
+    md.append("## AHEAD\n")
+    html.append(_h_section("Ahead"))
+
+    # The forward calendar moved here from CALENDAR when TODAY absorbed the
+    # rest of it. Data prints and policy dates are the same question asked at
+    # two ranges, and splitting them across tiers made the reader look twice.
+    if ctx["calendar"]["ok"]:
+        fwd = select_forward(ctx["calendar"]["data"]["events"], today)
+        md.append("**Next 5 sessions — High impact**\n")
+        html.append("<p><strong>Next 5 sessions — High impact</strong></p>")
+        if fwd:
+            items = [f"{e['dt_lis'].strftime('%a %d %b')} {_hhmm(e['dt_lis'])} LIS | "
+                     f"{e['country']} | {e['title']}" for e in fwd]
+            for i in items:
+                md.append(f"- {i}")
+            html.append("<ul>" + "".join(f"<li>{_hb(i)}</li>" for i in items)
+                        + "</ul>")
+        else:
+            # Distinguish an empty forward view from a dead feed. Printing
+            # "none scheduled" when the fetch failed is the worst outcome: it
+            # reads as an all-clear. ForexFactory publishes only the current
+            # week, so late in the week it genuinely runs out.
+            note = ("No further High-impact events this week. ForexFactory "
+                    "publishes only the current week, so next week is not "
+                    "covered." if ctx["calendar"]["data"].get("week_only")
+                    else "None scheduled in the forward feed.")
+            md.append(f"- {note}")
+            html.append(f"<ul><li>{_hb(note)}</li></ul>")
+        md.append("")
+
+    md.append("**Policy & geopolitics**\n")
+    html.append("<p><strong>Policy &amp; geopolitics</strong></p>")
+    pr = ctx.get("policy_radar")
+    if radar:
+        for name, rows in _radar_groups(radar, today):
+            md.append(f"**{name}**\n")
+            html.append(f"<p><strong>{_esc(name)}</strong></p>")
+            items = []
+            for days, e in rows:
+                line = _radar_text(days, e)
+                md.append(f"- {line}"
+                          + (f"  \n  {e['url']}" if e.get("url") else ""))
+                link = (f" <a href='{_esc(e['url'])}'>source</a>"
+                        if e.get("url") else "")
+                items.append(_hb(line) + link)
+            html.append("<ul>" + "".join(f"<li>{i}</li>" for i in items)
+                        + "</ul>")
+            md.append("")
+    else:
+        # An empty radar is a real state - most weeks nothing new has been
+        # signed with a future date - but it must not read as "nothing is
+        # coming" when the fetch simply failed.
+        if pr and not pr["ok"]:
+            note = f"Policy radar unavailable — {pr['error']}"
+        else:
+            note = (f"Nothing dated in the next {RADAR_HORIZON_DAYS} days from "
+                    f"either the Federal Register or the watchlist.")
+        md.append(f"- {note}\n")
+        html.append(f"<ul><li>{_hb(note)}</li></ul>")
+
+    # Say how much was actually read, so an empty section can be told apart
+    # from a section that never looked.
+    if pr and pr["ok"]:
+        d = pr["data"]
+        prov = (f"Scanned {d['texts_scanned']} presidential documents "
+                f"(last 90 days) plus rules with a future effective date "
+                f"· {d['source']}")
+        if d.get("partial"):
+            prov += f" · partial: {d['partial']}"
+        md.append(f"*{prov}*\n")
+        html.append(f"<p class='muted'><em>{_esc(prov)}</em></p>")
+    wl_problems = (ctx.get("watchlist") or {}).get("problems") or []
+    if wl_problems:
+        bad = "watchlist.txt: " + "; ".join(wl_problems[:4])
+        md.append(f"*{bad}*\n")
+        html.append(f"<p class='muted'><em>{_esc(bad)}</em></p>")
+
+    # ---- FED PATH ------------------------------------------------------
+    # Above POLICY DESK: the rate and what is priced against it frame
+    # everything underneath, including the buyback and supply lines.
+    fed_lines, fed_notes = _fed_path(ctx, today)
+    # Renamed from FED PATH: the section already carries more than the Fed's
+    # path, and midterm control contracts come off the same Kalshi API.
+    md.append("## EXPECTATIONS\n")
+    html.append(_h_section("Expectations"))
+    for l in fed_lines:
+        md.append(f"- {l}")
+    html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in fed_lines)
+                + "</ul>")
     md.append("")
+    if fed_notes:
+        note = " · ".join(fed_notes)
+        md.append(f"*{note}*\n")
+        html.append(f"<p class='muted'><em>{_esc(note)}</em></p>")
+
+    # ---- POLICY DESK ---------------------------------------------------
+    # Warsh and Bessent, the two people whose decisions Kabil trades around.
+    # Warsh is tracked by name off the Fed's own feeds. Bessent has no feed at
+    # all - Treasury publishes none - so he is tracked through the operations
+    # he controls: buybacks and the coupon calendar.
+    fed_lines, ops_lines, desk_notes = _policy_desk(ctx, today)
+    md.append("## POLICY DESK\n")
+    html.append(_h_section("Policy Desk"))
+    for label, lines in (("Fed \u00b7 Warsh & FOMC", fed_lines),
+                         ("Treasury \u00b7 buybacks & supply", ops_lines)):
+        if not lines:
+            continue
+        md.append(f"**{label}**\n")
+        html.append(f"<p><strong>{_hb(label)}</strong></p>")
+        for l in lines:
+            md.append(f"- {l}")
+        html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in lines)
+                    + "</ul>")
+        md.append("")
+    note = ("Treasury publishes no press feed, so the secretary is tracked "
+            "through operations rather than remarks.")
+    if desk_notes:
+        note += " " + " ".join(desk_notes)
+    md.append(f"*{note}*\n")
+    html.append(f"<p class='muted'><em>{_esc(note)}</em></p>")
 
     failed = [k for k, v in ctx.items()
               if isinstance(v, dict) and v.get("ok") is False]
@@ -963,6 +988,84 @@ def _radar_text(days, e) -> str:
     return " \u00b7 ".join(bits)
 
 
+SESSIONS = (
+    # name, tz, open, close. Tokyo's lunch break is ignored on purpose: the
+    # question this answers is "is Asia trading", not "is it mid-session".
+    ("Tokyo", "Asia/Tokyo", (9, 0), (15, 0)),
+    ("London", "Europe/London", (8, 0), (16, 30)),
+    ("New York", "America/New_York", (9, 30), (16, 0)),
+)
+
+
+def _span(minutes: int) -> str:
+    minutes = int(abs(minutes))
+    hours, mins = divmod(minutes, 60)
+    if hours and mins:
+        return f"{hours}h{mins:02d}m"
+    if hours:
+        return f"{hours}h"
+    return f"{mins}m"
+
+
+def _clocks(now):
+    """Four clocks and the state of three sessions. Nothing is fetched.
+
+    Kabil works in UTC, Lisbon, New York and Tokyo, and the brief has until
+    now made him do the arithmetic. The session line is the part that
+    matters: "New York opens in 5h" is the sentence a 09:20 reader actually
+    wants, and it is not derivable at a glance from four numbers.
+
+    Every offset is computed from the zone database, never assumed. The
+    ET-to-Lisbon gap is 4, 5 or 6 hours depending on the week, and this
+    project has already paid once for hardcoding it.
+    """
+    stamps = [f"**{_hhmm(now)} LIS**"]
+    for label, zone in (("UTC", "UTC"), ("NY", "America/New_York"),
+                        ("TYO", "Asia/Tokyo")):
+        stamps.append(f"{_hhmm(now.astimezone(ZoneInfo(zone)))} {label}")
+
+    states = []
+    for name, zone, (oh, om), (ch, cm) in SESSIONS:
+        tz = ZoneInfo(zone)
+        local = now.astimezone(tz)
+        opens = local.replace(hour=oh, minute=om, second=0, microsecond=0)
+        closes = local.replace(hour=ch, minute=cm, second=0, microsecond=0)
+        shut = (local.weekday() >= 5
+                or (zone == "America/New_York"
+                    and cycles.is_us_market_holiday(local.date())))
+        if shut:
+            states.append(f"{name} shut")
+        elif local < opens:
+            mins = (opens - local).total_seconds() / 60
+            states.append(f"{name} opens in {_span(mins)}")
+        elif local < closes:
+            mins = (local - opens).total_seconds() / 60
+            states.append(f"{name} open {_span(mins)}")
+        else:
+            mins = (local - closes).total_seconds() / 60
+            states.append(f"{name} closed {_span(mins)} ago")
+    return [" \u00b7 ".join(stamps), " \u00b7 ".join(states)]
+
+
+def _cycle_lines(today):
+    """Recurring expiries inside their own lead window. Nothing is fetched.
+
+    Empty most days, and that is correct — a section that prints every
+    morning stops being read. See scripts/cycles.py for the rules and for the
+    08:00 UTC settlement problem this exists to surface.
+    """
+    lines = []
+    if cycles.rolled_today(today):
+        lines.append("\u26a0 **Front expiry rolled today** \u2014 Deribit "
+                     "settled 08:00 UTC, twenty minutes before this brief "
+                     "built. Max pain and OI below are the NEXT expiry, not "
+                     "the one that just went off.")
+    for e in cycles.upcoming(today):
+        lines.append(f"**{_tminus(e['days'])} \u00b7 {e['date']:%a %d %b}** "
+                     f"\u2014 {e['name']} \u00b7 {e['note']}")
+    return lines
+
+
 def _risk_windows(ctx, today, now):
     """Windows still ahead of the reader, in order.
 
@@ -975,16 +1078,29 @@ def _risk_windows(ctx, today, now):
 
     cal = ctx["calendar"]
     if cal["ok"]:
+        # Every scheduled event, not only the High-impact ones. This section
+        # merges what used to be CALENDAR and RISK WINDOWS, so dropping the
+        # Mediums here would lose them entirely.
         for e in select_today(cal["data"]["events"], today):
-            if e["impact"].lower() == "high" or _is_cb_speaker(e["title"]):
-                timed.append((e["dt_lis"],
-                              f"**{_hhmm(e['dt_lis'])}** — {e['country']} "
-                              f"{e['title']}"))
+            loud = e["impact"].lower() == "high" and e["country"] == "USD"
+            loud = loud or _is_cb_speaker(e["title"])
+            name = f"**{e['title']}**" if loud else e["title"]
+            bits = [f"**{_hhmm(e['dt_lis'])}** — {e['country']} {name}"]
+            # Forecast and previous ride the same line rather than a separate
+            # table. A merged section cannot carry columns, and losing F/P
+            # would make this a downgrade for the prints that matter most.
+            if e.get("forecast") or e.get("previous"):
+                bits.append(f"F {_dash(e['forecast'])} · P {_dash(e['previous'])}")
+            if e["impact"].lower() != "low":
+                bits.append(e["impact"])
+            timed.append((e["dt_lis"], " · ".join(bits)))
 
     # Weekend: the cash session does not exist, so neither do its windows.
-    # Exchange holidays are NOT detected - that needs a holiday calendar we
-    # do not have, so a holiday still shows an open and a close.
-    weekend = today.weekday() >= 5
+    # US market holidays are now detected too (scripts/cycles.py), closing a
+    # gap this function's own comment flagged: before, a holiday still printed
+    # an open and a close.
+    holiday = cycles.us_market_holidays(today.year).get(today)
+    weekend = today.weekday() >= 5 or bool(holiday)
     if not weekend:
         # Recomputed, not assumed: the ET/Lisbon gap is not constant across
         # the two DST-mismatch windows in March and October.
@@ -1039,7 +1155,11 @@ def _risk_windows(ctx, today, now):
     passed = len(timed) - len(ahead)
 
     out = [txt for _, txt in ahead]
-    if weekend:
+    if holiday:
+        out.append(f"US cash equity markets closed today — {holiday}. "
+                   f"ETF creations and redemptions are a true zero, not a "
+                   f"missing feed.")
+    elif weekend:
         out.append("Cash equity markets closed today — no session windows.")
     if not ahead and not weekend:
         out.append(f"No windows left today; {passed} already passed at "
@@ -1084,6 +1204,17 @@ def _hb(s):
 def _h_open(title, sub):
     return (f"<html><head><meta charset='utf-8'><style>{_CSS}</style></head><body>"
             f"<h1>{_esc(title)}</h1><p class='sub'>{_esc(sub)}</p>")
+
+
+def _tier(md, html, label):
+    """A quiet rule between tiers.
+
+    Not a heading: headings here are section names, and inventing a fourth
+    level would push every real section down. The point is only to tell the
+    reader where the first screen ends.
+    """
+    md.append(f"---\n\n*{label}*\n")
+    html.append(f"<hr><p class='muted'><em>{_esc(label)}</em></p>")
 
 
 def _h_section(name):
