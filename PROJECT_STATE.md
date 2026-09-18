@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 📋 **build order in §13** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 📋 **build order in §13** |
 | **Last updated** | 2026-09-18 |
-| **Revision** | 27 (was: 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 28 (was: 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -361,7 +361,39 @@ path, not the schedule. See §5.
 every one of them watches for a failure and this was an absence. That is the
 finding, and §3.16 states it as a rule.
 
+### §2.6 D21 proven in production on the PM edition's first render — 2026-09-18
+
+Run #87, `BRIEF_EDITION=pm`, `skip_email`. The state file on the branch
+predates the bundle, so it carries no `am` key — which is exactly the
+condition D21 exists for, arriving by accident on the first live run.
+
+```
+# PM DELTA — Friday, 18 September 2026
+*Pre-NY-open scan — built 23:40 LIS.*
+
+## SINCE 09:20
+- **BTC** $81,162.90 · no morning baseline, so no delta
+- **ETH** $2,621.52 · no morning baseline, so no delta
+- DXY 100.22 (+0.76%) · US 10Y 5.00 (+0.75%) · S&P 500 fut 7,725.00 (+1.31%) …
+
+> **⚠ No 09:20 brief was recorded today, so every delta above is suppressed
+> rather than measured against yesterday. …**
+
+## MATERIAL CHANGE
+- No material change since 09:20.
+```
+
+**It suppressed rather than substituted.** The obvious wrong behaviour — fall
+back to the previous *day's* close — would have printed a plausible percentage
+measuring the wrong interval. That is §3.18 exactly, the bug that cost a
+correction in rev 7. The edition printed absolute levels instead, said why,
+and banner-flagged it.
+
+Also confirmed in the same run: `No state change to commit.` The PM touched
+nothing.
+
 ### §2.5 The latency banner, proven on a runner — 2026-09-18
+
 
 Built, then fired deliberately rather than waited for. A dispatch at 12:56
 Lisbon carrying `trigger_version: 7` and `skip_email: true` is 3h31m past the
@@ -522,6 +554,24 @@ permission is silently dropped**, producing a token that reads fine and cannot
 dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
+
+**§3.32 — "Still ahead today" printed tomorrow's entry, and the shape is the
+one this file keeps meeting.** Found on run #87, one commit after shipping.
+
+`_risk_windows` appends untimed radar entries at the **end** of its list, and
+those open with `**Tomorrow**`. The PM spine selected windows by matching a
+leading `**`, so at 23:40 — when no timed window remained — it fell through to
+the first untimed entry and printed **tomorrow's** FRED maintenance under a
+heading that says *today*.
+
+Nothing was fabricated. The item was real, correctly dated and correctly
+described. It was under the wrong heading. **That is §3.9 for the fourth
+time — present, sourced, correctly stamped, materially misleading** — after a
+buyback, a policy rate and a news headline.
+
+The fix selects on a clock rather than on bold, and the empty case says
+*"nothing further scheduled"* rather than leaving a heading that implies the
+day is clear. *Evidence: run #87 log, 22:40:38Z.*
 
 **§3.31 — The "no free liquidation source" verdict was wrong, and it was
 wrong in exactly the shape this file has a section about.** Probe round 18,
@@ -1167,8 +1217,19 @@ Revised order in §13.
 - ✅ **Commit 3 — DONE 2026-09-18.** BACKDROP (FRED, round 16's explicit
   realtime window in code rather than only in this file) and NEWS (CNBC as the
   wire, ZeroHedge marked as commentary). 430 checks. Live on run #86.
-- 🟠 **Commits 4–5** — the PM edition with the state bundle (which unblocks
-  the five deferred lines and, per the addendum, a sixth) · timing and health.
+- ✅ **Commit 4 — DONE 2026-09-18.** The state bundle (30-day history, `am`
+  baseline, six new tracked figures) and the PM edition (spine + threshold
+  body, NY-anchored, its own send marker, the shadow log). 475 checks. D21
+  proven live on the first render (§2.6).
+- 🟠 **Commit 5 — timing and health.** The Apps Script edit for the PM timers,
+  then the five-dispatch observation. **The one remaining commit**, and the
+  one that needs Kabil: a re-paste and a `SCRIPT_VERSION` bump.
+- ⏳ **The deferred lines are unblocked but not built.** Range position
+  7d/30d, days-since counters, volume against a 30-day average, stablecoin
+  7-day change, BTC.D deltas. The bundle carries every field they need, and
+  **none produces anything until the history has weeks in it** — which is the
+  honest reason the schema shipped before the lines.
+
 - ⏳ **Kalshi midterm contracts, deliberately not built.** The plan says Kalshi
   needs no probe because it is already LIVE and keyless. That is true of
   `KXFEDDECISION`; **the midterm control tickers are different contracts and
@@ -1398,6 +1459,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 26 | 2026-09-18 | **Probe round 18 and Commit 4.** The round overturned a verdict carried since rev 1: OKX returns liquidation orders keyless, with size, timestamp and side, so **the largest gap between Kabil's framework and this system is a wiring job rather than a subscription** (§3.31). Three other results corrected things this file asserted, two of them my own errors. Then Commit 4 — the state bundle and the PM edition, **the largest change on the delivery path** — with D21 proving itself on the first live render (§2.6). Two bugs of mine inside it: a per-cent change compared against a basis-point threshold, which would have fired the body on almost every afternoon, and a "still ahead today" line printing tomorrow's entry (§3.32) |
 | 25 | 2026-09-18 | **Commit 3 — BACKDROP and NEWS.** The FRED work repurposed from release-minute actuals to the economic picture, with round 16's explicit realtime window written into the fetcher rather than only into this file. NEWS ships CNBC as the wire and ZeroHedge marked as commentary — and the first live run returned three ZeroHedge items of which one was a culture-war headline with no market content, which is D16's warning arriving as evidence (§3.30). Two of my own mistakes: the commit message claimed 443 checks when the suite reports **430**, and `FRED_API_KEY` had been wired into `probe.yml` and never into the job that builds the brief, so BACKDROP would have degraded to `unavailable` every morning — caught by dispatching rather than by reading |
 | 24 | 2026-09-18 | **Commit 2 — seven lines, no new requests.** Funding restated as an annual carry (a rate per 8h is abstract; the same number annualised is money), perp basis pulled from a ticker field that was always in the payload and never returned, three OI strikes a side instead of one, stablecoin supply *and* dominance enforcing D24 in code, the ETF streak, and a cross-asset direction line. Three tests exist only to keep interpretation out: the options line may not say pin/target/support/resistance/expect, MACRO may not say risk-on or bearish, and dominance may not appear on a line without supply |
 | 23 | 2026-09-18 | **Commit 1 — the brief gets a shape.** Three tiers, CLOCKS, CYCLE, TODAY (CALENDAR + RISK WINDOWS merged), AHEAD to a year in five buckets, watchlist `class` and `lead`, EXPECTATIONS. **§3.24 fixed** and folded in as the plan said it should be — though the NY Fed caught up before it shipped, so it has not been seen firing. Two defects found by building rather than reading: `date` was missing from `render.py`'s import, which would have raised `NameError` on the first FOMC morning; and the offline suite had been opening a **live SMTP connection to Gmail on every CI run** (§3.29), which is why it took 170 seconds and now takes 0.17 |
@@ -1437,6 +1499,58 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 28 · 2026-09-18 · Commit 4 — and D21 proves itself by accident on the first render
+
+**Sections touched:** header, §2.6 (new), §3.32 (new), §5, §10, §13
+**Type:** DATA / STRUCTURE
+**Evidence:** run #87 `workflow_dispatch` with `BRIEF_EDITION=pm`,
+2026-09-18 22:40:32Z, success. 475 offline checks.
+
+| Field | Was | Now |
+|---|---|---|
+| `state/latest.json` | one snapshot | **30-day history + `am` baseline + 6 new figures** |
+| The PM edition | designed and approved, unbuilt since rev 13 | **built, and rendered live** |
+| D21 | a decision | **proven in production (§2.6)** |
+| PM send guard | — | **its own marker, separate from the morning's** |
+| Shadow log | specified (D20) | **shipping from day one** |
+| The five deferred lines | blocked on a schema | **unblocked, and still unbuilt** |
+
+**Why:** The plan and the addendum both called this the largest change on the
+delivery path and said it needed its own testing attention. It got 40 new
+checks, and the most important asserts the PM changes **exactly one key** and
+leaves the history and the morning snapshot byte-identical.
+
+**Impact on prior conclusions:** none reversed. D21 moves from decided to
+demonstrated, and by accident — the branch's state file predates the bundle,
+so the very first PM render hit the exact condition D21 was written for.
+
+**Two bugs of mine inside one commit**, both caught before a reader saw them.
+
+**A per-cent change compared against a basis-point threshold.** The 10Y rule
+is 5bp; a +0.30% session on a 4.70 yield is **1.4bp**, so comparing `0.30`
+against `0.05` would have fired the material-change body on almost every
+ordinary afternoon — destroying the point of a delta edition inside a week.
+Caught because a test fixture happened to carry a realistic yield.
+
+**§3.32, the "still ahead today" line printing tomorrow's entry** — the fourth
+time this project has met *present, sourced, correctly stamped, materially
+misleading*.
+
+**Not changed, deliberately:** three things.
+
+**The five deferred lines are still deferred.** The bundle carries every field
+they need and none produces anything until the history fills. Shipping the
+schema first is the point, not a shortfall.
+
+**The addendum's OI-change line was not built.** It rides this bundle's
+prior-run OI field, which now exists, and lands cleanly when that document
+closes.
+
+**Nothing dispatches the PM edition yet.** Commit 5 is the Apps Script work,
+and it is the one piece Kabil has to do himself.
+
+---
 
 ## rev 27 · 2026-09-18 · A verdict carried since rev 1 falls to one keyless call
 
@@ -2935,8 +3049,10 @@ The plan's §9 is sound and Gate 0 no longer blocks it. Two changes:
 | ~~3~~ | ~~Commit 1 — three tiers — with the §3.24 fix in it~~ | ✅ **DONE 2026-09-18.** 381 checks |
 | ~~4~~ | ~~Commit 2 — the zero-cost data lines~~ | ✅ **DONE 2026-09-18.** 409 checks |
 | ~~5~~ | ~~Commit 3 — probed sources wired~~ | ✅ **DONE 2026-09-18.** BACKDROP and NEWS, live on run #86 |
-| **6** | **Commit 4 — the PM edition and the state bundle** | Next, and **the single largest change on the delivery path**. Unblocks six deferred lines |
-| **7** | Commit 5 — timing and health | The Apps Script edit, then the five-dispatch observation |
+| ~~6~~ | ~~Commit 4 — the PM edition and the state bundle~~ | ✅ **DONE 2026-09-18.** 475 checks, D21 proven live |
+| **7** | **Commit 5 — timing and health** | **Last one, and it needs Kabil**: the PM's two Apps Script timers, a `SCRIPT_VERSION` bump to 8 and a re-paste. Until then the PM edition exists and nothing dispatches it |
+| **8** | **Wire OKX liquidations** | Not in the original plan, and arguably ahead of everything left in it (§3.31) |
+
 | — | **Probe round 18** | Still owed: the White House word filter, State's real feed URLs, the Senate schema, the two Yahoo `429`s, Kalshi's midterm tickers, and — if the addendum closes — CME futures and the unprobed liquidation APIs |
 | — | ~~Renew the trigger token, late October~~ | **Not a commit — an action only Kabil can take**, and it must happen before 25 Oct |
 
