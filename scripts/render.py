@@ -11,7 +11,7 @@ Formatting rules that matter:
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import health
@@ -715,6 +715,66 @@ def _policy_desk(ctx, today):
     return fed_lines, ops_lines, notes
 
 
+def _last_fomc_statement(ctx):
+    """When the FOMC last published a statement, if this brief saw one.
+
+    POLICY DESK already fetches the Fed's monetary-policy feed, so this costs
+    no request. An FOMC statement appearing in that feed is evidence a
+    decision **landed** — §3.23's distinction, which round 16 paid for: a
+    calendar says what is planned, only the data says what happened. The
+    scheduled date on a watchlist line would not do, because a meeting can
+    move and a statement cannot be published early.
+
+    Only the statement counts. The same feed carries the projections release
+    and the implementation note, and neither of those is the decision.
+
+    The feed is read over a 21-day lookback, so a statement older than that is
+    invisible here — which is harmless, because the staleness this guards
+    against lasts one to two business days.
+    """
+    fed = ctx.get("fed_officials")
+    if not (fed and fed.get("ok")):
+        return None
+    best = None
+    for item in (fed["data"].get("items") or []):
+        if item.get("kind") != "FOMC":
+            continue
+        if "fomc statement" not in (item.get("title") or "").lower():
+            continue
+        when = item.get("date")
+        if isinstance(when, date) and (best is None or when > best):
+            best = when
+    return best
+
+
+def superseded_range(rate_data, decided) -> bool:
+    """Is the printed target range older than the last decision? (§3.24)
+
+    The New York Fed carries `targetRateFrom`/`targetRateTo` on the **EFFR
+    row**, and EFFR publishes one business day in arrears. So the range the
+    brief prints is the one that was in force on the last day the effective
+    rate was published — which trails the decision by a day or two, **eight
+    times a year, on exactly the mornings that number matters most.**
+
+    Observed live on 17 and 18 September 2026: the FOMC moved to 3.75–4.00%
+    on the 16th and FED PATH printed `Target 3.50–3.75% · as of 16 Sep` for
+    two mornings, correctly age-stamped and materially misleading. A reader
+    would reasonably have concluded the Fed had held.
+
+    `as_of` **equal** to the decision date is stale, not current: the decision
+    lands at 19:00 Lisbon, so the rate in force for almost all of that day is
+    still the old one.
+    """
+    if not decided:
+        return False
+    as_of = (rate_data or {}).get("as_of")
+    if not isinstance(as_of, date):
+        return False
+    if rate_data.get("target_low") is None:
+        return False
+    return as_of <= decided
+
+
 def _pct(v, places=2):
     return "\u2014" if v is None else f"{v:+.{places}f}%"
 
@@ -737,15 +797,31 @@ def _fed_path(ctx, today):
 
     if rate and rate["ok"]:
         d = rate["data"]
+        decided = _last_fomc_statement(ctx)
+        stale = superseded_range(d, decided)
         bits = []
         if d.get("target_low") is not None and d.get("target_high") is not None:
             bits.append(f"**Target {d['target_low']:.2f}\u2013{d['target_high']:.2f}%**")
+            # The marker goes NEXT TO the number, not in a footnote. §3.9's
+            # lesson: a $6bn buyback was present, sourced and correctly
+            # stamped, and unreadable because the qualification was not where
+            # the eye was.
+            if stale:
+                bits.append("\u26a0 **may be superseded**")
         if d.get("effr") is not None:
             bits.append(f"EFFR {d['effr']:.2f}%")
         if d.get("as_of"):
             bits.append(f"as of {d['as_of']:%d %b}")
         bits.append(d["source"])
         lines.append(" \u00b7 ".join(bits))
+        if stale:
+            notes.append(
+                f"The target range above was in force on "
+                f"{d['as_of']:%d %b}, and the FOMC published a statement on "
+                f"{decided:%d %b} \u2014 so it may already have changed. The "
+                f"New York Fed carries the range on its EFFR row, which "
+                f"publishes one business day late. The decision itself is in "
+                f"the statement under POLICY DESK")
     elif rate:
         lines.append(f"Policy rate unavailable \u2014 {rate['error']}")
 

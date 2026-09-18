@@ -1211,6 +1211,89 @@ check_true("it never claims what the market will do",
            not any(w in _fed.lower() for w in
                    ("expect", "should ", "will likely", "target price")), _fed)
 
+print("\n-- the target range admits when a decision has overtaken it --")
+# §3.24, reproduced from the real thing. The FOMC moved to 3.75-4.00% on
+# 16 Sep 2026 and FED PATH printed "Target 3.50-3.75% - as of 16 Sep" on the
+# 17th AND the 18th: correctly sourced, correctly age-stamped, and materially
+# misleading. A reader would reasonably have concluded the Fed had held.
+def _fomc_feed(*items):
+    return {"ok": True, "error": None, "data": {
+        "items": [dict(kind=k, speaker="FOMC", title=t, date=d, url="")
+                  for k, t, d in items],
+        "watching": ["Warsh"], "lookback_days": 21, "partial": None,
+        "source": "Federal Reserve RSS"}}
+
+
+_STATEMENT = ("FOMC", "Federal Reserve issues FOMC statement", date(2026, 9, 16))
+_PROJECTIONS = ("FOMC", "Federal Reserve Board and Federal Open Market "
+                "Committee release economic projections", date(2026, 9, 17))
+_SPEECH = ("speech", "In Our Time", date(2026, 9, 18))
+
+check("the statement's date is found",
+      render._last_fomc_statement({"fed_officials": _fomc_feed(_STATEMENT)}),
+      date(2026, 9, 16))
+# The same feed carries the projections release and the implementation note.
+# Neither is the decision, and counting one would move the date by a day.
+check("the projections release is not the decision",
+      render._last_fomc_statement(
+          {"fed_officials": _fomc_feed(_PROJECTIONS, _SPEECH)}), None)
+check("a failed feed makes no claim",
+      render._last_fomc_statement({"fed_officials": {"ok": False}}), None)
+check("and neither does a missing one", render._last_fomc_statement({}), None)
+
+_sep16 = date(2026, 9, 16)
+_R = {"as_of": _sep16, "target_low": 3.5}
+# as_of EQUAL to the decision date is stale, not current: the decision lands
+# 19:00 Lisbon, so the rate in force for almost all of that day is the old one.
+check_true("a range dated the day of the decision is stale",
+           render.superseded_range(_R, _sep16))
+check_true("a range dated before it is stale too",
+           render.superseded_range({"as_of": date(2026, 9, 15),
+                                    "target_low": 3.5}, _sep16))
+check_true("the day after, it is current again",
+           not render.superseded_range({"as_of": date(2026, 9, 17),
+                                        "target_low": 3.5}, _sep16))
+check_true("no statement seen is no claim",
+           not render.superseded_range(_R, None))
+check_true("no range printed is no claim",
+           not render.superseded_range({"as_of": _sep16, "target_low": None},
+                                       _sep16))
+check_true("an unparseable as_of is no claim",
+           not render.superseded_range({"as_of": "16 Sep", "target_low": 3.5},
+                                       _sep16))
+
+# §3.11: the helper being right proves nothing until the brief says it.
+_stale_c = _fed_ctx(_RATE_OK, _ODDS_OK, _INFL_OK)
+_stale_c["policy_rate"] = {"ok": True, "error": None, "data": dict(
+    _RATE_OK["data"], as_of=date(2026, 9, 16))}
+_stale_c["fed_officials"] = _fomc_feed(_STATEMENT)
+_stale_md, _stale_html = render.build(_stale_c)
+_stale_fed = _stale_md.split("## FED PATH")[1].split("\n## ")[0]
+check_true("the rendered range carries the warning",
+           "may be superseded" in _stale_fed, _stale_fed)
+# §3.9: the marker goes next to the number, not in a footnote. A $6bn buyback
+# was present, sourced and correctly stamped, and unreadable because the
+# qualification was not where the eye was.
+check_true("and the marker sits beside the number, not below it",
+           _stale_fed.index("may be superseded")
+           - _stale_fed.index("Target 3.50") < 60, _stale_fed)
+check_true("the note names both dates",
+           "16 Sep" in _stale_fed and "statement" in _stale_fed, _stale_fed)
+check_true("and points at where the real decision is",
+           "POLICY DESK" in _stale_fed, _stale_fed)
+check_true("the range itself is still printed, not suppressed",
+           "Target 3.50\u20133.75%" in _stale_fed, _stale_fed)
+check_true("and it reaches the HTML too",
+           "may be superseded" in _stale_html, _stale_html[:200])
+
+# The far more common case: no FOMC in the last three weeks. Silence.
+_ok_c = _fed_ctx(_RATE_OK, _ODDS_OK, _INFL_OK)
+_ok_c["fed_officials"] = _fomc_feed(_SPEECH)
+_ok_fed = render.build(_ok_c)[0].split("## FED PATH")[1].split("\n## ")[0]
+check_true("a normal morning says nothing about supersession",
+           "may be superseded" not in _ok_fed, _ok_fed)
+
+
 print("\n-- FED PATH degrades honestly --")
 _wide = {"ok": True, "error": None, "data": dict(
     _ODDS_OK["data"], raw_total=72.0)}
