@@ -77,6 +77,12 @@ jobs:
           SKIP_EMAIL: ${{ inputs.skip_email && '1' || '' }}
           BRIEF_DEBUG: ${{ inputs.debug && '1' || '' }}
           TRIGGER_VERSION: ${{ inputs.trigger_version }}
+          # BACKDROP reads three FRED series. Absent, sources.backdrop raises
+          # and the section degrades to a named `unavailable` like any other -
+          # which is correct behaviour, and also exactly how this was found:
+          # the key was wired into probe.yml and never into the job that
+          # actually builds the brief.
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
         run: python scripts/main.py
 
