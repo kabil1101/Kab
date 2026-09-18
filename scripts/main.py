@@ -147,6 +147,12 @@ def gather(now):
     # watchlist; news is two independent feeds and either can go quiet.
     ctx["backdrop"] = safe(sources.backdrop, now.date())
     ctx["news"] = safe(sources.news, now)
+    # Rounds 18 and 19. Liquidations close the largest gap between Kabil's
+    # framework and this brief; the Yahoo extras and the plumbing come from
+    # the addendum, now closed.
+    ctx["liquidations"] = safe(sources.liquidations)
+    ctx["yahoo_extra"] = safe(sources.yahoo_extra)
+    ctx["plumbing"] = safe(sources.plumbing, now.date())
     # Not wrapped in safe(): the watchlist reads a local file and already
     # degrades to an empty list, so the only thing left to guard against is a
     # bug in the parser itself.

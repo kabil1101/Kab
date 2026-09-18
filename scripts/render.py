@@ -248,7 +248,7 @@ def build(ctx) -> tuple[str, str]:
     # Silent most mornings by design. Prints only when a recurring expiry is
     # inside its own lead window, which is what keeps a 365-day horizon from
     # flooding the page.
-    cyc = _cycle_lines(today)
+    cyc = _cycle_lines(today) + _cme_weekend(ctx, today)
     if cyc:
         md.append("## CYCLE\n")
         html.append(_h_section("Cycle"))
@@ -322,6 +322,20 @@ def build(ctx) -> tuple[str, str]:
         line += f" · via {d['source']}"
     md.append(f"- {line}")
     html.append(f"<p>{_hb(line)}</p>")
+    ye = ctx.get("yahoo_extra")
+    if ye is not None and ye["ok"]:
+        q = (ye["data"]["quotes"] or {}).get("IBIT")
+        if q:
+            # IBIT trades NYSE hours only. At 09:20 Lisbon (04:20 ET) the last
+            # print is YESTERDAY'S close and must be labelled as such, never
+            # stamped as current.
+            il = (f"**IBIT** ${q['last']:,.2f}"
+                  + (f" · {q['pct_change']:+.2f}%"
+                     if q.get("pct_change") is not None else "")
+                  + _as_of_stamp(q.get("as_of"), now)
+                  + " · secondary market, NYSE hours only")
+            md.append(f"- {il}")
+            html.append(f"<p>{_hb(il)}</p>")
     md.append("")
 
     # ---- DERIVATIVES ---------------------------------------------------
@@ -357,9 +371,13 @@ def build(ctx) -> tuple[str, str]:
         b = _basis(d)
         if b is not None:
             bits.append(f"basis {b:+.3f}% (live)")
-        bits.append(oi_txt)
+        oi_pair = _oi_line(ctx, label, key, f"oi_{label.lower()}")
+        bits.append(oi_pair or oi_txt)
         bits.append(d["source"])
         dlines.append(" · ".join(bits))
+    liq = ctx.get("liquidations")
+    if liq is not None:
+        dlines.extend(_liq_line(liq, now))
     for l in dlines:
         md.append(f"- {l}")
     html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in dlines) + "</ul>")
@@ -438,6 +456,22 @@ def build(ctx) -> tuple[str, str]:
         for l in lines:
             md.append(f"- {l}")
         html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in lines) + "</ul>")
+        ye = ctx.get("yahoo_extra")
+        if ye is not None and ye["ok"]:
+            b = (ye["data"]["quotes"] or {}).get("Brent")
+            w = (ca["data"]["quotes"] or {}).get("WTI")
+            if b:
+                bl = (f"**Brent** {b['last']:,.2f}"
+                      + (f" · {b['pct_change']:+.2f}%"
+                         if b.get("pct_change") is not None else "")
+                      + _as_of_stamp(b.get("as_of"), now))
+                if w and w.get("last"):
+                    # The spread is the cheap read on seaborne risk premium,
+                    # and it is the reason Brent is here rather than a second
+                    # oil price for its own sake.
+                    bl += f" · **Brent−WTI ${b['last'] - w['last']:+.2f}**"
+                md.append(f"- {bl}")
+                html.append(f"<p>{_hb(bl)}</p>")
         for label, err in (ca["data"].get("errors") or {}).items():
             md.append(f"- **{label}:** unavailable — {err}")
             html.append(f"<p><strong>{_esc(label)}:</strong> unavailable — {_esc(err)}</p>")
@@ -591,6 +625,19 @@ def build(ctx) -> tuple[str, str]:
         md.append("")
         html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in blines)
                     + "</ul>")
+        pl = ctx.get("plumbing")
+        if pl is not None:
+            plines = _plumbing_lines(pl, now)
+            for l in plines:
+                md.append(f"- {l}")
+            html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in plines)
+                        + "</ul>")
+            note = ("The three plumbing lines print as components. No net "
+                    "liquidity composite: that construct has modelling "
+                    "choices baked into it and would be a derived opinion in "
+                    "a fetched number's typeface.")
+            md.append(f"*{note}*\n")
+            html.append(f"<p class='muted'><em>{_esc(note)}</em></p>")
         if bd["ok"] and bd["data"].get("partial"):
             p = f"partial: {bd['data']['partial']}"
             md.append(f"*{p}*\n")
@@ -724,6 +771,140 @@ def _cross_asset_line(quotes):
         mark = "\u25b2" if pct > 0 else ("\u25bc" if pct < 0 else "\u2014")
         bits.append(f"{label} {mark}")
     return "**Cross-asset** \u2014 " + " \u00b7 ".join(bits) if bits else ""
+
+
+def _liq_line(liq, now):
+    """Recent forced closes and which side took them.
+
+    Says "recent" and a measured window rather than "24h", because one OKX
+    page is 100 rows and spans well under an hour. A 24h label on a 28-minute
+    sample is a number measuring something other than what it claims.
+
+    No dollar figure: `sz` is in contracts and the multiplier lives in an
+    endpoint nobody has probed, so counts and skew print and notional waits.
+    """
+    if not liq["ok"]:
+        return [f"**Liquidations:** unavailable — {liq['error']}"]
+    d = liq["data"]
+    span = d.get("span_hours")
+    if span is None:
+        window = "recent"
+    elif span < 1:
+        window = f"last {span * 60:.0f} min"
+    else:
+        window = f"last {span:.1f}h"
+    out = []
+    for b in d["books"]:
+        total = b["longs"] + b["shorts"]
+        if not total:
+            continue
+        skew = max(b["longs"], b["shorts"]) / total * 100
+        side = "long" if b["longs"] >= b["shorts"] else "short"
+        out.append(f"**{b['label']} liquidations** ({window}) — "
+                   f"{b['longs']} long · {b['shorts']} short · "
+                   f"{skew:.0f}% {side} · {d['source']}")
+    if out:
+        # The page is a cap, not a window. Saying so stops a reader reading
+        # "100" as a count of everything that happened.
+        out.append(f"*A page is capped at {d['page_size']} rows, so the "
+                   f"window is however long those took — not a fixed "
+                   f"period, and never a daily total. Counts only: size is "
+                   f"in contracts and the multiplier is unprobed.*")
+    return out
+
+
+def _oi_line(ctx, label, key, state_key):
+    """Open interest CHANGE against price change, with no label on it.
+
+    A level says nothing: 340,000 contracts is meaningless alone. The pair is
+    the positioning read, and there are four cases - price up on rising OI,
+    price up on falling OI, and their mirrors - which are opposite events
+    wearing the same price number.
+
+    **The interpretive label is deliberately absent (D3, D22).** "New longs
+    opening" looks like a mechanical identity and is an inference about WHO
+    the marginal participant is. With both deltas adjacent the reading is
+    trivial and it stays Kabil's.
+    """
+    p_ = ctx.get(key)
+    if not (p_ and p_["ok"]):
+        return None
+    oi = p_["data"].get("open_interest")
+    if oi is None:
+        return None
+    prev = ctx.get("prev") or {}
+    d_oi = state.delta(prev, state_key, oi)
+    if d_oi is None:
+        return None
+    bits = [f"OI {oi:,.0f} · {d_oi[1]:+.1f}% vs yesterday"]
+    c = ctx.get("crypto")
+    if c and c["ok"]:
+        for p in c["data"]["pairs"]:
+            if p["symbol"] == label:
+                d_px = state.delta(prev, label.lower(), p["last"])
+                if d_px:
+                    bits.append(f"(price {d_px[1]:+.1f}%)")
+                break
+    return " ".join(bits)
+
+
+def _plumbing_lines(pl, now):
+    """RRP, the TGA and reserve balances, each with its own observation date.
+
+    No composite. "Net liquidity" is arithmetic with modelling choices baked
+    in, computed differently by different desks, and printed as one headline
+    number it would be a derived opinion in a fetched number's typeface.
+    """
+    if not pl["ok"]:
+        return [f"Liquidity plumbing unavailable — {pl['error']}"]
+    out = []
+    for e in pl["data"]["series"]:
+        bits = [f"**{e['label']}** ${e['value']:,.0f}bn"]
+        if e["prior"] is not None:
+            bits.append(f"{e['value'] - e['prior']:+,.0f}bn on the prior print")
+        bits.append(f"as of {e['as_of']:%d %b}")
+        out.append(" · ".join(bits))
+    return out
+
+
+def _cme_weekend(ctx, today):
+    """CME's weekend close, and the gap spot traded through without it.
+
+    Part 1 of the addendum's Addition C is pure date math - when CME shuts and
+    reopens is a fixed weekly rule. Part 2 is a measurement and needed a
+    probe, which round 19 passed: `BTC=F` returns on the same call shape as
+    every other Yahoo symbol.
+
+    ⚠ It never says whether the gap "should" fill. The size and direction are
+    fetched facts; "gaps tend to fill" is a claim about future price and falls
+    under D3 and D22.
+    """
+    # Friday 17:00 ET to Sunday 18:00 ET. Only worth saying while it is open
+    # or has just closed.
+    if today.weekday() not in (4, 5, 6, 0):
+        return []
+    out = ["**CME weekend** — futures shut Fri 17:00 ET, reopen Sun 18:00 ET; "
+           "spot trades straight through it unhedged."]
+    ye = ctx.get("yahoo_extra")
+    c = ctx.get("crypto")
+    if not (ye and ye["ok"] and c and c["ok"]):
+        out.append("*Gap not measured this run.*")
+        return out
+    q = (ye["data"]["quotes"] or {}).get("CME BTC")
+    spot = next((p for p in c["data"]["pairs"] if p["symbol"] == "BTC"), None)
+    if not (q and spot and q.get("last")):
+        out.append("*Gap not measured this run.*")
+        return out
+    gap = (spot["last"] - q["last"]) / q["last"] * 100
+    line = (f"Last CME print ${q['last']:,.0f} · spot ${spot['last']:,.0f} · "
+            f"**gap {gap:+.2f}%**")
+    lo, hi = spot.get("low_24h"), spot.get("high_24h")
+    if lo is not None and hi is not None:
+        line += (" · spot has traded back through it"
+                 if lo <= q["last"] <= hi
+                 else " · spot has not traded back through it")
+    out.append(line)
+    return out
 
 
 def _annualised(funding_8h):
@@ -1488,6 +1669,7 @@ THRESHOLDS = {
     # where rates desks reprice rather than where they shrug.
     "us10y_bp": 5.0,
     "fed_odds": 5.0,     # points; below this is book noise on a thin market
+    "oi_btc": 3.0,       # per cent since the morning (addendum A)
     "btc_dom": 0.3,      # percentage points
     "stable_supply": 0.5,
 }
@@ -1614,6 +1796,21 @@ def pm_body(ctx):
             if abs(mv) >= THRESHOLDS["stable_supply"]:
                 lines.append(f"**Stablecoin supply {mv:+.2f}%** to "
                              f"${d['stable_supply_usd']/1e9:,.0f}bn")
+
+    p_ = ctx.get("perp_btc")
+    if p_ and p_["ok"]:
+        mv = _pm_move(am, "oi_btc", p_["data"].get("open_interest"))
+        if mv is not None:
+            shadow["oi_btc"] = round(mv, 4)
+            if abs(mv) >= THRESHOLDS["oi_btc"]:
+                # Both deltas, no label on the pair. D22.
+                px = _pm_move(am, "btc", next(
+                    (p["last"] for p in (ctx.get("crypto") or {}).get("data", {})
+                     .get("pairs", []) if p["symbol"] == "BTC"), None))
+                line = f"**BTC open interest {mv:+.1f}%** since 09:20"
+                if px is not None:
+                    line += f" (price {px:+.2f}%)"
+                lines.append(line)
 
     ca = ctx.get("cross_asset")
     if ca and ca["ok"]:

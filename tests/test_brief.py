@@ -253,6 +253,135 @@ check_true("an exhausted forward view is explained, not shown empty",
 check_true("it does not claim a broken feed",
            "unavailable" not in md3.split("Next 5 sessions")[1][:300].lower(), md3)
 
+print("\n-- liquidations: recent, counted, and never a daily total --")
+_NOW19 = datetime(2026, 9, 18, 9, 20, tzinfo=LISBON)
+_LIQ = {"ok": True, "error": None, "data": {
+    "books": [{"label": "BTC", "uly": "BTC-USDT", "rows": 100,
+               "longs": 31, "shorts": 69},
+              {"label": "ETH", "uly": "ETH-USDT", "rows": 100,
+               "longs": 48, "shorts": 52}],
+    "newest": _NOW19, "span_hours": 0.47, "page_size": 100,
+    "partial": None, "source": "OKX (single venue)"}}
+_ll = "\n".join(render._liq_line(_LIQ, _NOW19))
+check_true("the side counts print", "31 long · 69 short" in _ll, _ll)
+check_true("and the skew names a side", "69% short" in _ll, _ll)
+# One page spans 28 minutes. A "24h" label on it would be a number measuring
+# something other than what it claims.
+check_true("the window is the measured one", "last 28 min" in _ll, _ll)
+check_true("and it is never called a daily total",
+           "24h" not in _ll and "daily total" in _ll, _ll)
+# sz is in contracts and the multiplier lives in an unprobed endpoint.
+check_true("no dollar figure is invented", "$" not in _ll, _ll)
+check_true("and the reason is stated", "contracts" in _ll, _ll)
+check_true("the single venue is labelled", "single venue" in _ll, _ll)
+check_true("an hour-plus window reads in hours",
+           "last 2.0h" in " ".join(render._liq_line(
+               {"ok": True, "error": None,
+                "data": dict(_LIQ["data"], span_hours=2.0)}, _NOW19)))
+check_true("a dead fetch degrades to a named reason",
+           render._liq_line({"ok": False, "error": "okx: timeout"},
+                            _NOW19)[0].startswith("**Liquidations:** unavailable"))
+
+print("\n-- open interest against price, with no label on the pair --")
+_oi_ctx = dict(healthy)
+_oi_ctx["prev"] = {"oi_btc": 7.0e8, "btc": 80000.0}
+_oi_ctx["perp_btc"] = {"ok": True, "error": None, "data": {
+    "instrument": "BTC-PERPETUAL", "funding_8h": 0.0001,
+    "open_interest": 7.7e8, "index_price": 80000.0, "mark_price": 80400.0,
+    "source": "Deribit (single venue)"}}
+_oi_ctx["crypto"] = {"ok": True, "error": None, "data": {"pairs": [
+    {"symbol": "BTC", "last": 81600.0, "vol_24h": 1.0, "day_open": 80000.0,
+     "pct_since_utc_midnight": 2.0, "high_24h": 82000.0, "low_24h": 79000.0,
+     "vwap_24h": 80500.0}]}}
+_oi = render._oi_line(_oi_ctx, "BTC", "perp_btc", "oi_btc")
+check_true("the OI move prints", "+10.0% vs yesterday" in _oi, _oi)
+check_true("with the price move beside it", "(price +2.0%)" in _oi, _oi)
+# Price up on rising OI and price up on falling OI are opposite events wearing
+# the same price number. Naming WHICH is an inference about who the marginal
+# participant is, and D22 rejected exactly that boundary.
+check_true("and no reading of what the pair means",
+           not any(w in _oi.lower() for w in
+                   ("new longs", "shorts covering", "opening", "unwind")), _oi)
+check("no stored OI means no claim",
+      render._oi_line(dict(_oi_ctx, prev={}), "BTC", "perp_btc", "oi_btc"), None)
+
+print("\n-- liquidity plumbing: three components, never a composite --")
+_PL = {"ok": True, "error": None, "data": {"series": [
+    {"id": "RRPONTSYD", "label": "Reverse repo", "unit": "$bn",
+     "as_of": date(2026, 9, 17), "value": 412.0, "prior": 455.0},
+    {"id": "WTREGEN", "label": "Treasury account", "unit": "$bn",
+     "as_of": date(2026, 9, 10), "value": 811.0, "prior": 760.0},
+    {"id": "WRESBAL", "label": "Bank reserves", "unit": "$bn",
+     "as_of": date(2026, 9, 10), "value": 3120.0, "prior": 3180.0},
+], "partial": None, "source": "FRED (St. Louis Fed)"}}
+_pl = "\n".join(render._plumbing_lines(_PL, _NOW19))
+check_true("all three components print",
+           all(k in _pl for k in ("Reverse repo", "Treasury account",
+                                  "Bank reserves")), _pl)
+check_true("each carries its own date", _pl.count("as of") == 3, _pl)
+check_true("and the move on the prior print", "-43bn on the prior print" in _pl
+           or "-43" in _pl, _pl)
+# The common construct has modelling choices baked in and different desks
+# compute it differently. As one headline number it is a derived opinion in a
+# fetched number's typeface.
+check_true("no net liquidity composite is computed",
+           "net liquidity" not in _pl.lower(), _pl)
+_bd_ctx = dict(healthy)
+_bd_ctx["backdrop"] = {"ok": True, "error": None, "data": {"series": [
+    {"id": "UNRATE", "label": "Unemployment", "unit": "%",
+     "as_of": date(2026, 8, 1), "value": 4.4, "prior": 4.3,
+     "yoy": None, "ann_3m": None}], "partial": None,
+    "source": "FRED (St. Louis Fed)"}}
+_bd_ctx["plumbing"] = _PL
+_bd_md = render.build(_bd_ctx)[0]
+check_true("and the brief says why it is not computed",
+           "net liquidity composite" in _bd_md, _bd_md[-2000:])
+
+print("\n-- the CME weekend, measured but never predicted --")
+_cme_ctx = dict(healthy)
+_cme_ctx["yahoo_extra"] = {"ok": True, "error": None, "data": {"quotes": {
+    "CME BTC": {"last": 81260.0, "pct_change": 0.1, "as_of": None},
+    "IBIT": {"last": 46.02, "pct_change": 1.2, "as_of": None},
+    "Brent": {"last": 98.77, "pct_change": -0.4, "as_of": None}},
+    "partial": None, "source": "Yahoo chart API"}}
+_cme_ctx["crypto"] = {"ok": True, "error": None, "data": {"pairs": [
+    {"symbol": "BTC", "last": 83000.0, "vol_24h": 1.0, "day_open": 82000.0,
+     "pct_since_utc_midnight": 1.0, "high_24h": 83500.0, "low_24h": 82500.0,
+     "vwap_24h": 82800.0}]}}
+_cw = "\n".join(render._cme_weekend(_cme_ctx, date(2026, 9, 21)))   # Monday
+check_true("the session rule prints", "shut Fri 17:00 ET" in _cw, _cw)
+check_true("and names the risk", "unhedged" in _cw, _cw)
+check_true("the gap is measured", "gap +2.14%" in _cw, _cw)
+check_true("and whether spot went back through it",
+           "has not traded back through it" in _cw, _cw)
+# The size and direction are fetched facts. "Gaps tend to fill" is a claim
+# about future price and falls under D3 and D22.
+check_true("it never says the gap should fill",
+           not any(w in _cw.lower() for w in ("should", "tend", "expect",
+                                              "likely", "will fill")), _cw)
+check("midweek it says nothing at all",
+      render._cme_weekend(_cme_ctx, date(2026, 9, 23)), [])
+
+print("\n-- IBIT and Brent, unblocked by round 19 --")
+_ib = render.build(_cme_ctx)[0]
+check_true("IBIT reaches FLOWS", "**IBIT** $46.02" in _ib, _ib)
+# NYSE hours only: at 09:20 Lisbon the last print is yesterday's close.
+check_true("and is labelled as a secondary market on NYSE hours",
+           "secondary market, NYSE hours only" in _ib, _ib)
+check_true("Brent reaches MACRO", "**Brent** 98.77" in _ib, _ib)
+# Without WTI there is no spread, and printing Brent alone is the correct
+# degradation rather than a missing feature.
+check_true("no WTI means no spread, not a wrong one",
+           "Brent−WTI" not in _ib, _ib)
+_sp_ctx = dict(_cme_ctx)
+_sp_ctx["cross_asset"] = {"ok": True, "error": None, "data": {
+    "quotes": {"WTI": {"last": 95.78, "pct_change": -0.5, "as_of": None}},
+    "errors": {}}}
+_sp = render.build(_sp_ctx)[0]
+check_true("with WTI beside it the spread prints",
+           "Brent−WTI $+2.99" in _sp, _sp[-1200:])
+
+
 print("\n-- the state bundle: one schema change, several features --")
 def _snap_ctx(day, btc, **extra):
     c = {"now": datetime(2026, 9, day, 9, 20, tzinfo=LISBON),

@@ -1474,3 +1474,139 @@ def news(now: datetime | None = None) -> dict:
     return {"items": items, "window_hours": NEWS_WINDOW_HOURS,
             "partial": "; ".join(notes) or None,
             "source": "CNBC + ZeroHedge"}
+
+
+# ----------------------------------------------------------- liquidations
+
+OKX_LIQ = "https://www.okx.com/api/v5/public/liquidation-orders"
+
+# Round 18 overturned a verdict this project carried from rev 1: the register
+# said `S2 - CoinGlass, no free tier, $29/mo`, and §12.4a is the section about
+# exactly that mistake. CoinGlass being paid is a property of that ROUTE, not
+# of the world. OKX answers keyless.
+#
+# Round 19 then established the shape, and the shape constrains the claim:
+#
+#   * One page is 100 rows and spans well under an hour - 0.47h when measured.
+#     **A 24-hour total would need roughly fifty paged calls**, so the brief
+#     says "recent" and means it. Printing "24h liquidations" off one page
+#     would be a number measuring something other than its own label, which is
+#     the failure this project keeps meeting.
+#
+#   * `sz` is in CONTRACTS, not coins. ETH-USDT-SWAP is 0.1 ETH a contract, so
+#     `sz * bkPx` overstates notional tenfold. The multiplier lives in a
+#     different endpoint (`instruments`, field `ctVal`) that nobody has
+#     probed, so **this fetcher does not compute notional at all.** Counts and
+#     side skew need no multiplier and are printed; dollars wait for a probe.
+OKX_BOOKS = (("BTC", "BTC-USDT"), ("ETH", "ETH-USDT"))
+LIQ_PAGE = 100
+
+
+def liquidations(books=OKX_BOOKS) -> dict:
+    """Recent forced closes per book, with the side that got hit.
+
+    The four cases a positioning read cares about need price direction beside
+    this, and the brief already has that. What this adds is which side was
+    forced - and a page of it, not a day.
+    """
+    out, notes = [], []
+    newest = oldest = None
+    for label, uly in books:
+        try:
+            data = _json(OKX_LIQ, params={"instType": "SWAP", "uly": uly,
+                                          "state": "filled",
+                                          "limit": str(LIQ_PAGE)})
+        except Exception as exc:  # noqa: BLE001 - one book, not the section
+            notes.append(f"{label}: {_reason(exc)}")
+            continue
+        rows = []
+        for block in data.get("data") or []:
+            rows.extend(block.get("details") or [])
+        if not rows:
+            notes.append(f"{label}: no rows returned")
+            continue
+        longs = sum(1 for r in rows if r.get("posSide") == "long")
+        shorts = sum(1 for r in rows if r.get("posSide") == "short")
+        stamps = sorted(int(r["ts"]) for r in rows if r.get("ts"))
+        if stamps:
+            first = datetime.fromtimestamp(stamps[0] / 1000, timezone.utc)
+            last = datetime.fromtimestamp(stamps[-1] / 1000, timezone.utc)
+            newest = last if newest is None else max(newest, last)
+            oldest = first if oldest is None else min(oldest, first)
+        out.append({"label": label, "uly": uly, "rows": len(rows),
+                    "longs": longs, "shorts": shorts})
+
+    if not out:
+        raise RuntimeError("; ".join(notes) or "no books returned")
+    span_h = ((newest - oldest).total_seconds() / 3600
+              if newest and oldest else None)
+    return {"books": out, "newest": newest, "span_hours": span_h,
+            "page_size": LIQ_PAGE, "partial": "; ".join(notes) or None,
+            "source": "OKX (single venue)"}
+
+
+# --------------------------------------------------- IBIT, Brent, CME BTC
+
+# All three passed round 19 with the brief's own headers. They had drawn `429`
+# in rounds 17 and 18, and §3.28 recorded that as "Yahoo rate-limits an
+# Actions runner" - which was wrong, and wrong because the probe sent a
+# browser User-Agent with a JSON Accept while sources.py sends a plain one. A
+# browser fingerprint on an API endpoint is an ordinary thing to rate-limit.
+def yahoo_extra() -> dict:
+    """IBIT, Brent and CME BTC futures - one call shape, three instruments."""
+    out, notes = {}, []
+    for symbol, label in (("IBIT", "IBIT"), ("BZ=F", "Brent"),
+                          ("BTC=F", "CME BTC")):
+        try:
+            out[label] = _yahoo_quote(symbol)
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"{label}: {_reason(exc)}")
+    if not out:
+        raise RuntimeError("; ".join(notes))
+    return {"quotes": out, "partial": "; ".join(notes) or None,
+            "source": "Yahoo chart API"}
+
+
+# ------------------------------------------------- liquidity plumbing (FRED)
+
+# Addendum B. BACKDROP as first specified carries the economic PICTURE;
+# these three carry the MECHANISM - the plumbing policy actually reaches risk
+# assets through. Same host, same method, same key, so no new probe.
+#
+# ⚠ Deliberately NOT computed: a "net liquidity" composite. The common
+# construct (balance sheet minus TGA minus RRP) has modelling choices baked
+# into it and different desks compute it differently. Printed as one headline
+# number in the same typeface as fetched data, it would be a derived opinion
+# wearing a fetched number's clothes - §3.9 inverted, which is the one thing
+# this brief has never done. The three components print with their own dates.
+PLUMBING_SERIES = (
+    ("RRPONTSYD", "Reverse repo", "$bn", 10),
+    ("WTREGEN", "Treasury account", "$bn", 6),
+    ("WRESBAL", "Bank reserves", "$bn", 6),
+)
+
+
+def plumbing(today: date | None = None) -> dict:
+    """Overnight RRP, the Treasury General Account, and reserve balances."""
+    key = (os.environ.get("FRED_API_KEY") or "").strip()
+    if not key:
+        raise RuntimeError("FRED_API_KEY is not set")
+    today = today or datetime.now(LISBON).date()
+    out, notes = [], []
+    for sid, label, unit, limit in PLUMBING_SERIES:
+        try:
+            obs = _fred_obs(sid, key, limit, today)
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"{label}: {_reason(exc)}")
+            continue
+        if not obs:
+            notes.append(f"{label}: no observations")
+            continue
+        when, value = obs[0]
+        prior = obs[1][1] if len(obs) > 1 else None
+        out.append({"id": sid, "label": label, "unit": unit, "as_of": when,
+                    "value": value, "prior": prior})
+    if not out:
+        raise RuntimeError("; ".join(notes) or "no series returned")
+    return {"series": out, "partial": "; ".join(notes) or None,
+            "source": "FRED (St. Louis Fed)"}
