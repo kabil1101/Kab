@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🔴 **§3.24 still open: FED PATH printed a superseded target range for a third day** · 📋 **build order in §13** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🔴 **§3.24 still open: FED PATH printed a superseded target range for a third day** · 🟡 **round 17 probed: 4 pass, 2 fail, 3 inconclusive (§12.11)** · 📋 **build order in §13** |
 | **Last updated** | 2026-09-18 |
-| **Revision** | 22 (was: 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 23 (was: 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -523,6 +523,59 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.28 — Yahoo rate-limits an Actions runner, and thirteen live lines sit on
+it.** Probe round 17 asked Yahoo for IBIT and for Brent. Both returned
+**`HTTP 429 · 19 bytes · Too Many Requests`** — not a block, a rate limit, and
+the first of the two calls got it as readily as the second, so it was not
+self-inflicted by probing twice.
+
+**This is not a verdict on IBIT or Brent.** Neither was tested; the host never
+answered. Recorded as **inconclusive**, because "I could not reach it once" is
+not "it does not work" — the mistake §12.4a cost two wrong verdicts to learn.
+
+**What it IS a verdict on is the host.** Yahoo already carries DXY, 10Y, gold,
+WTI, VIX, S&P futures, Nasdaq futures, Nikkei, Hang Seng, USDJPY and CNH —
+eleven shipping lines, thirteen once IBIT and Brent land, **with no fallback on
+any of them.** The 09:20 brief has never seen a 429, but nothing about 08:20
+UTC is privileged; Actions runners share IP space and this probe drew a 429 at
+11:59 UTC from the same platform.
+
+`§12.5`'s kill criterion watches individual sources going quiet. **It does not
+watch a host becoming load-bearing**, which the build plan flagged as a
+theoretical risk on 17 September and this probe turned into a measured one the
+next day. Logged, not fixed: a fallback for eleven lines is a project, not a
+commit. *Evidence: probe run #17, job 105590900580, targets 6 and 7.*
+
+**§3.27 — A well-formed 200 answered a different question than the one asked.**
+Target 4 called Polymarket's gamma API with `closed=false` and `tag=fed`,
+looking for the next FOMC market **without a date in the query** — because a
+query carrying a month is a query that silently goes stale.
+
+It returned `HTTP 200`, valid JSON, five markets. The first was **"Will Adanech
+Abiebie be the next Prime Minister of Ethiopia?"**, `endDate`
+`2026-06-01` — an Ethiopian election market that closed three and a half months
+before the call.
+
+Two filters failed silently and neither said so:
+
+| Asked | Got |
+|---|---|
+| `tag=fed` | markets with no relation to the Fed — the tag was ignored |
+| `closed=false` | a market whose `endDate` had already passed |
+
+**Nothing about the response announces either failure.** Status 200, correct
+content type, well-formed objects, populated fields. A fetcher written against
+this would have printed a foreign election's odds under a heading reading
+*"Priced for the next decision"* — §3.10's exact shape, and worse than a 404,
+which at least fails loudly.
+
+**Verdict: Polymarket stays unwired, and the bar for wiring it has gone up.**
+It would now need a probe proving a filter is *honoured*, not merely accepted.
+And the argument for bothering is weak: **Kalshi is already LIVE, keyless, and
+generalises by ticker** — it needed no probe because its tickers carry the
+meeting, where Polymarket's slugs carry a month string. *Evidence: probe run
+#17, target 4.*
+
 **§3.26 — The token expiry has no detector, and the system would report
 itself healthy all the way down.** Raised in the 2026-09-17 planning chat
 (`docs/BUILD_PLAN.md` §5) and **verified against the code here before being
@@ -959,10 +1012,19 @@ Revised order in §13.
 - 🟠 **Commits 2–5** — zero-cost data lines · probed sources wired (FRED as
   BACKDROP, CNBC, ZeroHedge, Kalshi midterms) · the PM edition with the state
   bundle · timing and health.
-- ❓ **Nine probe targets, none probed.** Every URL in targets 1, 2, 8 and 9 is
-  pattern-matched, not verified. Government sites are a plausible `S1` —
-  Farside, Binance and CME all blocked datacenter IPs. **Until a runner
-  answers, none of them exists.**
+- ✅ **CLOSED 2026-09-18: the nine probe targets are probed (§12.11).** Four
+  pass, two fail, three inconclusive. Government hosts did **not** block the
+  runner, which was the round's flagged risk. What remains open from it:
+  - ⏳ **State Department, round 2.** Three guessed URLs, three dead ends —
+    one of them a `200` serving a PNG. The `/rss-feeds/` index page answered,
+    so the next round **parses it instead of guessing a fourth time**.
+  - ⏳ **The Senate schema, and the House render.** `hearings.xml` answered
+    200 and the probe's own parser could not read it. That is a probe bug, not
+    a dead source.
+  - ⏳ **Yahoo IBIT and Brent, re-probe.** Both drew `429`; the host never
+    answered, so neither has been tested (§3.28).
+  - ⏳ **The White House filter.** The feed is live and 2 of its top 3 items
+    are irrelevant to markets. It wires behind §3.6's word list or not at all.
 - ❓ **Five PM dispatch timestamps.** `nearMinute` behaviour is Google's
   scheduler, **not something a runner can probe** — the only test is to install
   it and watch. Recorded as an observation, explicitly not a probe. Cannot
@@ -1141,6 +1203,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 22 | 2026-09-18 | **Probe round 17 — nine targets, one dispatch, five seconds.** Four pass (White House feed 30/30 dated; Kraken 721 daily candles giving a **2.43% 14-day ADR**, which unblocks threshold v2; CoinGecko already carrying `usdt`/`usdc`; CourtListener keyless over 1,355 dockets). Two fail. Three inconclusive — including two Yahoo `429`s that tested nothing about IBIT or Brent but revealed **eleven shipping lines on one rate-limiting host** (§3.28). Polymarket returned a well-formed 200 answering a different question: `tag=fed` silently ignored, an Ethiopian election market returned under `closed=false` three months after it closed (§3.27). And the probe's own parser wrongly reported the Senate feed as unreadable — logged as a probe bug, not a dead source |
 | 21 | 2026-09-18 | **First build since the gate cleared.** The `health.py` latency banner shipped and fired live on run #78 — `BRIEF LATE — built 12:56 Lisbon, 3h31m past the 09:25 target` — closing §3.26 the same day it was recorded. D25 locked: a detector may only claim what it can tell apart, which is why the dispatch branch says *"unless this brief was pulled by hand"* and the fallback branch does not. Kabil ordered §3.25's task deleted outright rather than rewritten; done, with its prompt preserved. Probe round 17 dispatched: nine targets, one run |
 | 20 | 2026-09-18 | Kabil shared `docs/BUILD_PLAN.md` — a full redesign produced in a separate planning chat on 17 Sep against rev 17. It reverses the 14:00 data-actuals edition (§4.4), reorganises the AM brief into three tiers, extends AHEAD to 365 days with a `lead` field, and adds D17–D24 plus a D11 amendment. Two of its claims were checked against the code before being recorded: **the token-expiry blind spot is real (§3.26); the `muteHttpExceptions` hole it describes was closed in v5 and needed no work.** Gate 0, which the plan assumed stood at 3 of 5, had cleared the same morning |
 | 19 | 2026-09-18 | **Day 5 of five — delivery declared SOLVED.** Five inbox timestamps, all 09:20 LIS; dispatch identical to the second on all five days. The same morning found §3.24 — FED PATH had printed a target range the Fed superseded two days earlier — so the build queue five clean mornings was meant to unlock stayed shut. Closing the session for a handoff then surfaced §3.25: an enabled scheduled task firing daily outside the repository since August, dormant only because of a seasonal guard that stops guarding on 26 October |
@@ -1176,6 +1239,63 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 23 · 2026-09-18 · Nine probes, and the two most useful answers were to questions nobody asked
+
+**Sections touched:** header, §3.27 (new), §3.28 (new), §5, §10, §12.2, §12.11 (new)
+**Type:** DATA / CORRECTION
+**Evidence:** probe run #17, job 105590900580, 2026-09-18 11:59:41–11:59:46Z.
+Every figure below is a line in that log.
+
+| Field | Was | Now |
+|---|---|---|
+| Nine probe targets | 🔴 none probed, four sets of guessed URLs | **4 pass · 2 fail · 3 inconclusive (§12.11)** |
+| Government hosts | flagged as a plausible `S1` | **whitehouse.gov answered a runner, 200, 30 dated items** |
+| Threshold v2 (D19) | blocked on trailing candles | **unblocked — 721 candles, 14-day ADR 2.43%** |
+| Stablecoin lines (D24) | 1 probe, cost unknown | **zero cost — already in the `/global` call** |
+| The 1 Oct OpenAI date | no confirmation route | **CourtListener, keyless, 1,355 dockets** |
+| Polymarket | `S7` 🟡 PROBED, "not wired: slugs are per-month" | `S8` ⚫ **EXCLUDED — filters accepted and ignored (§3.27)** |
+| Yahoo | one source among eighteen | **a host carrying eleven lines that rate-limits runners (§3.28)** |
+| Rubio | tracked by nothing | **still tracked by nothing** |
+
+**Why:** The build order put the probe round second because it is the only work
+that produces new facts rather than new plans. It did — and two of the three
+most useful results were not on the target list.
+
+**Impact on prior conclusions:** One register verdict reversed and one risk
+promoted from theoretical to measured.
+
+**Polymarket's row is downgraded**, `S7` 🟡 → `S8` ⚫. Rev 12 recorded it as
+*"200, and far more liquid than Kalshi on the September meeting"*, unwired only
+because its slugs carry a month. That was true and it was not the problem. The
+problem is that its filters are **accepted and ignored**, so the failure is
+invisible: a fetcher would have printed an Ethiopian election's odds under
+*"Priced for the next decision"*. Liquidity was never the question.
+
+**Yahoo's concentration stops being a note and becomes a finding.** The build
+plan flagged it on 17 September as something to record; on the 18th a runner
+drew a `429` from it. Eleven live lines, no fallback, one host, one rate limit.
+
+**And I logged my own bug loudly**, per §8. The probe reported the Senate
+hearings feed as unreadable. The feed answered `200` with 23KB of XML; the
+parser looks for RSS `item`/Atom `entry` elements and the Senate uses its own
+schema. **Recording that as a dead source would have been §12.4a's mistake for
+a third time, caused by my code rather than by the host.** It is `S7`.
+
+**Not changed, deliberately:** three things.
+
+**Nothing was wired.** Four targets passed and not one line of fetcher was
+written. §12.3's ladder puts 🟡 PROBED before 🟠 WIRED, and the White House
+feed is the clearest case for why: it passes every mechanical test and two of
+its three newest items are about hunting and fishing.
+
+**The Yahoo concentration was not fixed.** A fallback for eleven lines is a
+project, not a commit, and inventing one on the day the risk was measured would
+be the comfortable-work trap (§8) wearing a safety vest.
+
+**§3.24 is still not fixed** — third day, visible again in run #78. Commit 1.
+
+---
 
 ## rev 22 · 2026-09-18 · The brief learns to say that it was late
 
@@ -2003,6 +2123,19 @@ them before the trigger is installed would leave no delivery path at all.
 | `zerohedge.com/fullrss2.xml` | `S3` | ⚫ EXCLUDED | 404. Feedburner is the live path |
 | `watcher.guru/news/feed` (= `/feed`) | `S5` | ⚫ EXCLUDED | `200`, well-formed, 10 items, all timestamped — and **newest item 41.9h old**, carrying equity stories on the crypto beat. The site feed does not carry what the X account posts. §3.20 |
 | CNBC `combinedcms` top news | `S0` | 🟢 **BEST OF ROUND** | `200`, 30 items, all timestamped, newest 3.1h old, **54.8h window**. Real wire content — the Strait of Hormuz vessel strike was in it |
+| **White House `presidential-actions/feed/`** | `S0` | 🟡 **PROBED — round 17** | `200`, `application/rss+xml`, 30 items, **30/30 dated**, newest 14.5h, 35-day window. **No datacenter block** — the round's flagged `S1` risk did not materialise. Not wired: the top three items were saltwater angling, hunting heritage and Senate withdrawals. Needs §3.6's two-tier word list before it renders |
+| `state.gov/rss-feeds/press-releases/feed/` | `S5` | ⚫ **EXCLUDED — round 17** | `200` serving **`content-type: image/png`**, 663KB, at a feed URL. Not a feed by any reading |
+| `state.gov/rss-feeds/secretary-of-state/feed/` | `S3` | ⚫ **EXCLUDED — round 17** | `404` (dressed as `application/rss+xml`, 156KB — a styled error page) |
+| `state.gov/rss-feeds/` | `S7` | 🟡 **PROBED — round 17** | `200 text/html`, 172KB — the **index** of feeds, not a feed. The next round parses this page for real URLs instead of guessing a fourth time |
+| **Kraken OHLC `interval=1440`** | `S0` | 🟢 **PASS — round 17** | `200`, **721 daily candles**. 14-day ADR **2.43%**, last close $77,994. Unblocks threshold v2 (D19) on a host already LIVE |
+| **CoinGecko `/global` stablecoins** | `S0` | 🟢 **PASS — round 17** | `usdt 6.861`, `usdc 2.762`, alongside `btc` and `eth`, **in the call the brief already makes**. Supply derivable from `total_market_cap` in the same payload, which D24 requires |
+| Polymarket gamma — filter honesty | `S8` | ⚫ **EXCLUDED — round 17** | `tag=fed` **silently ignored** and `closed=false` returned a market that closed 2026-06-01. A well-formed 200 answering a different question (§3.27). Kalshi generalises by ticker and needs no probe |
+| Yahoo IBIT | `S7` ⚠ | ⚠ **INCONCLUSIVE — round 17** | `HTTP 429 · Too Many Requests`. The host never answered, so this is **not** a verdict on IBIT (§3.28) |
+| Yahoo Brent `BZ=F` | `S7` ⚠ | ⚠ **INCONCLUSIVE — round 17** | `HTTP 429`, same call, same run |
+| **Yahoo — host concentration** | ⚠ | 🔴 **RISK, logged not fixed** | Not a source: a **host**. Eleven shipping lines, no fallback on any, and round 17 drew a `429` from an Actions runner. §12.5 watches sources going quiet, not hosts becoming load-bearing (§3.28) |
+| **CourtListener v4 search** | `S0` | 🟢 **PASS — round 17** | `200` **keyless**, 1,355 dockets / 40,456 documents for `OpenAI`, real cases by name with `dateFiled` ordering. Gives the 1 Oct watchlist entry a confirmation route it did not have |
+| `senate.gov/.../hearings.xml` | `S7` | 🟡 **PROBED — round 17** | `200`, 23KB, `text/xml`. **The probe's own parser could not read it** — it looks for RSS `item`/Atom `entry` and the Senate uses its own schema. Reachable, not yet parsed; **not** a dead source |
+| `docs.house.gov` calendar | `S6`? | 🟡 **PROBED — round 17** | `200`, 58KB HTML, **zero** occurrences of `hearing` or `markup`. Signature of a client-side render, as CME and Coinglass were. Provisional — confirm before excluding |
 | MarketWatch top stories | `S5` | 🟡 PROBED | `200`, fresh (0.3h) but only **6.7h window** and the wrong beat — retail personal finance, not a market wire |
 | Yahoo Finance news RSS | `S1` | ⚫ EXCLUDED | `429 Too Many Requests`. **And excluded on principle: Yahoo's chart API is the whole MACRO section** — §3.21 |
 | financialjuice.com | `S6`? | 🟡 PROBED | `200` HTML, **no RSS/Atom link advertised**. The squawk is a real-time product, almost certainly client-rendered. Unresolved |
@@ -2122,6 +2255,89 @@ Also unresolved: `releases/dates` listed *"FOMC Press Release, 2026-09-15"* on
 a day the FOMC decision is still **tomorrow**. Whether a listed date means
 *published* or *scheduled* decides whether the PM edition can say "released
 this morning" at all. Same round.
+
+### §12.11 Round 17 — nine targets, one dispatch, and two findings nobody asked for
+
+Run 2026-09-18, job 105590900580, five seconds wall clock. The batching worked:
+one commit, one dispatch, one log read for nine questions.
+
+| # | Target | Result |
+|---|---|---|
+| 1 | **White House `presidential-actions/feed/`** | ✅ **PASS** — 200, 30 items, **30/30 dated**, newest 14.5h, 35-day window |
+| 2 | State Dept | ❌ **FAIL** — no readable feed at any of three guessed URLs |
+| 3 | **Kraken daily OHLC** | ✅ **PASS, beyond the test** — 200, **721 candles** (asked for ≥20) |
+| 4 | Polymarket | ❌ **FAIL, and instructively** — §3.27 |
+| 5 | **CoinGecko stablecoins** | ✅ **PASS, zero cost** — `usdt 6.861`, `usdc 2.762` already in the call the brief makes |
+| 6 | Yahoo IBIT | ⚠ **INCONCLUSIVE** — 429, host never answered. §3.28 |
+| 7 | Yahoo Brent | ⚠ **INCONCLUSIVE** — 429, same |
+| 8 | **CourtListener** | ✅ **PASS** — 200 keyless, 1,355 dockets, real cases by name |
+| 9 | Senate / House calendars | ⚠ **INCONCLUSIVE** — see the probe bug below |
+
+#### The number that matters most: 2.43%
+
+Kraken's 14-day **average daily range on BTC is 2.43%**, last close $77,994.
+
+The PM edition's v1 threshold (D19) is a flat **±1.0%**, chosen because nothing
+better existed. Against today's range that is **41% of an average day** — and
+the plan's own proposed v2 rule was *"moved more than 40% of average daily
+range"*.
+
+**So the guess was almost exactly right, and that is the point.** It is right
+by coincidence, in this regime, this fortnight. At 60 vol the same ±1.0% is a
+shrug; at 15 vol it fires twice a day. **Threshold v2 is now unblocked and can
+be measured rather than argued**, which is what D19 gated it on — and it costs
+no new host, because Kraken has been LIVE since August.
+
+#### The White House feed passes on mechanics and is not yet useful
+
+30 items, every one dated, newest 14.5 hours, 35 days of window. **Government
+hosts did not block the datacenter IP** — the round's flagged `S1` risk, which
+sank Farside, Binance and CME, did not materialise here.
+
+But this probe's own instruction was *read the samples, not the status codes*,
+and the top three read:
+
+```
+· [14.5h] RESTORING AMERICAN SALTWATER ANGLING AND RECREATION
+· [14.5h] Reinvigorating America's Hunting Heritage
+· [20.2h] Withdrawals Sent to the Senate
+```
+
+**Two of the three are irrelevant to any market.** The feed carries what a
+president signs, and most of what a president signs is not tradeable. That is
+not a failure — it is exactly the condition §3.6 already solved once, when
+`"trade"` matched `"Trademark"` and a marine-mammal permit reached a live
+brief. **It wires with the same two-tier word list the Federal Register uses,
+or it does not wire at all.** Promoted to 🟡 PROBED, not 🟠 WIRED.
+
+#### My own probe had a bug, and the Senate is not dead
+
+Target 9 printed *"200, but no items parsed"* for
+`senate.gov/general/committee_schedules/hearings.xml` — 200, 23KB, `text/xml`.
+
+**The source answered. My parser did not read it.** `_items()` looks for
+elements named `item` or `entry`, which is RSS and Atom; the Senate publishes
+its own schema, so nothing matched. Recording this as a dead source would have
+been a wrong verdict caused by my code, and §12.4a is the standing warning
+about exactly that.
+
+**Correct verdict: `S7` — reachable, not yet parsed.** One more look at the
+element names settles it.
+
+The House side is a different story: `docs.house.gov` answered 200 with 58KB of
+HTML containing **zero** occurrences of `hearing` or `markup`, which is the
+signature of a client-side render — CME's failure and Coinglass's. Provisional
+`S6`, and a second look should confirm it rather than assume it.
+
+#### What the round changes
+
+- **Unblocked:** threshold v2 (target 3), stablecoin lines at zero cost
+  (target 5), the OpenAI watchlist date's confirmation route (target 8).
+- **Still blocked:** Rubio is tracked by nothing. Both remaining policy
+  primaries (State, Congress) need another round.
+- **Newly at risk:** eleven live lines on one rate-limiting host (§3.28).
+- **Newly harder:** Polymarket, which now needs a probe proving a filter is
+  honoured rather than accepted (§3.27).
 
 ### §12.4a The shape both wrong verdicts share
 
