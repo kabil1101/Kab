@@ -310,6 +310,10 @@ def build(ctx) -> tuple[str, str]:
         run = [r["total"] for r in d["recent"] if r["total"] is not None]
         line = (f"**BTC ETF** {d['latest_date']:%d %b}: {_money(d['latest_total'])} "
                 f"total · {_run_note(run)}")
+        n = _streak(run)
+        if n > 1:
+            word = "inflow" if run[-1] > 0 else "outflow"
+            line += f" · **{n}th straight {word}**"
         ibit, fbtc = d["recent"][-1].get("ibit"), d["recent"][-1].get("fbtc")
         if ibit is not None or fbtc is not None:
             line += f" · IBIT {_money(ibit)} · FBTC {_money(fbtc)}"
@@ -343,7 +347,19 @@ def build(ctx) -> tuple[str, str]:
             fund = f"funding {pct:+.4f}%/8h{flag}"
         oi = d.get("open_interest")
         oi_txt = f"OI {oi:,.0f}" if oi is not None else "OI —"
-        dlines.append(f"**{label} perp** {fund} · {oi_txt} · {d['source']}")
+        bits = [f"**{label} perp** {fund}"]
+        # A rate per eight hours is abstract. The same number as an annual
+        # carry is money, and it is the figure that decides whether holding
+        # the position costs more than the move is worth.
+        carry = _annualised(f8)
+        if carry is not None:
+            bits.append(f"{carry:+.1f}%/yr annualised")
+        b = _basis(d)
+        if b is not None:
+            bits.append(f"basis {b:+.3f}% (live)")
+        bits.append(oi_txt)
+        bits.append(d["source"])
+        dlines.append(" · ".join(bits))
     for l in dlines:
         md.append(f"- {l}")
     html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in dlines) + "</ul>")
@@ -379,6 +395,22 @@ def build(ctx) -> tuple[str, str]:
                 f"ETH {d['eth_dominance']:.1f}%")
         md.append(f"- {line}")
         html.append(f"<p>{_hb(line)}</p>")
+        # D24: supply AND dominance, never dominance alone. Dominance is a
+        # ratio and rises when the denominator falls, so a spike during a
+        # selloff is mostly arithmetic. Supply is the figure that says whether
+        # capital actually arrived.
+        if d.get("stable_supply_usd") is not None:
+            sl = (f"**Stablecoins** ${d['stable_supply_usd']/1e9:,.0f}bn supply "
+                  f"· {d['stable_dominance']:.2f}% of total cap")
+            legs = [f"USDT {d['usdt_dominance']:.2f}%"
+                    if d.get("usdt_dominance") is not None else None,
+                    f"USDC {d['usdc_dominance']:.2f}%"
+                    if d.get("usdc_dominance") is not None else None]
+            legs = [l for l in legs if l]
+            if legs:
+                sl += " · " + " · ".join(legs)
+            md.append(f"- {sl}")
+            html.append(f"<p>{_hb(sl)}</p>")
     md.append("")
 
     # ---- MACRO / EQUITIES ---------------------------------------------
@@ -390,6 +422,14 @@ def build(ctx) -> tuple[str, str]:
         md.append(line)
         html.append(f"<p><em>{_hb(line)}</em></p>")
     else:
+        # One glanceable line of directions above the detail. Layout only: it
+        # names which way each moved and stops there. Calling the set
+        # "risk-on" would be the brief's first opinion about the market, and
+        # D3 and D9 both forbid that.
+        arrows = _cross_asset_line(ca["data"]["quotes"])
+        if arrows:
+            md.append(f"- {arrows}")
+            html.append(f"<p>{_hb(arrows)}</p>")
         lines = []
         for label, q in ca["data"]["quotes"].items():
             chg = f"{q['pct_change']:+.2f}%" if q["pct_change"] is not None else "—"
@@ -572,13 +612,85 @@ def _run_note(run):
     return f"{note} (latest {word})"
 
 
+def _cross_asset_line(quotes):
+    """Every cross-asset move as one line of directions.
+
+    Five scattered rows make the reader assemble the picture. This assembles
+    the *directions* and nothing else — no verdict, no "risk-on", no reading
+    of what the combination means. That reading is Kabil's, or it happens in
+    chat where it is visibly a conversation and not a data feed.
+    """
+    bits = []
+    for label, q in quotes.items():
+        pct = q.get("pct_change")
+        if pct is None:
+            continue
+        mark = "\u25b2" if pct > 0 else ("\u25bc" if pct < 0 else "\u2014")
+        bits.append(f"{label} {mark}")
+    return "**Cross-asset** \u2014 " + " \u00b7 ".join(bits) if bits else ""
+
+
+def _annualised(funding_8h):
+    """A funding rate stated as an annual carry.
+
+    Three intervals a day, 365 days. Labelled *annualised*, never
+    *projected*: it is arithmetic on the rate standing right now, not a claim
+    that the rate persists. D9 forbids the second and this is not it.
+    """
+    if funding_8h is None:
+        return None
+    return funding_8h * 3 * 365 * 100
+
+
+def _basis(perp):
+    """Perp against index, in per cent. None when either side is missing.
+
+    Funding is the rate for the interval that just ended, so it lags. Basis is
+    where the contract is trading against the index **now**. The two get
+    different labels for that reason.
+    """
+    mark = perp.get("mark_price") or perp.get("last_price")
+    index = perp.get("index_price")
+    if mark is None or not index:
+        return None
+    return (mark - index) / index * 100
+
+
+def _strike_list(rows):
+    """Top strikes as `$85,000 (2,140)`, biggest open interest first."""
+    return " · ".join(f"${k:,.0f} ({v:,.0f})" for k, v in rows)
+
+
+def _streak(run):
+    """How many sessions the flow has kept the same sign. 0 if it has not."""
+    if not run or run[-1] == 0:
+        return 0
+    sign = 1 if run[-1] > 0 else -1
+    n = 0
+    for v in reversed(run):
+        if v == 0 or (1 if v > 0 else -1) != sign:
+            break
+        n += 1
+    return n
+
+
 def _options_line(d):
     n = d["nearest"]
     parts = [
         f"nearest expiry {n['expiry'].strftime('%d %b')} — max pain "
-        f"${n['max_pain']:,.0f}, top call OI ${n['top_call_strike']:,.0f}, "
-        f"top put OI ${n['top_put_strike']:,.0f}"
+        f"${n['max_pain']:,.0f}"
     ]
+    # Three strikes a side, biggest OI first, with the contract counts. Where
+    # the open interest actually sits is fetched data; what price will do
+    # about it is not, and stays unsaid (D3, D9).
+    if n.get("top_calls"):
+        parts[0] += f", calls {_strike_list(n['top_calls'])}"
+    elif n.get("top_call_strike") is not None:
+        parts[0] += f", top call OI ${n['top_call_strike']:,.0f}"
+    if n.get("top_puts"):
+        parts[0] += f", puts {_strike_list(n['top_puts'])}"
+    elif n.get("top_put_strike") is not None:
+        parts[0] += f", top put OI ${n['top_put_strike']:,.0f}"
     if n["put_call_oi_ratio"] is not None:
         parts[0] += f", P/C OI {n['put_call_oi_ratio']:.2f}"
     m = d.get("monthly")

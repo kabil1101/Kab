@@ -248,6 +248,101 @@ check_true("an exhausted forward view is explained, not shown empty",
 check_true("it does not claim a broken feed",
            "unavailable" not in md3.split("Next 5 sessions")[1][:300].lower(), md3)
 
+print("\n-- lines that cost nothing, because the data was already fetched --")
+
+# A rate per eight hours is abstract; the same number as annual carry is
+# money. 0.0001/8h -> x3 daily -> x365 -> 10.95%/yr.
+check("funding becomes an annual carry",
+      round(render._annualised(0.0001), 2), 10.95)
+check("negative funding annualises negative",
+      round(render._annualised(-0.0002), 2), -21.90)
+check("no rate makes no claim", render._annualised(None), None)
+
+# Funding lags by an interval; basis is live. Two numbers that look alike and
+# mean different things is the $6bn failure in miniature, so they are labelled
+# apart and the test checks the labels, not just the arithmetic.
+check("basis is the perp against the index",
+      round(render._basis({"mark_price": 80400.0, "index_price": 80000.0}), 3),
+      0.5)
+check("it falls back to last price when mark is absent",
+      round(render._basis({"last_price": 79600.0, "index_price": 80000.0}), 3),
+      -0.5)
+check("a missing index makes no claim",
+      render._basis({"mark_price": 80400.0, "index_price": None}), None)
+check("and so does a missing price",
+      render._basis({"index_price": 80000.0}), None)
+
+_perp = dict(healthy)
+_perp["perp_btc"] = {"ok": True, "error": None, "data": {
+    "instrument": "BTC-PERPETUAL", "funding_8h": 0.0001,
+    "current_funding": 0.0001, "open_interest": 780000000.0,
+    "index_price": 80000.0, "mark_price": 80400.0, "last_price": 80390.0,
+    "volume_24h_usd": 1e9, "source": "Deribit (single venue)"}}
+_dv = render.build(_perp)[0].split("## DERIVATIVES")[1].split("\n## ")[0]
+check_true("the annual carry is printed", "+11.0%/yr annualised" in _dv, _dv)
+check_true("and never called a projection", "project" not in _dv.lower(), _dv)
+check_true("basis is printed and marked live", "basis +0.500% (live)" in _dv, _dv)
+check_true("funding is still there beside it", "funding +0.0100%/8h" in _dv, _dv)
+
+# Where open interest sits is fetched data. What price will do about it is a
+# claim, and it stays banned.
+_opt = dict(healthy)
+_o = dict(_opt["options_btc"]["data"])
+_n = dict(_o["nearest"])
+_n["top_calls"] = [(85000.0, 2140.0), (80000.0, 1890.0), (90000.0, 1510.0)]
+_n["top_puts"] = [(75000.0, 1700.0), (70000.0, 980.0)]
+_o["nearest"] = _n
+_opt["options_btc"] = {"ok": True, "error": None, "data": _o}
+_ol = render._options_line(_o)
+check_true("three call strikes are listed", "$85,000 (2,140)" in _ol, _ol)
+check_true("biggest open interest first",
+           _ol.index("$85,000") < _ol.index("$80,000"), _ol)
+check_true("puts are listed too", "$75,000 (1,700)" in _ol, _ol)
+check_true("a side with only two strikes prints two",
+           _ol.count("$") >= 5, _ol)
+check_true("and the line never calls a level",
+           not any(w in _ol.lower() for w in ("pin", "target", "support",
+                                              "resistance", "expect")), _ol)
+
+check("a flow streak counts consecutive same-sign days",
+      render._streak([-283, -13, 160, -450, -296, 159]), 1)
+check("three inflows in a row count three",
+      render._streak([-450, 100, 200, 300]), 3)
+check("a zero breaks the streak", render._streak([100, 0, 200]), 1)
+check("an empty run has no streak", render._streak([]), 0)
+check("and a run ending flat has none", render._streak([100, 200, 0]), 0)
+
+# D24: dominance is a ratio and rises when the denominator falls. A spike in a
+# selloff is mostly arithmetic, so supply must always be printed with it.
+_gl = dict(healthy)
+_gl["global_mcap"] = {"ok": True, "error": None, "data": {
+    "total_mcap_usd": 2.79e12, "mcap_change_24h_pct": 2.5,
+    "btc_dominance": 58.5, "eth_dominance": 11.5,
+    "usdt_dominance": 6.861, "usdc_dominance": 2.762,
+    "stable_dominance": 9.623, "stable_supply_usd": 2.79e12 * 0.09623,
+    "source": "CoinGecko /api/v3/global"}}
+_sent = render.build(_gl)[0].split("## SENTIMENT")[1].split("\n## ")[0]
+check_true("stablecoin supply is printed", "bn supply" in _sent, _sent)
+check_true("and dominance beside it", "% of total cap" in _sent, _sent)
+check_true("with both legs named",
+           "USDT 6.86%" in _sent and "USDC 2.76%" in _sent, _sent)
+# The rule, asserted rather than trusted: no dominance without supply.
+check_true("dominance never appears without supply on the same line",
+           all("supply" in l for l in _sent.split("\n")
+               if "of total cap" in l), _sent)
+
+_macro = render.build(dict(healthy))[0].split("## MACRO")[1].split("\n## ")[0]
+check_true("the cross-asset line leads the section",
+           "**Cross-asset**" in _macro, _macro)
+check_true("with a direction per asset",
+           "\u25b2" in _macro or "\u25bc" in _macro, _macro)
+# The brief has no opinion about what the combination means, and a test says so.
+check_true("and no verdict about what it means",
+           not any(w in _macro.lower() for w in ("risk-on", "risk on",
+                                                 "risk-off", "risk off",
+                                                 "bullish", "bearish")), _macro)
+
+
 print("\n-- the watchlist grows two fields without breaking the old ones --")
 # The file is maintained by hand. A format change that invalidates the lines
 # already in it is a format change that loses them.

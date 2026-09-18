@@ -308,6 +308,13 @@ def perp_stats(currency: str = "BTC"):
         "current_funding": res.get("current_funding"),
         "open_interest": res.get("open_interest"),
         "index_price": res.get("index_price"),
+        # Both already in the ticker payload this call has always made, so
+        # basis costs nothing. Funding is the rate for the LAST interval and
+        # lags; basis is where the perp is trading against the index right
+        # now. The brief labels which is which, because two numbers that look
+        # alike and mean different things is the $6bn failure in miniature.
+        "mark_price": res.get("mark_price"),
+        "last_price": res.get("last_price"),
         "volume_24h_usd": stats.get("volume_usd"),
         "source": "Deribit (single venue)",
     }
@@ -388,6 +395,17 @@ def options(currency: str = "BTC"):
         top_put = max(puts, key=puts.get) if any(puts.values()) else None
         total_c = sum(calls.values())
         total_p = sum(puts.values())
+
+        def top3(book):
+            """The three strikes carrying most open interest, biggest first.
+
+            Capped at three per side deliberately. These are fetched numbers,
+            not a view: "most open interest sits at 85k" is data, "BTC will
+            pin to 85k" is a claim and stays banned (D3, D9).
+            """
+            live = [(k, v) for k, v in book.items() if v]
+            return sorted(live, key=lambda kv: kv[1], reverse=True)[:3]
+
         return {
             "expiry": exp,
             "max_pain": _max_pain(by_strike),
@@ -395,6 +413,8 @@ def options(currency: str = "BTC"):
             "top_call_oi": calls.get(top_call),
             "top_put_strike": top_put,
             "top_put_oi": puts.get(top_put),
+            "top_calls": top3(calls),
+            "top_puts": top3(puts),
             "put_call_oi_ratio": (total_p / total_c) if total_c else None,
             "total_oi": total_c + total_p,
         }
@@ -469,12 +489,33 @@ def cross_asset():
 
 
 def coingecko_global():
+    """Market cap, dominance, and the stablecoin pair.
+
+    Probe round 17 settled the stablecoin question at zero cost: `usdt` and
+    `usdc` are already in the `market_cap_percentage` block of the call this
+    function has always made, so no second endpoint is needed.
+
+    Supply is derived from total market cap rather than fetched, and D24 is
+    why both are returned. **Dominance is a ratio: it rises when the
+    denominator falls.** A dominance spike during a selloff is mostly
+    arithmetic, and printing it alone hands the reader a risk-off signal that
+    is sometimes just a falling market wearing a costume.
+    """
     d = _json(COINGECKO_GLOBAL)["data"]
+    pct = d["market_cap_percentage"]
+    total = d["total_market_cap"]["usd"]
+    usdt, usdc = pct.get("usdt"), pct.get("usdc")
+    stable_pct = sum(v for v in (usdt, usdc) if v is not None) or None
     return {
-        "total_mcap_usd": d["total_market_cap"]["usd"],
+        "total_mcap_usd": total,
         "mcap_change_24h_pct": d.get("market_cap_change_percentage_24h_usd"),
-        "btc_dominance": d["market_cap_percentage"].get("btc"),
-        "eth_dominance": d["market_cap_percentage"].get("eth"),
+        "btc_dominance": pct.get("btc"),
+        "eth_dominance": pct.get("eth"),
+        "usdt_dominance": usdt,
+        "usdc_dominance": usdc,
+        "stable_dominance": stable_pct,
+        "stable_supply_usd": (total * stable_pct / 100.0
+                              if stable_pct is not None and total else None),
         "source": "CoinGecko /api/v3/global",
     }
 
