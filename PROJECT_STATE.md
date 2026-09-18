@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5 clean mornings** · 🔴 **content bug open: FED PATH carried a superseded target range for two days (§3.24)** · 🟠 **a scheduled task outside this repo wakes up 26 Oct (§3.25)** · 📋 **handoff written — read §13 first** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🔴 **two detection/content bugs open: §3.24 stale target range, §3.26 the token-expiry blind spot** · 🟠 **a scheduled task outside this repo wakes up 26 Oct (§3.25)** · 📋 **build plan in `docs/BUILD_PLAN.md` — reconciliation and order in §13** |
 | **Last updated** | 2026-09-18 |
-| **Revision** | 20 (was: 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 21 (was: 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -479,6 +479,47 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.26 — The token expiry has no detector, and the system would report
+itself healthy all the way down.** Raised in the 2026-09-17 planning chat
+(`docs/BUILD_PLAN.md` §5) and **verified against the code here before being
+recorded.**
+
+Walk the chain:
+
+```
+token expires 2026-11-07
+  -> Apps Script dispatch returns 401, throws, Google emails Kabil   [caught]
+  -> no workflow_dispatch run at 08:20Z, so no brief at 09:20        [NOT caught]
+  -> the scheduled cron ("25 8" / "25 9") fires hours later          [by design]
+  -> the brief DOES arrive, just four hours late
+  -> state/latest.json gets last_sent_date = today
+  -> health.py: no day was missed  -> delivery_note() stays silent
+  -> health.py: the script version is fine -> trigger_note() stays silent
+```
+
+**Verified, not assumed:** `health.py`'s `notes()` calls exactly two checks —
+`delivery_note()` (missed days) and `trigger_note()` (script version). Neither
+looks at *when* the brief was built. The cron fallback is still registered at
+`25 8` / `25 9` in `market-brief.yml`. So the chain holds: **the project would
+silently return to the 4.5-hour delay it spent three weeks solving, with both
+detectors green.**
+
+This is §3.16 a second time, one level up. The first detector answered *"was a
+brief sent?"* Nothing answers *"was it sent on time?"* — and on-time delivery
+is the thing this project actually measures itself by (§9).
+
+**The fix is small:** the brief compares its own build time against target and
+banners past 30 minutes. It needs no new source, no probe and no schema change.
+
+**One claim in the same plan section does NOT hold, and is corrected here.**
+The plan states that `muteHttpExceptions: true` makes a 401 *"return as an
+ordinary response"* so *"Google sends no alert and the failure is completely
+silent"*, and asks for a non-200 throw. `trigger/apps-script.gs:104-113`
+already throws on `code !== 204`, with a comment giving that exact reason.
+**The hole described is closed and has been since v5.** Recorded so nobody
+spends a commit rebuilding it. *Evidence: `scripts/health.py` `notes()`;
+`.github/workflows/market-brief.yml:17-19`; `trigger/apps-script.gs:104`.*
+
 **§3.25 — A scheduled task with the ability to send mail has been firing
 daily outside this repository, and nothing in this file knew it existed.**
 Found 2026-09-18, while checking that no check-in was armed to fire into a chat
@@ -671,6 +712,67 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
 
 ---
 
+### §4.1 Decisions from the 2026-09-17 planning chat (D17–D24)
+
+**Source and status.** Taken with Kabil in a planning chat on 2026-09-17,
+recorded verbatim in `docs/BUILD_PLAN.md`. **None is implemented.** Evidence is
+that document, not a runner — which under §12.3 makes every one of them a
+design decision rather than a measured fact. They are binding on what gets
+built; they prove nothing about what works.
+
+| # | Decision |
+|---|---|
+| **D17** | **The PM edition is a delta, not a second brief.** Fixed spine (~6 lines) plus a body that prints only on material change; an empty body says `No material change since 09:20`. Daily, seven days a week |
+| **D18** | **The PM anchors to New York, not Lisbon.** `atHour(8).nearMinute(0)` ≈ 07:45–08:15 ET, `atHour(7)` as documented fallback. Two Lisbon timers plus an NY-hour guard — the D5 two-slot pattern |
+| **D19** | **Material-change thresholds are numeric and live in one config block.** v1 is fixed-percentage and regime-blind by acknowledged compromise; v2 is range-scaled, gated behind probe target 3 |
+| **D20** | **The shadow log ships in the same commit as the PM edition.** Every run records what the body would have printed at every threshold, even when suppressed. Retrofitting discards the evidence that sets v2 |
+| **D21** | **A missing AM baseline suppresses PM deltas entirely.** Absolute levels only, with the reason named. Never falls back to yesterday's close — that is §3.18 exactly |
+| **D22** | **The brief never flags a level.** Proposed and rejected. Number, delta, age stamp. D3 and D9 stand unchanged |
+| **D23** | **Policy scope is actions, scheduled announcements and dated plans — not remarks.** The wire is what catches an announced plan before it is signed |
+| **D24** | **Stablecoins always print supply and dominance together, never dominance alone.** Dominance is a ratio: it rises when the denominator falls. Printing it alone hands Kabil a risk-off signal that is sometimes just a falling market wearing a costume |
+
+### §4.2 D11 amended — per-class confirmation horizons
+
+**D11 is Locked, so this is an amendment and is logged as one.**
+
+| Class | Horizon | Applies to |
+|---|---|---|
+| `policy` | **75 days** *(was: 75 days for everything)* | summits, OPEC, FOMC, announcements |
+| `statutory` | **365 days** (new) | midterms and anything fixed in law |
+| `holiday` | **365 days** (new) | US and China closures |
+| `unlock` | **30 days** (new) | reserved — unlocks dropped, `docs/BUILD_PLAN.md` §11 |
+
+**Reason:** a holiday entry would flag `unconfirmed` within 75 days of every
+refresh, and **a flag that always fires is a flag nobody reads.** This is a
+parameter on the existing mechanism, not a second mechanism.
+
+### §4.3 D12 challenged and held
+
+Bessent was raised in the same chat as a coverage gap. Under D23's scope he is
+**not** one — buybacks, auctions and refunding are actions, and POLICY DESK
+already carries them. **The flag was wrong and is recorded as wrong**, per §8's
+own-errors-loudly rule. D12 unchanged.
+
+### §4.4 The data-actuals PM edition is dead
+
+**Reversed.** *(was, rev 13–20: "the 14:00 Lisbon second edition, designed,
+costed and approved" — carrying FRED actuals, landing 30 minutes after the
+08:30 ET prints.)* Kabil killed it: **he is at the desk when data prints, so a
+brief reporting the number after it lands tells him what is already on his
+screens.** It is replaced by a pre-NY-open delta at ~07:45–08:15 ET (D17, D18)
+— deliberately *before* the print rather than after it.
+
+**The honest cost:** three probe rounds (14, 15, 16) settled FRED's vintage
+method for a claim the brief will now not make. §12.9 and §12.10 stand as
+correct findings, and **most of that specific work is surplus to the design
+that replaced it.** FRED itself survives, repurposed to BACKDROP —
+unemployment trend, yield curve, CPI trend — which needs none of the
+`output_type=4` vintage machinery. Recorded rather than quietly dropped,
+because a planning chat that reverses four revisions of work should cost
+something visible.
+
+---
+
 ## §5 · OPEN QUESTIONS
 
 ### Blocking / high value
@@ -748,29 +850,57 @@ a working analysis layer at ~$4/month. *Evidence: sessions 5–6.*
   produced the same four entries. Needs a month of observation.
 
 ### Process
-- ❓ Is the AHEAD horizon (130 days) right? Untested against Kabil's actual
-  planning window.
+- ✅ **CLOSED 2026-09-17: the AHEAD horizon.** *(was: "Is the AHEAD horizon
+  (130 days) right? Untested against Kabil's actual planning window."* Open
+  since rev 1.) Answered: **365 days, five buckets** — NOW (7d) · THIS MONTH ·
+  3 MONTHS · 6 MONTHS · 12 MONTHS — with a new per-entry `lead` field setting
+  how many days ahead each one starts appearing, so a year-long horizon does
+  not flood the section. `docs/BUILD_PLAN.md` §6.
 
-### Queued behind the fifth clean morning
-- 🟠 **The 14:00 Lisbon "US OPEN" edition.** Designed, costed, approved. 09:00
-  ET for ~48 weeks a year; lands 30 min after the 08:30 ET prints and 30 min
-  before the NYSE open. **Not built** — it touches `main.py`, `state.py`, the
-  workflow and the Apps Script, all on the path producing the 09:20 brief.
-- 🟠 **FRED, method settled (§12.10).** `output_type=4` + an explicit realtime
-  window; a first print whose `realtime_start` is today published today. Key is
-  in place as a repository secret. **Not wired.**
-- 🟠 **The news set** — ZeroHedge (D16, as marked commentary) and CNBC, which
-  beat three of the four X accounts Kabil named (§12.8).
+### The build queue — gate cleared 2026-09-18, superseded by `docs/BUILD_PLAN.md`
+*(was: "Queued behind the fifth clean morning", listing the 14:00 Lisbon "US
+OPEN" edition, FRED and the news set as three independent items.)* The fifth
+clean morning landed and **Gate 0 is cleared.** The three items survive but are
+no longer a list — they are distributed across the five commits in
+`docs/BUILD_PLAN.md` §9, and the 14:00 edition itself is reversed (§4.4).
+Revised order in §13.
+
+- 🟠 **Commit 1 — AM reorganisation into three tiers.** Zero new sources, zero
+  probes; all rendering and date math against feeds already live. **Fold the
+  §3.24 fix in here** — it rewrites that section anyway.
+- 🟠 **The batched probe round — nine targets, one dispatch.** Off the delivery
+  path entirely, so it runs in parallel with Commits 1 and 2. The only work in
+  the plan that produces new *facts* rather than new plans.
+- 🟠 **Commits 2–5** — zero-cost data lines · probed sources wired (FRED as
+  BACKDROP, CNBC, ZeroHedge, Kalshi midterms) · the PM edition with the state
+  bundle · timing and health.
+- ❓ **Nine probe targets, none probed.** Every URL in targets 1, 2, 8 and 9 is
+  pattern-matched, not verified. Government sites are a plausible `S1` —
+  Farside, Binance and CME all blocked datacenter IPs. **Until a runner
+  answers, none of them exists.**
+- ❓ **Five PM dispatch timestamps.** `nearMinute` behaviour is Google's
+  scheduler, **not something a runner can probe** — the only test is to install
+  it and watch. Recorded as an observation, explicitly not a probe. Cannot
+  start until the Apps Script edit lands.
+- ❓ **Threshold v2, range-scaled.** Blocked on probe target 3 (Kraken daily
+  candles), then on ~2 weeks of shadow-log data.
 
 ### Data Kabil still owes
 - ✅ **CLOSED 2026-09-15: the FRED API key.** Created and added as repository
   secret `FRED_API_KEY`.
 - ✅ **CLOSED 2026-09-15: ZeroHedge in or out.** In, as visibly-marked
   commentary (D16).
-- ⏳ **The events he already watches.** Summits, court dates, deal deadlines he
-  is trading around. The curated leg of the radar is empty of everything he has
-  not named, and only he knows that list. **The one item on this list that has
-  not moved since rev 1.**
+- ⏳ **The events he already watches — moved for the first time since rev 1.**
+  Four entries supplied in the 2026-09-17 chat: **Trump–Xi 24 Sep** (`policy`,
+  lead 30, `CONFIRM`), **OpenAI court answer 1 Oct** (`policy`, lead 30,
+  `CONFIRM`), **US midterms 3 Nov** (`statutory`, lead 60, derivable from
+  federal law and therefore needing no confirmation route), **OPEC+
+  ministerials** (~8/yr, `policy`, lead 14, hand-entered). Still the least
+  complete item in the file, and no source can fill it.
+- ⏳ **His manual morning checks** — what he looks at every day that the brief
+  still does not carry. Raised in the 2026-09-17 chat and not answered.
+  **This is where the remaining value is**; the cheap wins are close to
+  exhausted.
 - ⏳ Whether he wants any Fed speaker beyond Warsh tracked by name.
 
 ---
@@ -801,6 +931,9 @@ trigger/apps-script.gs     the on-time trigger — installed 2026-09-08; carries
                            SCRIPT_VERSION, which the brief checks (was: "NOT
                            YET INSTALLED", stale since 2026-09-08)
 docs/trigger-setup.md      its walkthrough, checkpoint by checkpoint
+docs/BUILD_PLAN.md         the 2026-09-17 plan, verbatim, with a dated
+                           reconciliation preamble. Nothing in it is built
+docs/SYNOPSIS.md           the narrative account — the story, not the system
 README.md                  setup, source table, design rationale
 PROJECT_STATE.md           this file
 ```
@@ -892,9 +1025,11 @@ never once arrived on time. **When this file is next read, check §5 before
 8. Weekly: confirm watchlist entries, add events he hears about
 9. New source proposed  ->  PROBE FIRST  ->  §12.2 entry  ->  only then wire
 
-   -- the fifth clean morning arrived 2026-09-18; the queue still waits --
-10. Fix §3.24 first: a superseded target range outranks any new section
-11. PM edition at 14:00 LIS, read-only against state, actuals from FRED
+   -- gate 0 cleared 2026-09-18; build order now docs/BUILD_PLAN.md §9 --
+10. health.py latency banner: closes §3.26, the hole nothing detects
+11. Probe round (9 targets, 1 dispatch) -- off the delivery path, runs parallel
+12. Commit 1: three tiers, with the §3.24 fix folded in
+13. Commits 2-5: data lines -> probed sources -> PM delta + state bundle -> health
 ```
 
 **What success in this phase actually is.** Not a longer brief. A brief that
@@ -917,6 +1052,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 20 | 2026-09-18 | Kabil shared `docs/BUILD_PLAN.md` — a full redesign produced in a separate planning chat on 17 Sep against rev 17. It reverses the 14:00 data-actuals edition (§4.4), reorganises the AM brief into three tiers, extends AHEAD to 365 days with a `lead` field, and adds D17–D24 plus a D11 amendment. Two of its claims were checked against the code before being recorded: **the token-expiry blind spot is real (§3.26); the `muteHttpExceptions` hole it describes was closed in v5 and needed no work.** Gate 0, which the plan assumed stood at 3 of 5, had cleared the same morning |
 | 19 | 2026-09-18 | **Day 5 of five — delivery declared SOLVED.** Five inbox timestamps, all 09:20 LIS; dispatch identical to the second on all five days. The same morning found §3.24 — FED PATH had printed a target range the Fed superseded two days earlier — so the build queue five clean mornings was meant to unlock stayed shut. Closing the session for a handoff then surfaced §3.25: an enabled scheduled task firing daily outside the repository since August, dormant only because of a seasonal guard that stops guarding on 26 October |
 | 18 | 2026-09-17 | Day 4. The brief moved on from the FOMC correctly — the countdown re-pointed at 28 Oct, the radar dropped the spent entry, and the rebuilt ETF sign-flip flag fired live. The `Target X–Y% · EFFR` line was recorded **UNREAD** rather than inferred from the EFFR beneath it, which had plainly updated. That refusal to infer is what produced §3.24 the next morning — the inference would have been wrong |
 | 17 | 2026-09-16 | Day 3 of five, and the FOMC. Both radar legs fired on the same event and agreed; FED PATH resolved its countdown to `TODAY` with Kalshi live at 86% against 80% on the 13th; RISK WINDOWS listed all four components separately. **The ETF sign-flip flag — the detector the synopsis records as inverted at birth — was observed firing correctly on a real reversal for the first time** |
@@ -950,6 +1086,69 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 21 · 2026-09-18 · A redesign arrives from another chat, and two of its claims get checked
+
+**Sections touched:** header, §3.26 (new), §4.1–§4.4 (new), §5, §6, §9, §10,
+§13 (rewritten), `docs/BUILD_PLAN.md` (new)
+**Type:** DECISION / CORRECTION / STRUCTURE
+**Evidence:** `docs/BUILD_PLAN.md`, supplied by Kabil 2026-09-18 and committed
+verbatim. Code checks run here: `scripts/health.py` `notes()`;
+`.github/workflows/market-brief.yml:17-19`; `trigger/apps-script.gs:104-113`.
+
+| Field | Was | Now |
+|---|---|---|
+| The second edition | 14:00 LIS, FRED actuals, *"came in at X"* — designed, costed, approved | **reversed (§4.4)**: a pre-NY-open delta at ~07:45–08:15 ET, before the print |
+| AM brief structure | eleven flat sections | **three tiers, 14 sections** (D17–D24, `BUILD_PLAN` §3) |
+| AHEAD horizon | 130 days, open since rev 1 | **365 days, five buckets, per-entry `lead` field** — question CLOSED |
+| D11 confirmation horizon | 75 days for everything | **per-class: `policy` 75, `statutory` 365, `holiday` 365, `unlock` 30** (§4.2) |
+| Token expiry 2026-11-07 | a dated watchlist entry | **§3.26 — a failure chain with no detector at any step** |
+| `muteHttpExceptions` | *(plan: a silent-failure hole needing a fix)* | **already closed in v5 — verified, no work needed** |
+| Events Kabil trades around | empty, unmoved since rev 1 | **four entries** — Trump–Xi, OpenAI, midterms, OPEC+ |
+| Gate 0 | 3 of 5 (the plan's assumption) | **cleared 2026-09-18** |
+| Fragile fortnight | 4 dated events, 25 Oct – 7 Nov | **6, three of them new since the plan** (§13) |
+
+**Why:** The plan was written on 17 September against rev 17 and arrived on the
+18th against rev 20. Left side by side and unreconciled, the two documents
+disagree about the gate, about whether the PM edition carries actuals, and
+about whether an Apps Script fix is needed. A handoff of two documents that
+contradict each other is not a handoff.
+
+**Impact on prior conclusions:** One reversal and one correction.
+
+**The reversal** is §4.4 — the data-actuals PM edition is dead, and with it
+most of the specific value of probe rounds 14–16. §12.9 and §12.10 remain
+correct findings about FRED; they are simply no longer load-bearing, because
+BACKDROP needs none of the `output_type=4` vintage machinery. Recorded openly:
+a planning chat that reverses four revisions of work should cost something
+visible.
+
+**The correction runs the other way** — toward the plan. Its
+`muteHttpExceptions` item describes a hole that `trigger/apps-script.gs` closed
+in v5. Recorded in §3.26 so nobody spends a commit rebuilding a working guard.
+**This is why a plan gets checked against the code before it gets built, not
+after.**
+
+**Not changed, deliberately:** four things.
+
+**Nothing was built.** The plan is committed verbatim, with a preamble marking
+what has moved. Gate 0 clearing removes the excuse for not building, not the
+discipline governing how — nine unprobed targets are still nine unprobed
+targets, and every URL in four of them is pattern-matched rather than verified.
+
+**D17–D24 are recorded as design decisions, not measurements.** Their evidence
+line is a document, which under §12.3 proves what was decided and nothing about
+what works.
+
+**§3.24 was still not fixed, and §3.25's task was still not disabled.**
+Unchanged from rev 20, for the reasons given there.
+
+**The plan's own §9 order was kept.** Two items moved — the §3.24 fix folded
+into Commit 1, and the token renewal pulled out of the commit list because it
+is an action only Kabil can take. The rest stands as written, because it was
+right.
+
+---
 
 ## rev 20 · 2026-09-18 · A scheduled task nobody in this file knew about, and the handoff
 
@@ -1842,63 +2041,88 @@ consent screen.**
 
 ## §13 · HANDOFF — 2026-09-18
 
-This file and `docs/SYNOPSIS.md` are the two documents a new chat opens with.
-Read them in that order. What follows is the short version: what is live, what
-is broken, and what is waiting.
+Four documents now. Read them in this order:
 
-### Read these three first
+| | |
+|---|---|
+| `PROJECT_STATE.md` | this file — what is true, what is decided, what is open |
+| `docs/BUILD_PLAN.md` | what to build. **Read its preamble first**, then its §9 |
+| `docs/SYNOPSIS.md` | the story — how it got here and what went wrong |
+| `data/watchlist.txt` | the dated events the brief counts down to |
 
-1. **§3.24 — FED PATH's target range is stale for 1–2 days after every FOMC.**
-   It is in the shipping brief. It recurs eight times a year. **Next occurrence
-   28 October.** No fix is written; the cheapest one uses data the brief
-   already fetches. **This is the highest-value item in the file.**
-2. **§3.25 — the scheduled task that wakes up on 26 October.** Outside the
-   repository, invisible to every check inside it, able to send mail. Decide
-   before the 25th.
-3. **§2.1h — the five clean mornings.** Delivery is solved and does not need
-   re-litigating. A new chat that opens by re-measuring arrival times is
-   spending time that is already spent.
+### Read these four things first
 
-### The build queue, unopened on purpose
+1. **§3.26 — the token expires 2026-11-07 and nothing detects the failure.**
+   Dispatch dies, the old cron fires hours later, the brief still arrives, and
+   both detectors stay green while the project slides back to the 4.5-hour
+   delay it spent three weeks solving. **The fix is a build-time-vs-target
+   banner in `health.py`.** No probe, no new source, no schema change.
+2. **§3.24 — FED PATH prints a target range that is stale for 1–2 days after
+   every FOMC.** In the shipping brief. **Next occurrence 28 October.** The
+   plan renames the section to EXPECTATIONS; that does not fix it. Fold the fix
+   into Commit 1, which rewrites the section anyway.
+3. **§3.25 — a scheduled task outside this repository, able to send mail, stops
+   being dormant on 26 October.** That is inside the plan's own fragile
+   fortnight, and the plan does not know it exists.
+4. **§2.1h — delivery is solved, 5 of 5. Gate 0 is cleared.** Do not re-measure
+   it. `docs/BUILD_PLAN.md` still says "3 of 5" because it was written the day
+   before the fifth.
 
-Five clean mornings were meant to unlock three things. They arrived, and the
-queue stayed shut, because §3.24 landed the same morning.
+### The revised build order
 
-| | Ready? | Waiting on |
+The plan's §9 is sound and Gate 0 no longer blocks it. Two changes:
+
+| | What | Why it moved |
 |---|---|---|
-| **FRED wiring** | method settled (§12.10), key in place as a repo secret | the ordering decision |
-| **News set** — ZeroHedge + CNBC | decided (D16, §12.8) | the ordering decision |
-| **14:00 LIS "US OPEN" edition** | designed, costed, approved | FRED, then the ordering decision |
+| **1** | `health.py` latency banner (§3.26) | The plan already ranks this first. It closes the only failure nothing detects, and it is the smallest change in the whole plan |
+| **2** | The batched probe round — 9 targets, 1 dispatch | Off the delivery path entirely, so it runs in parallel with everything below. **The only work that produces new facts rather than new plans** |
+| **3** | Commit 1 — three tiers — **with the §3.24 fix in it** | New. The plan has Commit 1 rewriting FED PATH into EXPECTATIONS; fixing the stale range there costs one extra field and no new source |
+| **4** | Commits 2–5, in the plan's order | Unchanged |
+| — | ~~Renew the trigger token, late October~~ | **Not a commit — an action only Kabil can take**, and it must happen before 25 Oct |
 
-**The ordering decision is Kabil's and has not been made.** Three ways to take
-it: **(A)** fix §3.24 first, then build; **(B)** build first and fix §3.24
-before 28 October; **(C)** both, §3.24 first because it is the smaller change.
-**Recommendation: (A).** A bug in the brief that ships outranks three additions
-to it, and the deadline is set by the Fed rather than by preference.
+### The fragile fortnight, now with four entries
 
-### Dated, in order
-
-| When | What | Where |
+| Date | Event | Effect |
 |---|---|---|
-| **Sat 2026-09-19 · 14:30–16:00 LIS** | FRED maintenance. FRED is not wired, so nothing breaks — a free rehearsal for the degradation path if anyone wants one | `data/watchlist.txt` |
-| **Sun 2026-10-25** | Lisbon WEST→WET. The scheduled task's guard stops guarding | §3.25 |
-| **Wed 2026-10-28** | FOMC. §3.24 fires again unless it is fixed | §5 |
-| **Sat 2026-11-07** | The trigger token expires. The brief silently stops arriving on time | §5, `data/watchlist.txt` |
+| **25 Oct** | Portugal falls back | Lisbon–NY gap 5h → 4h; a Lisbon-anchored trigger lands an hour wrong |
+| **26 Oct** | **§3.25's task stops being dormant** | **Added here — the plan does not have this row.** A second, mail-capable sender wakes inside the same window |
+| **28 Oct** | **FOMC** | **Added here.** §3.24 fires again unless fixed |
+| **1 Nov** | US falls back | Gap returns to 5h, desync closes |
+| **3 Nov** | US midterms | Highest-volatility political event of the year |
+| **7 Nov** | Trigger token expires | Dispatch dies — silently, until §3.26 is fixed |
 
-### Still owed by Kabil, and only by him
+**Five dated events in fourteen days, three of them new since the plan was
+written.** The plan's own advice — renew the token in late October so the
+fortnight contains no scheduled maintenance — is right and now more so.
 
-**The events he already trades around** — summits, court dates, deal deadlines.
-The curated leg of the radar is empty of everything he has not named. **It is
-the one item on this file's list that has not moved since rev 1**, and no
-amount of building substitutes for it.
+### Decisions still owed by Kabil
+
+1. **The 26 October task (§3.25)** — rewrite as an alarm, disable, or leave.
+   Recommendation: rewrite as an alarm. Before the 25th.
+2. **His manual morning checks** — what he looks at daily that the brief does
+   not carry. Raised in the planning chat, unanswered. **The cheap wins are
+   close to exhausted; this is where the remaining value is.**
+3. **The rest of the events he trades around.** Four now exist. Still the least
+   complete item in the file, open since rev 1.
+4. **Any Fed speaker beyond Warsh**, by name.
 
 ### What is armed, and what is not
 
-No check-in is scheduled into the chat being closed — the five daily ones all
-fired and are spent. The only live scheduled thing touching this project
-outside GitHub Actions is §3.25's task. **The brief itself needs no chat to
-run:** Apps Script dispatches it, Actions builds it, Gmail delivers it, and
-none of that depends on a conversation being open.
+No check-in is scheduled into the chat being closed. The only live scheduled
+thing touching this project outside GitHub Actions is §3.25's task. **The brief
+itself needs no chat to run:** Apps Script dispatches it, Actions builds it,
+Gmail delivers it, and none of that depends on a conversation being open.
+
+### The discipline, restated because it is about to be tested
+
+Everything in `docs/BUILD_PLAN.md` was designed in one chat and **none of it is
+built.** Gate 0 existed to stop planning outrunning evidence, and it has now
+cleared — which removes the excuse, not the discipline. Nothing marked 🔴
+enters code until a runner answers a probe (§12.3). The plan adds nine
+unprobed targets and every URL in four of them is pattern-matched rather than
+verified.
+
+> The section count is not the metric. The arrival time is.
 
 ---
 

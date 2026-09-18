@@ -395,6 +395,36 @@ It was written down, dated, and left switched on, because it belongs to Kabil's
 account and his inbox, it cannot fire for another five weeks, and switching off
 somebody's fallback is not a thing to do on your own initiative.
 
+### One more thing arrived after this was written
+
+On 18 September Kabil shared a full redesign, worked out in a separate chat the
+day before: the morning brief reorganised into three tiers so the first screen
+answers most days on its own, the horizon stretched from four months to a year,
+and the second edition rebuilt from the ground up.
+
+**That last one is a reversal, and an instructive one.** The second edition had
+been designed to report the number *after* it prints — *"CPI came in at X"* —
+and three rounds of probing went into proving it could. Kabil killed it in one
+sentence: **he is already at the desk when data prints.** A brief that tells him
+what is already on his screens is a brief he stops opening. So the edition moved
+*earlier* — before the print, not after — and became a scan of what changed
+overnight rather than a report of what just landed.
+
+Most of the FRED work that survives is repurposed; some of it is simply spent.
+That is written down rather than quietly dropped.
+
+The plan also found something genuinely new: **the trigger token expires on
+7 November, and nothing would notice.** The dispatch would die, the old slow
+schedule would pick the brief up hours later, it would still arrive — and every
+alarm the project has built would stay green while it slid back to the delay it
+took three weeks to fix. That one is real; it was checked against the code
+before it was written down. A second item in the same plan was checked the same
+way and turned out to be **already fixed six versions ago** — which is the
+reason to check.
+
+The plan is in the repository as `BUILD_PLAN.md`, verbatim, with a note at the
+top saying what has moved since. **None of it is built.**
+
 ---
 
 ## 6 · What it deliberately will not do
@@ -434,16 +464,21 @@ were reasoned the same way as the two retracted verdicts, and are now marked
 | Commits | 68 |
 
 **Nothing needs Kabil to keep the brief running.** The FRED key is in place,
-ZeroHedge is decided, the script is re-pasted and the timer is confirmed. Two
-things need a decision from him, and neither is urgent this week:
+ZeroHedge is decided, the script is re-pasted and the timer is confirmed. Some
+things need a decision from him, and none is urgent this week:
 
-1. **What to build first** — fix the stale target range, or open the build
-   queue. My answer is the fix: a bug in the thing that ships outranks three
-   additions to it, and the Fed sets the deadline, not us.
+1. **Whether he accepts the build order.** It is written down now: close the
+   detection hole first, probe second, then rebuild the morning brief with the
+   stale-rate fix inside it. The reasoning is that bugs in the thing that ships
+   outrank additions to it, and the dates are set by the Fed and the token
+   rather than by preference.
 2. **What to do with the job that wakes up on 26 October** — switch it off, or
    cut it back to a one-line alarm that says *no brief arrived today* instead
    of writing a replacement one. My answer is the alarm, and switching it off
    if that turns out to be more work than it is worth.
+3. **What he checks every morning that the brief still does not carry.** Asked
+   in the planning chat and not yet answered. **This is where the remaining
+   value is** — the easy additions are close to exhausted.
 
 The one item still owed is the one owed since the beginning: **the events he
 already trades around**, which only he knows. The curated half of the radar is
