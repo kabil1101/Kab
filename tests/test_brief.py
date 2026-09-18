@@ -253,6 +253,19 @@ check_true("an exhausted forward view is explained, not shown empty",
 check_true("it does not claim a broken feed",
            "unavailable" not in md3.split("Next 5 sessions")[1][:300].lower(), md3)
 
+print("\n-- FRED keeps its own calendar, and it is not Lisbon's --")
+# The St. Louis Fed runs on US Central, six hours behind Lisbon in summer, so
+# between midnight and about 06:00 Lisbon has rolled over and FRED has not.
+# Asking for that date is a 400. Found live at 00:11 Lisbon; the 09:20 brief
+# never hits it, because 09:20 Lisbon is 03:20 Central on the same day.
+check("a Lisbon date ahead of FRED's is clamped",
+      sources._fred_today(date(2099, 1, 1)),
+      datetime.now(sources.FRED_TZ).date())
+check("an older explicit date is left alone",
+      sources._fred_today(date(2026, 1, 5)), date(2026, 1, 5))
+check_true("and with no argument it is FRED's own today",
+           sources._fred_today() == datetime.now(sources.FRED_TZ).date())
+
 print("\n-- liquidations: recent, counted, and never a daily total --")
 _NOW19 = datetime(2026, 9, 18, 9, 20, tzinfo=LISBON)
 _LIQ = {"ok": True, "error": None, "data": {

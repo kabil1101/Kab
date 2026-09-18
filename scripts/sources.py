@@ -1310,6 +1310,25 @@ def fed_odds(today: date) -> dict:
 
 FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
 
+# FRED keeps its own calendar, and it is not Lisbon's. The St. Louis Fed runs
+# on US Central, which is 6 hours behind Lisbon in summer - so between
+# midnight and about 06:00 Lisbon, Lisbon has rolled over and FRED has not.
+# Asking for that date is a 400:
+#
+#   Variable realtime_start can not be after today's date (2026-09-18)
+#   unless it's equal to the real-time max date 9999-12-31
+#
+# The 09:20 brief never hits it (09:20 Lisbon is 03:20 Central, same day) and
+# a 00:11 dispatch does, which is how it was found. Clamping costs nothing and
+# removes a whole class of "correct in one calendar, wrong in another".
+FRED_TZ = ZoneInfo("America/Chicago")
+
+
+def _fred_today(today: date | None = None) -> date:
+    """The latest date FRED will accept as a vintage."""
+    theirs = datetime.now(FRED_TZ).date()
+    return min(today, theirs) if today else theirs
+
 # Round 16 settled the method and it is a rule, not a preference: ask with an
 # EXPLICIT realtime window. FRED's default window wanders between calls -
 # round 15 saw two requests seconds apart disagree about what "today" was -
@@ -1386,7 +1405,7 @@ def backdrop(today: date | None = None) -> dict:
     key = (os.environ.get("FRED_API_KEY") or "").strip()
     if not key:
         raise RuntimeError("FRED_API_KEY is not set")
-    today = today or datetime.now(LISBON).date()
+    today = _fred_today(today)
 
     out, notes = [], []
     for sid, label, unit, limit in BACKDROP_SERIES:
@@ -1610,7 +1629,7 @@ def plumbing(today: date | None = None) -> dict:
     key = (os.environ.get("FRED_API_KEY") or "").strip()
     if not key:
         raise RuntimeError("FRED_API_KEY is not set")
-    today = today or datetime.now(LISBON).date()
+    today = _fred_today(today)
     out, notes = [], []
     for sid, label, unit, limit in PLUMBING_SERIES:
         try:
