@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🔴 **two detection/content bugs open: §3.24 stale target range, §3.26 the token-expiry blind spot** · 🟠 **a scheduled task outside this repo wakes up 26 Oct (§3.25)** · 📋 **build plan in `docs/BUILD_PLAN.md` — reconciliation and order in §13** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🔴 **§3.24 still open: FED PATH printed a superseded target range for a third day** · 📋 **build order in §13** |
 | **Last updated** | 2026-09-18 |
-| **Revision** | 21 (was: 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 22 (was: 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -361,6 +361,50 @@ path, not the schedule. See §5.
 every one of them watches for a failure and this was an absence. That is the
 finding, and §3.16 states it as a rule.
 
+### §2.5 The latency banner, proven on a runner — 2026-09-18
+
+Built, then fired deliberately rather than waited for. A dispatch at 12:56
+Lisbon carrying `trigger_version: 7` and `skip_email: true` is 3h31m past the
+09:25 target, so the check had to fire — and it did, in both places it should.
+
+**Actions annotation (run #78, job 105590008204):**
+
+```
+##[warning]BRIEF LATE — built 12:56 Lisbon, 3h31m past the 09:25 target.
+The external trigger dispatched late, unless this brief was pulled by hand.
+```
+
+**And in the brief itself**, under the build stamp and above THE SETUP:
+
+```
+*Cloud run — built 12:56 LIS.*
+
+> **⚠ BRIEF LATE — built 12:56 Lisbon, 3h31m past the 09:25 target. The
+> external trigger dispatched late, unless this brief was pulled by hand.**
+```
+
+Three things this run establishes beyond the banner:
+
+- **The wording is the dispatch one, not the fallback one.** `BRIEF_SCHEDULE`
+  was empty and `TRIGGER_VERSION` was `7`, which is exactly the ambiguous case
+  — and the note says *"unless this brief was pulled by hand"* rather than
+  accusing a working trigger. It was, in fact, pulled by hand.
+- **`skip_email` left the state file untouched** (`No state change to
+  commit.`), so proving the detector cost nothing: no email, no baseline
+  shift, no `last_sent_date` write.
+- **The self-test gate passed on the runner** before the build, so the 26 new
+  checks run in CI and not only on a laptop.
+
+> ⚠ **What this run does NOT establish.** The fallback wording — the one that
+> matters on 7 November — has never been produced by a real cron run. It is
+> covered by four offline tests, and offline is not a runner (§8). The first
+> genuine proof will be the first morning the trigger fails, which is by
+> construction not schedulable. Recorded as evidence-pending rather than
+> silently counted as proven.
+
+*Evidence: run #78 `workflow_dispatch` 2026-09-18 11:56:07Z, conclusion
+success, log lines 11:56:32.986 and 11:56:32.987.*
+
 ### §2.2 Token permission for the external trigger — measured, not assumed
 
 `.github/workflows/probe-permissions.yml`, run 33981684155, three jobs:
@@ -510,6 +554,12 @@ is the thing this project actually measures itself by (§9).
 
 **The fix is small:** the brief compares its own build time against target and
 banners past 30 minutes. It needs no new source, no probe and no schema change.
+
+> ✅ **FIXED AND PROVEN LIVE, 2026-09-18 — rev 22.** `health.latency_note()`
+> ships, 26 tests cover it including the rendered-brief path, and run #78 put
+> the banner in front of a reader. §2.5 has the run. The fallback wording — the
+> one the token expiry will actually produce — remains offline-tested only, and
+> §2.5 says so rather than counting it.
 
 **One claim in the same plan section does NOT hold, and is corrected here.**
 The plan states that `muteHttpExceptions: true` makes a 401 *"return as an
@@ -731,6 +781,29 @@ built; they prove nothing about what works.
 | **D23** | **Policy scope is actions, scheduled announcements and dated plans — not remarks.** The wire is what catches an announced plan before it is signed |
 | **D24** | **Stablecoins always print supply and dominance together, never dominance alone.** Dominance is a ratio: it rises when the denominator falls. Printing it alone hands Kabil a risk-off signal that is sometimes just a falling market wearing a costume |
 
+### §4.5 D25 — a detector may only claim what it can tell apart
+
+**Locked 2026-09-18.** When two situations produce identical evidence, the
+brief makes **one note naming both**, never one note picking the likelier.
+
+The case that forced it: `testNow()` pulls a brief by hand through the same
+`dispatch()` call, carrying the same `SCRIPT_VERSION`, as the timer. From the
+runner's side a late dispatch and a hand-pulled brief are **the same bytes.**
+The tempting fix was to infer from the size of the delay — hours means manual,
+minutes means drift. That is a guess wearing a threshold, and §12.4a already
+cost two wrong verdicts to learn what guesses cost.
+
+So the fallback branch, which `should_run` genuinely proves, gets a flat claim
+and names the token. The dispatch branch gets *"unless this brief was pulled by
+hand."* One of those is an alarm; the other is a question. **Printing them in
+the same words would have made both useless.**
+
+The alternative — adding a `manual` flag to the Apps Script so the two really
+could be told apart — was rejected for now: it bumps `SCRIPT_VERSION` to 8,
+which makes every brief say `TRIGGER OUT OF DATE` until Kabil re-pastes. That
+is real friction bought for a distinction he can make himself by remembering
+whether he pressed the button. Revisit when the PM timer forces a bump anyway.
+
 ### §4.2 D11 amended — per-class confirmation horizons
 
 **D11 is Locked, so this is an amendment and is logged as one.**
@@ -793,14 +866,26 @@ something visible.
 - ✅ **CLOSED 2026-09-18 — FIVE CLEAN MORNINGS. Delivery is solved.** Open in
   some form since rev 1; the headline item since rev 3. Five inbox timestamps,
   all 09:20 Lisbon, against a scheduler that was 13-for-13 late. §2.1h.
-- 🔴 **NEW HIGHEST-VALUE ITEM: FED PATH's target range is stale for 1–2 days
+- ✅ **CLOSED 2026-09-18: the token-expiry blind spot (§3.26).** Found in the
+  morning's plan, verified against the code, built, and fired in front of a
+  reader the same day. §2.5 has the run. The fallback wording — the one
+  7 November will actually produce — is offline-tested only, and §2.5 records
+  that rather than counting it as proven.
+- 🔴 **HIGHEST-VALUE ITEM: FED PATH's target range is stale for 1–2 days
   after every FOMC (§3.24).** Found the morning the measurement closed. It is
   in the shipping brief, it recurs eight times a year, and **the next FOMC is
   28 October**. Cheapest fix uses data already fetched: the watchlist knows the
   decision dates and POLICY DESK sees the statement land, so a range stamped on
   or before the last decision can be flagged as possibly superseded.
-- 🟠 **NEW, and dated: a scheduled task outside this repository wakes up on
-  26 October (§3.25).** It has self-exited every weekday since August on a
+- ✅ **CLOSED 2026-09-18, seven hours after it opened: the outside task is
+  deleted.** Kabil's call, taken the same day it surfaced — not rewritten as an
+  alarm, removed. Its prompt is preserved verbatim in
+  `docs/retired-cowork-relay.md`, with why it went and what to keep if a
+  fallback is ever rebuilt, so deleting the job did not delete what it knew.
+  The enabled-Routines list is now empty: **nothing outside GitHub Actions
+  touches this project.**
+- ⏳ *(was: NEW, and dated: a scheduled task outside this repository wakes up on
+  26 October (§3.25).* It has self-exited every weekday since August on a
   seasonal guard. When Lisbon returns to winter time the guard stops firing and
   it runs for real at 09:45 LIS — with the ability to email a second, degraded
   brief to the same inbox. **Nothing needs doing today; everything needs
@@ -919,9 +1004,10 @@ scripts/
   main.py       (230)      run guard, orchestration, SMTP, recipient lock
   state.py      (102)      day-over-day memory + duplicate-send guard
   watchlist.py   (98)      the curated half of the policy radar
-  health.py     (119)      does the brief itself still work — missed days,
-                           stale trigger. The only module that checks the
-                           system rather than the market
+  health.py     (200)      does the brief itself still work — missed days,
+                           stale trigger, and late arrival. The only module
+                           that checks the system rather than the market
+                           (was: 119 lines, two checks)
   probe.py      (167)      scratch prober, rewritten each round
 tests/
   test_brief.py(1176)      offline, no network, gates every brief
@@ -931,6 +1017,9 @@ trigger/apps-script.gs     the on-time trigger — installed 2026-09-08; carries
                            SCRIPT_VERSION, which the brief checks (was: "NOT
                            YET INSTALLED", stale since 2026-09-08)
 docs/trigger-setup.md      its walkthrough, checkpoint by checkpoint
+docs/retired-cowork-relay.md  the scheduled task deleted 2026-09-18, its
+                           prompt kept verbatim so deleting the job did not
+                           delete what it knew
 docs/BUILD_PLAN.md         the 2026-09-17 plan, verbatim, with a dated
                            reconciliation preamble. Nothing in it is built
 docs/SYNOPSIS.md           the narrative account — the story, not the system
@@ -1052,6 +1141,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 21 | 2026-09-18 | **First build since the gate cleared.** The `health.py` latency banner shipped and fired live on run #78 — `BRIEF LATE — built 12:56 Lisbon, 3h31m past the 09:25 target` — closing §3.26 the same day it was recorded. D25 locked: a detector may only claim what it can tell apart, which is why the dispatch branch says *"unless this brief was pulled by hand"* and the fallback branch does not. Kabil ordered §3.25's task deleted outright rather than rewritten; done, with its prompt preserved. Probe round 17 dispatched: nine targets, one run |
 | 20 | 2026-09-18 | Kabil shared `docs/BUILD_PLAN.md` — a full redesign produced in a separate planning chat on 17 Sep against rev 17. It reverses the 14:00 data-actuals edition (§4.4), reorganises the AM brief into three tiers, extends AHEAD to 365 days with a `lead` field, and adds D17–D24 plus a D11 amendment. Two of its claims were checked against the code before being recorded: **the token-expiry blind spot is real (§3.26); the `muteHttpExceptions` hole it describes was closed in v5 and needed no work.** Gate 0, which the plan assumed stood at 3 of 5, had cleared the same morning |
 | 19 | 2026-09-18 | **Day 5 of five — delivery declared SOLVED.** Five inbox timestamps, all 09:20 LIS; dispatch identical to the second on all five days. The same morning found §3.24 — FED PATH had printed a target range the Fed superseded two days earlier — so the build queue five clean mornings was meant to unlock stayed shut. Closing the session for a handoff then surfaced §3.25: an enabled scheduled task firing daily outside the repository since August, dormant only because of a seasonal guard that stops guarding on 26 October |
 | 18 | 2026-09-17 | Day 4. The brief moved on from the FOMC correctly — the countdown re-pointed at 28 Oct, the radar dropped the spent entry, and the rebuilt ETF sign-flip flag fired live. The `Target X–Y% · EFFR` line was recorded **UNREAD** rather than inferred from the EFFR beneath it, which had plainly updated. That refusal to infer is what produced §3.24 the next morning — the inference would have been wrong |
@@ -1086,6 +1176,51 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 22 · 2026-09-18 · The brief learns to say that it was late
+
+**Sections touched:** header, §2.5 (new), §3.26, §4.5 (new), §5, §6, §10, §13
+**Type:** DATA / DECISION
+**Evidence:** run #78 `workflow_dispatch` 2026-09-18 11:56:07Z, conclusion
+success; annotation and rendered banner at log lines 11:56:32.986–.987.
+`scripts/health.py` `latency_note`; 26 new checks in `tests/test_brief.py`.
+
+| Field | Was | Now |
+|---|---|---|
+| §3.26 | 🔴 open, no detector at any step | ✅ **closed and proven in front of a reader** |
+| §3.25's scheduled task | 🟠 enabled, wakes 26 Oct | ✅ **deleted** — Kabil's call, same day |
+| Things scheduled outside Actions | one, mail-capable | **none** |
+| `health.py` | two checks, 119 lines | **three checks, 200 lines** |
+| What a detector may claim | *(unwritten)* | **D25 — only what it can tell apart** |
+
+**Why:** The plan found the hole, this file verified it against the code, and
+the fix was the smallest change in the whole build order. Doing it first cost
+one morning's work and removed the one failure mode that would have been
+invisible while everything reported healthy.
+
+**Impact on prior conclusions:** None reversed. §3.16's *"this project had no
+way to detect its own absence"* now has its second half — it had no way to
+detect its own **lateness** either, which is the harder case, because a late
+brief still arrives and still looks like success.
+
+**Not changed, deliberately:** three things.
+
+**No Apps Script change, so no re-paste.** Adding a `manual` flag would let the
+brief tell `testNow()` from a drifting timer, and would cost a
+`SCRIPT_VERSION` bump to 8 — which makes every brief print `TRIGGER OUT OF
+DATE` until Kabil re-pastes. That friction is not worth a distinction he can
+make by remembering whether he pressed the button. D25 records the reasoning;
+revisit when the PM timer forces a bump anyway.
+
+**The 30-minute threshold was not tuned.** It is six times the largest spread
+ever observed and no data yet says otherwise. Tightening it on five samples
+would be exactly the over-fitting §12.4 warns about.
+
+**§3.24 is still not fixed.** Run #78 shows it live for a third day:
+`Target 3.50–3.75% · EFFR 3.63% · as of 16 Sep`, when the Fed moved to
+3.75–4.00% on the 16th. It is next in the build order, inside Commit 1.
+
+---
 
 ## rev 21 · 2026-09-18 · A redesign arrives from another chat, and two of its claims get checked
 
@@ -2074,8 +2209,8 @@ The plan's §9 is sound and Gate 0 no longer blocks it. Two changes:
 
 | | What | Why it moved |
 |---|---|---|
-| **1** | `health.py` latency banner (§3.26) | The plan already ranks this first. It closes the only failure nothing detects, and it is the smallest change in the whole plan |
-| **2** | The batched probe round — 9 targets, 1 dispatch | Off the delivery path entirely, so it runs in parallel with everything below. **The only work that produces new facts rather than new plans** |
+| ~~1~~ | ~~`health.py` latency banner (§3.26)~~ | ✅ **DONE 2026-09-18, proven live on run #78.** §2.5 |
+| ~~2~~ | ~~The batched probe round — 9 targets, 1 dispatch~~ | ✅ **RUN 2026-09-18.** Four passes, two failures, three inconclusive, two findings nobody asked for. §12.11 |
 | **3** | Commit 1 — three tiers — **with the §3.24 fix in it** | New. The plan has Commit 1 rewriting FED PATH into EXPECTATIONS; fixing the stale range there costs one extra field and no new source |
 | **4** | Commits 2–5, in the plan's order | Unchanged |
 | — | ~~Renew the trigger token, late October~~ | **Not a commit — an action only Kabil can take**, and it must happen before 25 Oct |
