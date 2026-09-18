@@ -33,6 +33,12 @@ const WORKFLOW = 'market-brief.yml';
 const REF = 'claude/daily-market-brief-kvfi35';
 const TZ = 'Europe/Lisbon';
 
+// The PM edition anchors to New York, not Lisbon: the point of it is to land
+// before the US cash open, and that moment is a New York time. 08:00 New York
+// is 30 minutes before the 08:30 prints and 90 minutes before the open.
+const NY_TZ = 'America/New_York';
+const PM_TARGET_NY_HOUR = 8;
+
 /**
  * Which version of this file is actually installed.
  *
@@ -46,7 +52,7 @@ const TZ = 'Europe/Lisbon';
  * compares that against EXPECTED_TRIGGER_VERSION in scripts/health.py. If you
  * change this file, bump both.
  */
-const SCRIPT_VERSION = '7';
+const SCRIPT_VERSION = '8';
 
 /**
  * Fired by the time-driven trigger. Asks GitHub to run the brief now.
@@ -58,6 +64,33 @@ const SCRIPT_VERSION = '7';
  */
 function sendBrief() {
   dispatch();
+}
+
+/**
+ * Fired by the two PM timers. Sends the afternoon delta - but only from the
+ * one of them that lands on 08:xx in New York today.
+ *
+ * Why two timers and a guard, rather than one timer at the right hour: Apps
+ * Script fires in the PROJECT's timezone, which is Lisbon, and the
+ * Lisbon-to-New-York gap is 4, 5 or 6 hours depending on the week. The US and
+ * the EU change clocks on different dates, so any single Lisbon hour is the
+ * wrong New York hour for about two weeks a year. This is the same two-slot
+ * pattern the workflow already uses for the morning cron, and it is here for
+ * the same reason.
+ *
+ * The guard reads New York's current hour from the clock rather than assuming
+ * an offset. That is deliberate: this project has already paid once for
+ * hardcoding one.
+ */
+function sendPm() {
+  const nyHour = Number(Utilities.formatDate(new Date(), NY_TZ, 'H'));
+  if (nyHour !== PM_TARGET_NY_HOUR) {
+    console.log('New York is ' + nyHour + ':xx, not ' + PM_TARGET_NY_HOUR +
+                ':xx. The other slot owns today. Exiting.');
+    return;
+  }
+  dispatch('pm');
+  console.log('PM delta dispatched (trigger v' + SCRIPT_VERSION + ').');
 }
 
 /**
@@ -73,7 +106,7 @@ function testNow() {
 /**
  * The actual call. Throws with GitHub's own words on anything but success.
  */
-function dispatch() {
+function dispatch(edition) {
   const token = PropertiesService.getScriptProperties()
       .getProperty('GITHUB_TOKEN');
   if (!token) {
@@ -94,7 +127,7 @@ function dispatch() {
     },
     payload: JSON.stringify({
       ref: REF,
-      inputs: {trigger_version: SCRIPT_VERSION}
+      inputs: {trigger_version: SCRIPT_VERSION, edition: edition || 'am'}
     }),
     // Read the status ourselves so a refusal produces a message that says
     // what GitHub actually objected to.
@@ -133,7 +166,8 @@ function install() {
   }
 
   ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === 'sendBrief') {
+    const fn = t.getHandlerFunction();
+    if (fn === 'sendBrief' || fn === 'sendPm') {
       ScriptApp.deleteTrigger(t);
     }
   });
@@ -145,6 +179,23 @@ function install() {
       .nearMinute(25)
       .create();
 
-  console.log('Installed: sendBrief runs daily near 09:25 ' + TZ +
-              ', seven days a week.');
+  // Two PM slots, one New York hour. 13:00 Lisbon is 08:00 New York while the
+  // clocks agree; 12:00 Lisbon is 08:00 New York in the two mismatch weeks
+  // when they do not. sendPm() checks which is which and the wrong one exits.
+  //
+  // nearMinute(0) narrows Google's window to roughly +-15 minutes instead of
+  // the whole hour, which is what keeps this ahead of the 08:30 prints rather
+  // than a coin flip against them.
+  [12, 13].forEach(function(hour) {
+    ScriptApp.newTrigger('sendPm')
+        .timeBased()
+        .everyDays(1)
+        .atHour(hour)
+        .nearMinute(0)
+        .create();
+  });
+
+  console.log('Installed: sendBrief near 09:25 ' + TZ + ', and sendPm at ' +
+              '12:00 and 13:00 ' + TZ + ' with a New York guard so exactly ' +
+              'one of them sends. Seven days a week.');
 }

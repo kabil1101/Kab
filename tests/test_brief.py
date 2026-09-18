@@ -17,6 +17,7 @@ import json  # noqa: E402
 import re  # noqa: E402
 
 import cycles  # noqa: E402
+import health  # noqa: E402
 import render  # noqa: E402
 import sources  # noqa: E402
 import state  # noqa: E402
@@ -252,6 +253,39 @@ check_true("an exhausted forward view is explained, not shown empty",
            "publishes only the current week" in md3, md3)
 check_true("it does not claim a broken feed",
            "unavailable" not in md3.split("Next 5 sessions")[1][:300].lower(), md3)
+
+print("\n-- the PM slots, and the version bump that forces a re-paste --")
+_gs = (Path(__file__).resolve().parents[1] / "trigger" / "apps-script.gs"
+       ).read_text(encoding="utf-8")
+check("the script and health agree on the version",
+      _gs.split("const SCRIPT_VERSION = '")[1].split("'")[0],
+      health.EXPECTED_TRIGGER_VERSION)
+check_true("the script has a PM sender", "function sendPm()" in _gs)
+# Apps Script fires in the PROJECT's timezone, which is Lisbon, and the
+# Lisbon-to-New-York gap is 4, 5 or 6 hours depending on the week. Any single
+# Lisbon hour is the wrong New York hour for about two weeks a year.
+check_true("installed at two Lisbon hours", "[12, 13].forEach" in _gs, _gs[-900:])
+check_true("with a New York guard so one of them exits",
+           "PM_TARGET_NY_HOUR" in _gs and "nyHour !== PM_TARGET_NY_HOUR" in _gs)
+check_true("and the offset is read, never assumed",
+           "Utilities.formatDate(new Date(), NY_TZ" in _gs)
+check_true("install clears BOTH handlers, so re-running cannot stack them",
+           "fn === 'sendBrief' || fn === 'sendPm'" in _gs)
+check_true("the dispatch carries the edition", "edition: edition || 'am'" in _gs)
+
+_wf = (Path(__file__).resolve().parents[1] / ".github" / "workflows"
+       / "market-brief.yml").read_text(encoding="utf-8")
+check_true("the workflow registers both PM cron slots",
+           '- cron: "0 12 * * *"' in _wf and '- cron: "0 13 * * *"' in _wf)
+# Without this the PM crons would run the MORNING path, should_run would see
+# 12:00 or 13:00 Lisbon and exit, and the fallback behind the PM edition would
+# silently never fire.
+check_true("and resolves the edition from the cron that fired",
+           "github.event.schedule == '0 12 * * *'" in _wf, _wf[:0])
+check_true("the PM guard reads New York from the cron, not the clock",
+           "PM_TARGET_HOUR_NY" in (Path(__file__).resolve().parents[1]
+                                   / "scripts" / "main.py")
+           .read_text(encoding="utf-8"))
 
 print("\n-- FRED keeps its own calendar, and it is not Lisbon's --")
 # The St. Louis Fed runs on US Central, six hours behind Lisbon in summer, so
@@ -1111,7 +1145,6 @@ print("\n-- a multi-day move is never called 'vs yesterday' --")
 # compared against Friday's figures and printed "-0.6% vs yesterday". The
 # number was correct; the label was two days wrong. Nothing in the suite had
 # an opinion about it, because the fixture above carried no date at all.
-import health  # noqa: E402
 
 
 def _label(prev_date, today=date(2026, 8, 21)):
@@ -1255,8 +1288,11 @@ check("and a ragged one keeps them", health._delay(222), "3h42m")
 
 # Ordering matters: the latency note is the one that explains why the others
 # look fine. It leads.
+# The version must be the CURRENT one, or this also trips the drift check and
+# the count below stops measuring what it claims to.
 _all = health.notes({"last_sent_date": "2026-09-20"}, date(2026, 9, 21),
-                    "7", "25 8", now=datetime(2026, 9, 21, 13, 7, tzinfo=LISBON))
+                    health.EXPECTED_TRIGGER_VERSION, "25 8",
+                    now=datetime(2026, 9, 21, 13, 7, tzinfo=LISBON))
 check("a late fallback run raises exactly one note", len(_all), 1)
 check_true("and it is the latency one", _all[0].startswith("BRIEF LATE"), _all)
 

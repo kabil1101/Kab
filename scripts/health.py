@@ -50,7 +50,7 @@ from datetime import date, datetime, timedelta
 # say so in the setup doc. The installed copy reports its own number on every
 # dispatch; a mismatch means someone edited the file here and never re-pasted
 # it into Google. That is not hypothetical — it is what happened on 12 Sep.
-EXPECTED_TRIGGER_VERSION = "7"
+EXPECTED_TRIGGER_VERSION = "8"
 
 # When the brief is meant to land. Both cron slots fire at :25 past, and
 # docs/trigger-setup.md tells Kabil to expect it then; main.py resolves which
