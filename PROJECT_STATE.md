@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 📋 **build order in §13** |
-| **Last updated** | 2026-09-18 |
-| **Revision** | 28 (was: 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed, trigger v8 live, banner cleared** · 🟠 **three PM-path bugs found by running it, all fixed (§3.33–§3.35)** · 📋 **build order in §13** |
+| **Last updated** | 2026-09-19 |
+| **Revision** | 29 (was: 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -554,6 +554,114 @@ permission is silently dropped**, producing a token that reads fine and cannot
 dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
+
+**§3.35 — The PM edition announced Friday's session as today's, and quietly
+poisoned the dataset meant to calibrate it.** Found on run #95, 2026-09-19.
+
+The body printed, at 14:20 on a **Saturday**:
+
+```
+**DXY +0.76%** on the session
+```
+
+The cash and futures markets were shut. That was **Friday's** session. The
+spine carried the same number as a bare percentage with no date — and a bare
+percentage is character-for-character what today's move looks like.
+
+**The timestamp was on the payload the whole time.** `_yahoo_quote` has always
+returned `as_of` from `meta.regularMarketTime`, and the morning brief has
+always put every quote through `_as_of_stamp`, whose docstring argues this
+exact case in full. **The PM edition simply never read the field.** Confirmed
+on run #96: with the fix in, all four quotes print `(Fri 18 Sep)`.
+
+**That is §3.9 for the fifth time** — present, sourced, and materially
+misleading — after a buyback, a policy rate, a news headline and a section
+heading.
+
+**The third consequence was the one nobody would have seen.** `shadow.jsonl`'s
+first and only row recorded `dxy 0.7591` and `us10y_bp 3.73` as
+Saturday-afternoon PM moves. That file is the **entire** evidence base for
+replacing v1's fixed thresholds with range-scaled ones (D20), and two of its
+seven fields were measuring the wrong day before it had a second row. A
+mislabelled banner gets noticed; a mislabelled dataset gets *averaged*.
+
+**Fixed three ways, because a label alone was not enough:**
+
+| Layer | Was | Now |
+|---|---|---|
+| Spine | bare `%` | dated: `(Fri 18 Sep)`, plus one line saying why |
+| Body | fired on any quote | **freshness is a gate** — a stale quote fires nothing |
+| Shadow log | stale value recorded as a move | **`null`**, so the gap is visible |
+
+`null` rather than a dropped key on purpose: a missing key reads as *"the
+dollar did not move"*, and the truth is *"the dollar was not trading"*. Those
+are different claims and only one of them is true.
+
+**No timestamp counts as not fresh** — §12.4a, absence of evidence is not
+evidence. The spine prints `(no timestamp)` so a quiet body always carries a
+visible reason rather than going silent, which is how this project's failures
+prefer to arrive. *Evidence: run #95 log 13:20:21Z (the bug), run #96 log
+13:31:17Z (the fix).*
+
+**§3.34 — `BRIEF LATE` would have fired on every PM edition, for ever, and
+retired the detector before it ever caught anything.** Found on run #95.
+
+```
+BRIEF LATE — built 14:20 Lisbon, 4h55m past the 09:25 target
+```
+
+**09:25 is the morning target.** `latency_note` had never heard of a second
+edition, so it judged every PM brief against the morning clock. The PM edition
+is built at **13:00 Lisbon by design** — 3h35m past 09:25, and seven times the
+30-minute threshold. Every PM edition, every day, would have opened with a red
+banner saying it was late while being exactly on time.
+
+**Why this is worse than a cosmetic fault.** §5 and the `LATE_AFTER_MINUTES`
+comment both say a detector that cries wolf gets retired inside a week. This
+one would have cried wolf on **half of all briefs**. The check built after the
+12 September gap — the one whose whole purpose is to catch a silent slide back
+to a 4.5-hour delay — would have been trained into background noise before it
+caught anything real.
+
+**The target is anchored to New York, not to a Lisbon hour.** Same reason the
+cron has two slots and the Apps Script has a New York guard: the Lisbon-NY gap
+is 4, 5 or 6 hours depending on the week, so a hardcoded 13:00 would itself
+have fired a false banner for an hour a day through **both DST mismatch
+windows**. Verified across 400 consecutive days that the target lands on 08:00
+New York on every one of them. *Evidence: run #95 (the false banner), run #96
+— `1h30m past the 13:00 target`, correct for a 14:30 hand-pulled run.*
+
+**§3.33 — The PM cron fallback was dead on arrival, and the test asserted the
+config line's presence rather than its behaviour.** Found on run #92, the
+first real firing of the `0 12` slot, 12:34 UTC:
+
+```
+BRIEF_EDITION:
+A brief for 2026-09-19 was already sent; this scheduled run is a duplicate.
+```
+
+The YAML `${{ }}` expression that resolved the edition from the cron produced
+an **empty string** on a scheduled run. So the PM slot ran the *morning* path,
+hit the morning's duplicate guard — which was true, the morning brief had gone
+out — and exited in **zero seconds reporting success**. The entire afternoon
+fallback was inert, and nothing would ever have looked broken.
+
+**The comment directly above that expression described this exact failure. The
+comment was right and the code was wrong.**
+
+**The test is the part worth keeping.** It asserted the workflow file
+*contained* the expression. It was green from the moment it was written,
+because the string was there and the string did nothing. **A test on a config
+line's presence is not a test on its behaviour**, and this one bought false
+confidence in precisely the place that could not otherwise be seen.
+
+Resolution moved into `main.edition()` for one reason: Python can be tested and
+a `${{ }}` expression cannot. `PM_CRON_SLOTS` is declared rather than derived
+from the New York hour, because which slot lands on 08:00 NY changes with US
+daylight saving and **both** must resolve to the PM edition — so
+`should_run_pm` is what rejects the non-owner, with its own message, rather
+than the morning guard rejecting it with a misleading one about a duplicate.
+*Evidence: run #92 log, 12:34:44Z.*
 
 **§3.32 — "Still ahead today" printed tomorrow's entry, and the shape is the
 one this file keeps meeting.** Found on run #87, one commit after shipping.
@@ -1459,6 +1567,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 27 | 2026-09-19 | **Commit 5 and the first PM editions — three bugs, none of which a test could have caught.** Probe round 19 sized the OKX page (100 rows / 28 minutes) and settled that `sz` is in contracts, so liquidations ship as counts and skew with **no dollar figure**. The addendum was closed by building all of it. Then Commit 5 installed the PM timers and bumped the trigger to v8 — Kabil re-pasted, three timers confirmed, banner cleared. **Then the running started, and it found what reading had not:** the PM cron fallback was inert and its test only checked that a string was present (§3.33); `BRIEF LATE` judged every PM edition against the morning's 09:25 target and would have fired on half of all briefs for ever (§3.34); and the PM edition announced Friday's session as today's, poisoning the first row of the D20 shadow log on the way (§3.35). **All three were found by dispatching, not by reading** — the suite was green through every one of them |
 | 26 | 2026-09-18 | **Probe round 18 and Commit 4.** The round overturned a verdict carried since rev 1: OKX returns liquidation orders keyless, with size, timestamp and side, so **the largest gap between Kabil's framework and this system is a wiring job rather than a subscription** (§3.31). Three other results corrected things this file asserted, two of them my own errors. Then Commit 4 — the state bundle and the PM edition, **the largest change on the delivery path** — with D21 proving itself on the first live render (§2.6). Two bugs of mine inside it: a per-cent change compared against a basis-point threshold, which would have fired the body on almost every afternoon, and a "still ahead today" line printing tomorrow's entry (§3.32) |
 | 25 | 2026-09-18 | **Commit 3 — BACKDROP and NEWS.** The FRED work repurposed from release-minute actuals to the economic picture, with round 16's explicit realtime window written into the fetcher rather than only into this file. NEWS ships CNBC as the wire and ZeroHedge marked as commentary — and the first live run returned three ZeroHedge items of which one was a culture-war headline with no market content, which is D16's warning arriving as evidence (§3.30). Two of my own mistakes: the commit message claimed 443 checks when the suite reports **430**, and `FRED_API_KEY` had been wired into `probe.yml` and never into the job that builds the brief, so BACKDROP would have degraded to `unavailable` every morning — caught by dispatching rather than by reading |
 | 24 | 2026-09-18 | **Commit 2 — seven lines, no new requests.** Funding restated as an annual carry (a rate per 8h is abstract; the same number annualised is money), perp basis pulled from a ticker field that was always in the payload and never returned, three OI strikes a side instead of one, stablecoin supply *and* dominance enforcing D24 in code, the ETF streak, and a cross-asset direction line. Three tests exist only to keep interpretation out: the options line may not say pin/target/support/resistance/expect, MACRO may not say risk-on or bearish, and dominance may not appear on a line without supply |
@@ -1499,6 +1608,70 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 29 · 2026-09-19 · Commit 5 ships, and then three PM bugs fall out of actually running it
+
+**Sections touched:** header, §3.33 (new), §3.34 (new), §3.35 (new), §10, §13
+**Type:** DEFECT / DELIVERY
+**Evidence:** runs #92 (12:34:44Z), #95 (13:20:21Z), #96 (13:31:17Z). 555
+offline checks, up from 527.
+
+| Field | Was | Now |
+|---|---|---|
+| Trigger | v7 installed, v8 in repo, banner showing | **v8 installed, 3 timers, banner cleared** |
+| PM cron fallback | registered and **inert** (§3.33) | resolved in Python, and tested on behaviour |
+| `BRIEF LATE` on a PM edition | **fires every day, for ever** (§3.34) | judged against the PM target, anchored to New York |
+| Cross-asset in the PM body | fires on any quote (§3.35) | **freshness is a gate** |
+| `shadow.jsonl` row 1 | two fields measuring Friday | deleted; stale now logs as `null` |
+| Liquidations | probed (§3.31) | **wired** — counts and skew, no notional |
+| `BUILD_PLAN_ADDENDUM_1` | open | **closed, and all of it built** |
+
+**Why this revision is mostly defects.** Commit 5 was the last commit in the
+plan and the only one that could not finish without Kabil — he pasted v8 and
+ran `install()`, and the three timers came up clean. Everything after that
+point was **found by dispatching runs, not by reading code**, and the suite was
+green through all three.
+
+**The pattern, stated plainly, because it is now the third time:**
+
+| Bug | The suite said | What was wrong |
+|---|---|---|
+| §3.33 | green | the test asserted a string was **present**, not that it **worked** |
+| §3.34 | green | no test had ever run `latency_note` as the PM edition |
+| §3.35 | green | every PM fixture was written **without a timestamp** |
+
+In all three, the test and the code agreed with each other and both were wrong
+about the world. §8's rule — *nothing is working until a runner says so* — has
+now paid for itself three times in one day, and the corollary is sharper than
+the rule: **a green suite is evidence about the fixtures, not about
+production.**
+
+**What §3.35 cost that the other two did not.** A wrong banner is visible and
+gets fixed. A wrong *dataset* gets averaged. The shadow log is the only
+evidence that will ever exist for setting v2's thresholds, and its first row
+was measuring the wrong day. That row is deleted — it came from a `skip_email`
+test dispatch, not a real edition — and the file is back to empty, which is the
+honest state.
+
+**Proven live on run #96, in order:** the fixed `edition()` path renders the PM
+edition; the version banner is gone; `BRIEF LATE` names `the 13:00 target`; all
+four cross-asset quotes print `(Fri 18 Sep)`; MATERIAL CHANGE reads *"No
+material change since 09:20"* where it had printed a false DXY alert.
+
+**Open, and flagged rather than fixed.** `gather()` makes 21 fetches; the PM
+edition renders a handful of them. Run #96 took 43s against run #95's 13s, and
+it started at 13:30:34Z — the minute the FRED maintenance window opened. The
+timing is *consistent with* paying timeout cost for data the PM edition never
+prints, but it has not been isolated. With `TIMEOUT=30` and `tries=3` a single
+dead host costs 90 seconds, and the PM edition's entire value is being ahead of
+the 08:30 ET prints. **Needs a probe, not a guess.**
+
+**Also open:** whether the PM edition should run at weekends at all. It is
+headed *"Pre-NY-open scan"* and there is no NY open on a Saturday; the crypto
+deltas are real, the whole cross-asset spine is not. That is a product call,
+and it is Kabil's.
+
+---
 
 ## rev 28 · 2026-09-18 · Commit 4 — and D21 proves itself by accident on the first render
 
