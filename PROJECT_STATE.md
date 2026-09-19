@@ -6,7 +6,7 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed, trigger v8 live, banner cleared** · 🟠 **three PM-path bugs found by running it, all fixed (§3.33–§3.35)** · 📋 **build order in §13** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed (3 confirmed)** · 🟡 **v8 banner clears on a dispatch carrying v8; the INSTALLED copy is unproven until Google dispatches** · 🟠 **three PM-path bugs found by running it, all fixed (§3.33–§3.35)** · 📋 **build order in §13** |
 | **Last updated** | 2026-09-19 |
 | **Revision** | 29 (was: 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
@@ -1618,7 +1618,7 @@ offline checks, up from 527.
 
 | Field | Was | Now |
 |---|---|---|
-| Trigger | v7 installed, v8 in repo, banner showing | **v8 installed, 3 timers, banner cleared** |
+| Trigger | v7 installed, v8 in repo, banner showing | 3 timers confirmed by screenshot; **v8 still unproven from Google's side** |
 | PM cron fallback | registered and **inert** (§3.33) | resolved in Python, and tested on behaviour |
 | `BRIEF LATE` on a PM edition | **fires every day, for ever** (§3.34) | judged against the PM target, anchored to New York |
 | Cross-asset in the PM body | fires on any quote (§3.35) | **freshness is a gate** |
@@ -1628,9 +1628,17 @@ offline checks, up from 527.
 
 **Why this revision is mostly defects.** Commit 5 was the last commit in the
 plan and the only one that could not finish without Kabil — he pasted v8 and
-ran `install()`, and the three timers came up clean. Everything after that
-point was **found by dispatching runs, not by reading code**, and the suite was
-green through all three.
+ran `install()`, and the Triggers page showed three timers. Everything after
+that point was **found by dispatching runs, not by reading code**, and the
+suite was green through all three.
+
+> ⚠ **What the cleared banner does and does not prove.** Runs #95 and #96 were
+> `workflow_dispatch` calls where **I supplied `trigger_version: 8` as an
+> input**. They prove the banner clears when a dispatch carries v8. They prove
+> **nothing about the copy running inside Google** — that claim can only be
+> settled by a dispatch Google itself sends, i.e. the next scheduled brief.
+> §12.4a: a verdict is a claim, and the claim here is still open. The screenshot
+> shows three timers *exist*; it does not show their version.
 
 **The pattern, stated plainly, because it is now the third time:**
 
@@ -1654,7 +1662,7 @@ test dispatch, not a real edition — and the file is back to empty, which is th
 honest state.
 
 **Proven live on run #96, in order:** the fixed `edition()` path renders the PM
-edition; the version banner is gone; `BRIEF LATE` names `the 13:00 target`; all
+edition; `BRIEF LATE` names `the 13:00 target`; all
 four cross-asset quotes print `(Fri 18 Sep)`; MATERIAL CHANGE reads *"No
 material change since 09:20"* where it had printed a false DXY alert.
 
