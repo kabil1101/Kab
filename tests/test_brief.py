@@ -794,6 +794,79 @@ check("a fresh quote under the threshold still prints nothing",
       [l for l in render.pm_body(_q_small)[0] if "DXY" in l], [])
 
 
+print("\n-- the shadow log records editions that were sent, not test runs --")
+# Three rows landed in the D20 dataset from skip_email dispatches at 14:30,
+# 15:25 and 15:38 Lisbon. None is a 13:00 edition, so each measures a
+# different interval from the one the thresholds are being calibrated for.
+# §3.35's lesson a second time: a wrong banner gets seen, a wrong dataset
+# gets averaged.
+#
+# Driven through main() rather than by reading the source for an `if`. §3.33
+# is the section about a test that asserted a line was PRESENT while the line
+# did nothing, and it cost a dead PM fallback nobody could see.
+import tempfile as _tempfile
+
+def _run_main(skip_email, shadow_path):
+    """main() end to end, offline, with the shadow log pointed at a temp file."""
+    _saved = {k: _os.environ.get(k) for k in
+              ("SKIP_EMAIL", "BRIEF_EDITION", "FORCE_RUN", "BRIEF_SCHEDULE",
+               "TRIGGER_VERSION", "GMAIL_USER", "GMAIL_APP_PASSWORD")}
+    _orig = (main.gather, main.send_email, main.SHADOW_PATH,
+             state.load, state.save)
+    sent = []
+    try:
+        _os.environ["BRIEF_EDITION"] = "pm"
+        _os.environ["FORCE_RUN"] = "1"
+        _os.environ["GMAIL_USER"] = "x@example.com"
+        _os.environ["GMAIL_APP_PASSWORD"] = "pw"
+        for k in ("BRIEF_SCHEDULE", "TRIGGER_VERSION"):
+            _os.environ.pop(k, None)
+        if skip_email:
+            _os.environ["SKIP_EMAIL"] = "1"
+        else:
+            _os.environ.pop("SKIP_EMAIL", None)
+        ctx = dict(_q_shut)
+        main.gather = lambda now: dict(ctx, now=now)
+        main.send_email = lambda *a, **kw: sent.append(a)
+        main.SHADOW_PATH = shadow_path
+        state.load = lambda *a, **kw: {"am": {"btc": 80000.0, "eth": 2500.0}}
+        state.save = lambda *a, **kw: None
+        # main() prints the brief to stdout by design; the suite's own
+        # output is the report, so swallow it here.
+        import contextlib as _ctx, io as _io
+        with _ctx.redirect_stdout(_io.StringIO()), \
+             _ctx.redirect_stderr(_io.StringIO()):
+            rc = main.main()
+        return rc, sent
+    finally:
+        (main.gather, main.send_email, main.SHADOW_PATH,
+         state.load, state.save) = _orig
+        for k, v in _saved.items():
+            if v is None:
+                _os.environ.pop(k, None)
+            else:
+                _os.environ[k] = v
+
+with _tempfile.TemporaryDirectory() as _td:
+    _sp = Path(_td) / "shadow.jsonl"
+    _rc, _sent = _run_main(skip_email=True, shadow_path=_sp)
+    check("a skip_email run still succeeds", _rc, 0)
+    check("and sends nothing", _sent, [])
+    check_true("and writes NO shadow row", not _sp.exists(), _sp.exists())
+
+    _sp2 = Path(_td) / "shadow2.jsonl"
+    _rc2, _sent2 = _run_main(skip_email=False, shadow_path=_sp2)
+    check("a real send succeeds too", _rc2, 0)
+    check("and actually sends", len(_sent2), 1)
+    check_true("and DOES write a shadow row", _sp2.exists(), False)
+    _rows = [json.loads(l) for l in _sp2.read_text().splitlines() if l.strip()]
+    check("exactly one row per edition", len(_rows), 1)
+    check_true("carrying the measured moves",
+               "btc" in _rows[0]["moves"], _rows[0])
+    check_true("and the thresholds they were judged against",
+               _rows[0]["thresholds"] == render.THRESHOLDS, _rows[0])
+
+
 print("\n-- a source is fetched when something reads it, and not before --")
 # §3.36. gather() used to fetch all 21 sources before either edition rendered
 # a line, so the PM edition waited on FRED - which it never prints - through

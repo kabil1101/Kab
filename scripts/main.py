@@ -431,8 +431,16 @@ def main() -> int:
         print(f"::warning::{note}", file=sys.stderr)
     if mode == "pm":
         markdown, html = render.pm_build(ctx)
-        _, shadow = render.pm_body(ctx)
-        write_shadow(now, shadow, len(render.pm_body(ctx)[0]))
+        body, shadow = render.pm_body(ctx)
+        # D20 records what a REAL edition would have printed. A skip_email
+        # test dispatch is not one: it runs at whatever hour the testing
+        # happens to be at, so its row measures a different interval from the
+        # 09:20-to-13:00 window the thresholds are being calibrated for.
+        # Three such rows were already in the file before anyone noticed,
+        # which is §3.35's lesson a second time - a wrong banner gets seen,
+        # a wrong dataset gets averaged.
+        if sending:
+            write_shadow(now, shadow, len(body))
     else:
         markdown, html = render.build(ctx)
 
