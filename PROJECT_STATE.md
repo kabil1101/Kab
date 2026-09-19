@@ -1612,7 +1612,7 @@ later.
 
 ## rev 29 · 2026-09-19 · Commit 5 ships, and then three PM bugs fall out of actually running it
 
-**Sections touched:** header, §3.33 (new), §3.34 (new), §3.35 (new), §10, §13
+**Sections touched:** header, §3.33 (new), §3.34 (new), §3.35 (new), §3.36 (new, open), D25 (new), §10, §13
 **Type:** DEFECT / DELIVERY
 **Evidence:** runs #92 (12:34:44Z), #95 (13:20:21Z), #96 (13:31:17Z). 555
 offline checks, up from 527.
@@ -1667,18 +1667,37 @@ edition; `BRIEF LATE` names `the 13:00 target`; all
 four cross-asset quotes print `(Fri 18 Sep)`; MATERIAL CHANGE reads *"No
 material change since 09:20"* where it had printed a false DXY alert.
 
-**Open, and flagged rather than fixed.** `gather()` makes 21 fetches; the PM
-edition renders a handful of them. Run #96 took 43s against run #95's 13s, and
-it started at 13:30:34Z — the minute the FRED maintenance window opened. The
-timing is *consistent with* paying timeout cost for data the PM edition never
-prints, but it has not been isolated. With `TIMEOUT=30` and `tries=3` a single
-dead host costs 90 seconds, and the PM edition's entire value is being ahead of
-the 08:30 ET prints. **Needs a probe, not a guess.**
+**§3.36 (open) — the PM edition waits on sources it never prints.** Three runs
+inside and outside FRED's maintenance window, same code path, same edition:
 
-**Also open:** whether the PM edition should run at weekends at all. It is
-headed *"Pre-NY-open scan"* and there is no NY open on a Saturday; the crypto
-deltas are real, the whole cross-asset spine is not. That is a product call,
-and it is Kabil's.
+| Run | Built | FRED window | Build step |
+|---|---|---|---|
+| #95 | 13:20Z | outside | **13s** |
+| #96 | 13:30Z | opens 13:30Z | **43s** |
+| #97 | 14:25Z | inside | **100s** |
+
+A call-graph trace over `pm_build` settles what the PM edition actually reads:
+**11 of the 21 sources `gather()` fetches.** `backdrop` and `plumbing` — the
+**nine FRED calls** — are not among them. With `TIMEOUT=30` and `tries=3` a
+dead host costs 90 seconds, and nine of them share one host.
+
+So the PM edition currently blocks on a source it does not render, and the
+evidence is a 7.7× build time inside a window that was on the watchlist. The
+morning brief has the same exposure: 08:20 UTC is outside FRED's maintenance
+window, but *outside this particular window* is not the same as safe.
+
+**Not yet fixed, deliberately.** The obvious fix — pass the edition into
+`gather()` and skip what the edition never reads — touches the delivery path,
+and this file's own rule is that delivery-path changes get their own testing
+attention rather than riding along with something else. The skip list must also
+be derived, not guessed: two of the eleven (`perp_eth`, the `_oi_line` key) are
+read through a loop variable and an AST trace misses them. Guessing that list
+is how a section goes quietly empty.
+
+**Closed by D25:** whether the PM edition should run at weekends. Kabil's call
+— **crypto only**, and proven live on run #97: no cross-asset line, funding and
+both liquidation books in its place, `Cash and futures markets are shut — crypto
+only` in the subtitle.
 
 ---
 
