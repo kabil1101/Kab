@@ -6,7 +6,7 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed (3 confirmed)** · 🟡 **v8 banner clears on a dispatch carrying v8; the INSTALLED copy is unproven until Google dispatches** · 🟠 **three PM-path bugs found by running it, all fixed (§3.33–§3.35)** · 📋 **build order in §13** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed (3 confirmed)** · 🟡 **v8 banner clears on a dispatch carrying v8; the INSTALLED copy is unproven until Google dispatches** · 🟠 **three PM-path bugs found by running it, all fixed (§3.33–§3.35)** · 🟢 **weekend PM edition is crypto only (D25)** · 📋 **build order in §13** |
 | **Last updated** | 2026-09-19 |
 | **Revision** | 29 (was: 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
@@ -1132,6 +1132,7 @@ built; they prove nothing about what works.
 | **D22** | **The brief never flags a level.** Proposed and rejected. Number, delta, age stamp. D3 and D9 stand unchanged |
 | **D23** | **Policy scope is actions, scheduled announcements and dated plans — not remarks.** The wire is what catches an announced plan before it is signed |
 | **D24** | **Stablecoins always print supply and dominance together, never dominance alone.** Dominance is a ratio: it rises when the denominator falls. Printing it alone hands Kabil a risk-off signal that is sometimes just a falling market wearing a costume |
+| **D25** | **The weekend PM edition runs crypto only, and "shut" is decided by the quotes' own timestamps.** Kabil's call 2026-09-19 over skipping weekends. When every cross-asset quote is timestamped and every one is stale, the section is dropped and funding + liquidations take the slot — both 24/7. **A dead feed is never read as a shut market**: `failed` and `unknown` are separate states, because collapsing them would hide an outage behind a plausible story (§3.16) |
 
 ### §4.5 D25 — a detector may only claim what it can tell apart
 
