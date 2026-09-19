@@ -1685,6 +1685,32 @@ def _pm_move(am, key, current):
     return (current - was) / was * 100.0
 
 
+def _pm_fresh(q, now):
+    """Is this quote's last print from today, and can we even tell?
+
+    The PM edition read `pct_change` straight off the Yahoo payload and called
+    it "on the session". On a Saturday that is FRIDAY'S session: the cash and
+    futures markets are shut, `regularMarketPrice` still answers, and the
+    percentage is a real number attached to the wrong day. Run #95 printed
+    "DXY +0.76% on the session" at 14:20 on a Saturday for exactly that
+    reason. §3.9 shape - present, sourced, and materially misleading.
+
+    The morning brief never had this bug: it puts every quote through
+    `_as_of_stamp`, whose docstring makes the argument in full. The timestamp
+    was on the payload all along; this edition simply never looked at it.
+
+    No timestamp counts as NOT fresh. §12.4a - absence of evidence is not
+    evidence, and a threshold alert fired on a number whose age cannot be
+    established is the same bug wearing a shrug.
+    """
+    as_of = (q or {}).get("as_of")
+    if as_of is None:
+        return False, " (no timestamp)"
+    if as_of.date() == now.date():
+        return True, ""
+    return False, f" ({as_of:%a %d %b})"
+
+
 def pm_spine(ctx):
     """About six lines, always printed, even on the quietest afternoon.
 
@@ -1717,16 +1743,23 @@ def pm_spine(ctx):
 
     ca = ctx.get("cross_asset")
     if ca and ca["ok"]:
-        bits = []
+        bits, stale = [], False
         for label in ("DXY", "US 10Y", "S&P 500 fut", "Nasdaq fut"):
             q = (ca["data"]["quotes"] or {}).get(label)
             if not q:
                 continue
+            fresh, mark = _pm_fresh(q, now)
+            stale = stale or not fresh
             bits.append(f"{label} {q['last']:,.2f}"
                         + (f" ({q['pct_change']:+.2f}%)"
-                           if q.get("pct_change") is not None else ""))
+                           if q.get("pct_change") is not None else "")
+                        + mark)
         if bits:
             out.append(" · ".join(bits))
+            if stale:
+                out.append("A dated or untimed quote above is that market's "
+                           "last print, not today's move — the session is "
+                           "shut or the feed carried no clock.")
     elif ca:
         out.append(f"Cross-asset unavailable — {ca['error']}")
 
@@ -1762,6 +1795,7 @@ def pm_body(ctx):
     v2 thresholds.
     """
     am = state.am_baseline(ctx.get("prev") or {})
+    now = ctx["now"]
     lines, shadow = [], {}
     if not am:
         return lines, shadow
@@ -1815,17 +1849,24 @@ def pm_body(ctx):
     ca = ctx.get("cross_asset")
     if ca and ca["ok"]:
         quotes = ca["data"]["quotes"] or {}
+        # A stale quote is shadow-logged as null rather than dropped. Dropping
+        # the key would make the gap invisible to whoever calibrates v2, and
+        # they would read a weekend as "the dollar did not move" instead of
+        # "the dollar was not trading". D20 wants the measurement attempt on
+        # the record either way.
         q = quotes.get("DXY")
         if q and q.get("pct_change") is not None:
-            shadow["dxy"] = round(q["pct_change"], 4)
-            if abs(q["pct_change"]) >= THRESHOLDS["dxy"]:
+            fresh, _m = _pm_fresh(q, now)
+            shadow["dxy"] = round(q["pct_change"], 4) if fresh else None
+            if fresh and abs(q["pct_change"]) >= THRESHOLDS["dxy"]:
                 lines.append(f"**DXY {q['pct_change']:+.2f}%** on the session")
         q = quotes.get("US 10Y")
         if q and q.get("pct_change") is not None and q.get("last"):
             # Convert the per-cent change into a move in the yield itself.
+            fresh, _m = _pm_fresh(q, now)
             bp = q["last"] * q["pct_change"] / 100.0 * 100.0
-            shadow["us10y_bp"] = round(bp, 2)
-            if abs(bp) >= THRESHOLDS["us10y_bp"]:
+            shadow["us10y_bp"] = round(bp, 2) if fresh else None
+            if fresh and abs(bp) >= THRESHOLDS["us10y_bp"]:
                 lines.append(f"**US 10Y {bp:+.0f}bp** to {q['last']:.2f}%")
     return lines, shadow
 

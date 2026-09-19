@@ -657,7 +657,9 @@ _bp = dict(healthy)
 _bp["now"] = datetime(2026, 9, 18, 13, 0, tzinfo=LISBON)
 _bp["prev"] = {"am": {"btc": 80000.0}}
 _bp["cross_asset"] = {"ok": True, "error": None, "data": {"quotes": {
-    "US 10Y": {"last": 4.70, "pct_change": 0.30, "as_of": None}}, "errors": {}}}
+    "US 10Y": {"last": 4.70, "pct_change": 0.30,
+               "as_of": datetime(2026, 9, 18, 13, 0, tzinfo=LISBON)}},
+    "errors": {}}}
 _, _sh = render.pm_body(_bp)
 check("a 0.30% session on a 4.70 yield is 1.4bp, not 30",
       _sh["us10y_bp"], 1.41)
@@ -666,6 +668,121 @@ check("and 1.4bp does not cross a 5bp threshold",
 _bp["cross_asset"]["data"]["quotes"]["US 10Y"]["pct_change"] = 2.0   # ~9bp
 check_true("9bp does", any("10Y" in l for l in render.pm_body(_bp)[0]),
            render.pm_body(_bp)[0])
+
+
+print("\n-- the PM edition reads a quote's clock before calling it today's --")
+# Run #95, 14:20 on a SATURDAY, printed "DXY +0.76% on the session". The cash
+# and futures markets were shut; that was Friday's session. The timestamp was
+# on the payload the whole time and this edition never looked at it.
+def _ca_ctx(as_of, pct=0.76, when=(2026, 9, 19, 13, 0)):
+    c = _pm_ctx(80000.0, am={"btc": 80000.0, "eth": 2500.0})
+    c["now"] = datetime(*when, tzinfo=LISBON)
+    c["cross_asset"] = {"ok": True, "error": None, "data": {"quotes": {
+        "DXY": {"last": 100.22, "pct_change": pct, "as_of": as_of}},
+        "errors": {}}}
+    return c
+
+_sat = _ca_ctx(datetime(2026, 9, 18, 21, 0, tzinfo=LISBON))   # Friday's print
+_sat_body, _sat_shadow = render.pm_body(_sat)
+check("a Friday quote never fires a Saturday alert",
+      [l for l in _sat_body if "DXY" in l], [])
+check_true("and the words 'on the session' are nowhere near it",
+           not any("on the session" in l for l in _sat_body), _sat_body)
+_sat_md, _ = render.pm_build(_sat)
+check_true("the spine still prints the quote", "DXY 100.22" in _sat_md, _sat_md)
+check_true("but dated, so it cannot read as today's",
+           "(Fri 18 Sep)" in _sat_md, _sat_md)
+check_true("and says plainly why it is dated",
+           "not today's move" in _sat_md, _sat_md)
+
+# D20. The gap must be visible to whoever calibrates v2: a MISSING key reads
+# as "the dollar did not move", which is a different claim from "the dollar
+# was not trading".
+check_true("a stale reading is shadow-logged as null, not dropped",
+           "dxy" in _sat_shadow and _sat_shadow["dxy"] is None, _sat_shadow)
+import json as _json
+check_true("and it survives the JSON round trip the log actually does",
+           _json.loads(_json.dumps(_sat_shadow, sort_keys=True))["dxy"] is None,
+           _sat_shadow)
+
+_live = _ca_ctx(datetime(2026, 9, 19, 12, 55, tzinfo=LISBON))  # today's print
+_live_body, _live_shadow = render.pm_body(_live)
+check_true("a same-day quote fires normally",
+           any("DXY" in l and "on the session" in l for l in _live_body),
+           _live_body)
+check("and is measured, not nulled", round(_live_shadow["dxy"], 2), 0.76)
+_live_md, _ = render.pm_build(_live)
+check_true("a live quote carries no date marker",
+           "(Fri 18 Sep)" not in _live_md, _live_md)
+check_true("and no staleness footnote",
+           "not today's move" not in _live_md, _live_md)
+
+# §12.4a. A quote with no clock cannot be shown to be current, so it makes no
+# claim - but it must SAY so rather than go quiet, which is the failure shape
+# this project keeps meeting.
+_noclock = _ca_ctx(None)
+_nc_body, _nc_shadow = render.pm_body(_noclock)
+check("an undateable quote fires nothing",
+      [l for l in _nc_body if "DXY" in l], [])
+check_true("and is nulled in the shadow log",
+           _nc_shadow["dxy"] is None, _nc_shadow)
+_nc_md, _ = render.pm_build(_noclock)
+check_true("and the brief says the clock is missing",
+           "(no timestamp)" in _nc_md, _nc_md)
+
+# The threshold still has to be crossed - freshness is a gate, not a trigger.
+_small = _ca_ctx(datetime(2026, 9, 19, 12, 55, tzinfo=LISBON), pct=0.05)
+check("a fresh quote under the threshold still prints nothing",
+      [l for l in render.pm_body(_small)[0] if "DXY" in l], [])
+
+
+print("\n-- BRIEF LATE knows which edition it is judging --")
+# Every PM edition carried a BRIEF LATE banner, because 13:00 Lisbon is three
+# and a half hours past an 09:25 target and the check knew of one edition.
+_pm_on_time = datetime(2026, 9, 19, 13, 5, tzinfo=LISBON)
+check("a PM brief at 13:05 is on time",
+      health.latency_note(_pm_on_time, "8", None, "pm"), None)
+check_true("the same moment judged as a morning brief is very late",
+           "BRIEF LATE" in (health.latency_note(_pm_on_time, "8", None, "am")
+                            or ""),
+           health.latency_note(_pm_on_time, "8", None, "am"))
+_pm_late = datetime(2026, 9, 19, 14, 20, tzinfo=LISBON)
+_late_note = health.latency_note(_pm_late, "8", None, "pm")
+check_true("a PM brief at 14:20 is late", "BRIEF LATE" in (_late_note or ""),
+           _late_note)
+check_true("and it names the PM target, not the morning one",
+           "13:00 target" in _late_note, _late_note)
+check_true("the morning path still names 09:25",
+           "09:25 target" in (health.latency_note(
+               datetime(2026, 9, 19, 10, 30, tzinfo=LISBON), "8", None, "am")
+               or ""),
+           health.latency_note(
+               datetime(2026, 9, 19, 10, 30, tzinfo=LISBON), "8", None, "am"))
+check("no edition given still means the morning, as it always did",
+      health.latency_note(_pm_on_time, "8", None),
+      health.latency_note(_pm_on_time, "8", None, "am"))
+
+# The PM target is anchored to NEW YORK. A hardcoded Lisbon hour would fire a
+# false banner for an hour every day through both DST mismatch windows - the
+# same two weeks the cron slots and the Apps Script guard already handle.
+for _d, _want, _label in ((date(2026, 9, 19), 13, "normal summer"),
+                          (date(2026, 10, 26), 12, "October mismatch"),
+                          (date(2026, 12, 15), 13, "winter"),
+                          (date(2027, 3, 20), 12, "March mismatch"),
+                          (date(2027, 4, 15), 13, "normal spring")):
+    _n = datetime(_d.year, _d.month, _d.day, 12, 30, tzinfo=LISBON)
+    check(f"PM target on {_label} is {_want:02d}:00 Lisbon",
+          health.target_time(_n, "pm").hour, _want)
+# And it agrees with the cron slot that actually owns that day.
+check_true("the PM target always lands on 08:00 New York",
+           all(health.target_time(
+               datetime(2026, 9, 19, 12, 30, tzinfo=LISBON)
+               + timedelta(days=_i), "pm")
+               .astimezone(health.NEW_YORK).hour == 8
+               for _i in range(400)),
+           "a day resolved to the wrong New York hour")
+check("one definition of the PM hour, shared with the dispatch guard",
+      main.PM_TARGET_HOUR_NY, health.PM_TARGET_HOUR_NY)
 
 
 print("\n-- BACKDROP: slow numbers, each carrying the day it was observed --")

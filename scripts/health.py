@@ -45,6 +45,7 @@ version, produces **no claim at all** rather than a guessed one.
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 # Bump this whenever trigger/apps-script.gs changes in a way that matters, and
 # say so in the setup doc. The installed copy reports its own number on every
@@ -58,6 +59,16 @@ EXPECTED_TRIGGER_VERSION = "8"
 # latency check can never disagree about what "on time" means.
 TARGET_HOUR = 9
 TARGET_MINUTE = 25
+
+# The PM edition's target, and it is anchored to NEW YORK rather than to a
+# Lisbon hour. The Lisbon-to-New-York gap is 4, 5 or 6 hours depending on the
+# week, so any fixed Lisbon target is the wrong one for about two weeks a year
+# - which is precisely the DST mismatch the two cron slots and the Apps Script
+# guard already exist to handle. A hardcoded Lisbon hour here would fire a
+# false BRIEF LATE banner through exactly those windows.
+NEW_YORK = ZoneInfo("America/New_York")
+PM_TARGET_HOUR_NY = 8
+PM_TARGET_MINUTE_NY = 0
 
 # How late is late. Generous on purpose: the external trigger normally lands
 # five minutes EARLY (09:20), so half an hour of slack is roughly six times
@@ -147,9 +158,27 @@ def _delay(minutes: float) -> str:
     return f"{mins} min"
 
 
+def target_time(now: datetime, edition=None) -> datetime:
+    """When this edition was meant to be BUILT, in `now`'s own timezone.
+
+    Split out because the two editions have different targets and the latency
+    check had only ever known one. See §3.33: every PM edition carried a
+    BRIEF LATE banner, because 13:00 Lisbon is three and a half hours past an
+    09:25 target and the check had no idea there was a second edition.
+    """
+    if str(edition or "am").strip().lower() != "pm":
+        return now.replace(hour=TARGET_HOUR, minute=TARGET_MINUTE,
+                           second=0, microsecond=0)
+    ny = now.astimezone(NEW_YORK).replace(
+        hour=PM_TARGET_HOUR_NY, minute=PM_TARGET_MINUTE_NY,
+        second=0, microsecond=0)
+    return ny.astimezone(now.tzinfo)
+
+
 def latency_note(now: datetime | None,
                  trigger_version=None,
-                 schedule=None) -> str | None:
+                 schedule=None,
+                 edition=None) -> str | None:
     """One sentence when a brief arrived, but late. None when it did not.
 
     Two runs can be late and only one of them is a fault, so this makes two
@@ -183,14 +212,13 @@ def latency_note(now: datetime | None,
     if not reported and not cron:
         return None
 
-    target = now.replace(hour=TARGET_HOUR, minute=TARGET_MINUTE,
-                         second=0, microsecond=0)
+    target = target_time(now, edition)
     minutes = (now - target).total_seconds() / 60.0
     if minutes <= LATE_AFTER_MINUTES:
         return None
 
     head = (f"BRIEF LATE — built {now:%H:%M} Lisbon, {_delay(minutes)} past "
-            f"the {TARGET_HOUR:02d}:{TARGET_MINUTE:02d} target")
+            f"the {target:%H:%M} target")
     if cron:
         return (f"{head}. No brief had gone out today, so the fallback "
                 f"schedule built this one — the on-time trigger did not "
@@ -200,9 +228,10 @@ def latency_note(now: datetime | None,
 
 
 def notes(prev: dict, today: date, trigger_version=None,
-          schedule=None, now: datetime | None = None) -> list[str]:
+          schedule=None, now: datetime | None = None,
+          edition=None) -> list[str]:
     """Every warning the brief should lead with. Empty when all is well."""
-    found = (latency_note(now, trigger_version, schedule),
+    found = (latency_note(now, trigger_version, schedule, edition),
              delivery_note(prev, today),
              trigger_note(trigger_version))
     return [n for n in found if n]

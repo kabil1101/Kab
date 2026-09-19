@@ -47,7 +47,9 @@ TARGET_HOUR = health.TARGET_HOUR   # 09:xx Lisbon local
 # 4, 5 or 6 hours depending on the week, so two Lisbon cron slots are
 # registered and the job checks which one lands on the target New York hour -
 # the same D5 pattern the morning brief already uses, and for the same reason.
-PM_TARGET_HOUR_NY = 8              # 08:xx New York
+# One definition, in health.py, so the dispatch guard here and the latency
+# check there can never disagree about when the PM edition was due.
+PM_TARGET_HOUR_NY = health.PM_TARGET_HOUR_NY   # 08:xx New York
 NEW_YORK = ZoneInfo("America/New_York")
 
 # The two UTC cron slots registered for the PM edition, as (minute, hour).
@@ -330,7 +332,7 @@ def main() -> int:
     ctx["health"] = health.notes(prev, now.date(),
                                  os.environ.get("TRIGGER_VERSION"),
                                  os.environ.get("BRIEF_SCHEDULE"),
-                                 now=now)
+                                 now=now, edition=mode)
     for note in ctx["health"]:
         # Also surfaces on the Actions run page, so a gap is visible to
         # whoever opens GitHub as well as to whoever opens Gmail.
