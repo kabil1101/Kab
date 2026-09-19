@@ -674,66 +674,124 @@ print("\n-- the PM edition reads a quote's clock before calling it today's --")
 # Run #95, 14:20 on a SATURDAY, printed "DXY +0.76% on the session". The cash
 # and futures markets were shut; that was Friday's session. The timestamp was
 # on the payload the whole time and this edition never looked at it.
-def _ca_ctx(as_of, pct=0.76, when=(2026, 9, 19, 13, 0)):
+def _q_ca_ctx(as_of, pct=0.76, when=(2026, 9, 19, 13, 0)):
     c = _pm_ctx(80000.0, am={"btc": 80000.0, "eth": 2500.0})
     c["now"] = datetime(*when, tzinfo=LISBON)
     c["cross_asset"] = {"ok": True, "error": None, "data": {"quotes": {
         "DXY": {"last": 100.22, "pct_change": pct, "as_of": as_of}},
         "errors": {}}}
+    # 24/7 venues, so a shut-market edition can still say something.
+    c["perp_btc"] = {"ok": True, "error": None, "data": {
+        "funding_8h": 0.00012, "open_interest": 340000.0,
+        "mark_price": 80010.0, "index_price": 80000.0}}
+    c["liquidations"] = {"ok": True, "error": None, "data": {
+        "span_hours": 0.47, "page_size": 100, "source": "OKX",
+        "books": [{"label": "BTC", "longs": 61, "shorts": 39}]}}
     return c
 
-_sat = _ca_ctx(datetime(2026, 9, 18, 21, 0, tzinfo=LISBON))   # Friday's print
-_sat_body, _sat_shadow = render.pm_body(_sat)
+_q_shut = _q_ca_ctx(datetime(2026, 9, 18, 21, 0, tzinfo=LISBON))   # Friday's print
+_q_shut_body, _q_shut_shadow = render.pm_body(_q_shut)
 check("a Friday quote never fires a Saturday alert",
-      [l for l in _sat_body if "DXY" in l], [])
+      [l for l in _q_shut_body if "DXY" in l], [])
 check_true("and the words 'on the session' are nowhere near it",
-           not any("on the session" in l for l in _sat_body), _sat_body)
-_sat_md, _ = render.pm_build(_sat)
-check_true("the spine still prints the quote", "DXY 100.22" in _sat_md, _sat_md)
-check_true("but dated, so it cannot read as today's",
-           "(Fri 18 Sep)" in _sat_md, _sat_md)
-check_true("and says plainly why it is dated",
-           "not today's move" in _sat_md, _sat_md)
+           not any("on the session" in l for l in _q_shut_body), _q_shut_body)
+_q_shut_md, _ = render.pm_build(_q_shut)
+# Kabil's call, 2026-09-19: every quote shut means CRYPTO ONLY, not four
+# Friday prints behind date markers. The dead section is dropped outright.
+check("every quote stale and timestamped reads as shut",
+      render.markets_shut(_q_shut), "shut")
+check_true("the edition says so in its title",
+           "PM DELTA — crypto only" in _q_shut_md, _q_shut_md[:200])
+check_true("and in the subtitle, with the reason",
+           "Cash and futures markets are shut — crypto only" in _q_shut_md,
+           _q_shut_md[:300])
+check_true("it never claims to be a pre-NY-open scan on a shut day",
+           "Pre-NY-open scan" not in _q_shut_md, _q_shut_md[:300])
+check_true("and the dead quote is gone, not dated",
+           "DXY 100.22" not in _q_shut_md, _q_shut_md)
+
+# A MIX is not shut: one live market means the section still earns its place,
+# and the stale members carry their dates.
+_q_mixed = _q_ca_ctx(datetime(2026, 9, 18, 21, 0, tzinfo=LISBON))
+_q_mixed["cross_asset"]["data"]["quotes"]["S&P 500 fut"] = {
+    "last": 7712.5, "pct_change": 0.4,
+    "as_of": datetime(2026, 9, 19, 12, 55, tzinfo=LISBON)}
+check("one live quote means not shut", render.markets_shut(_q_mixed), "live")
+_q_mx_md, _ = render.pm_build(_q_mixed)
+check_true("the live quote prints", "S&P 500 fut 7,712.50" in _q_mx_md, _q_mx_md)
+check_true("the stale one prints too, but dated",
+           "DXY 100.22 (+0.76%) (Fri 18 Sep)" in _q_mx_md, _q_mx_md)
+check_true("and the footnote explains the mix",
+           "not today's move" in _q_mx_md, _q_mx_md)
+check_true("a mixed day is still a pre-NY-open scan",
+           "Pre-NY-open scan" in _q_mx_md, _q_mx_md[:300])
+
+# The three states that are NOT shut, because only one cause is a closed
+# market and collapsing them would hide an outage (§3.16).
+check("a quote with no clock is unknown, never shut",
+      render.markets_shut(_q_ca_ctx(None)), "unknown")
+_q_failed = _q_ca_ctx(datetime(2026, 9, 18, 21, 0, tzinfo=LISBON))
+_q_failed["cross_asset"] = {"ok": False, "error": "connection failed",
+                          "data": None}
+check("a dead feed is failed, never shut",
+      render.markets_shut(_q_failed), "failed")
+_q_fmd, _ = render.pm_build(_q_failed)
+check_true("and it says the feed is down rather than the market",
+           "Cross-asset unavailable — connection failed" in _q_fmd, _q_fmd)
+check_true("and does not turn the edition crypto-only",
+           "crypto only" not in _q_fmd, _q_fmd[:300])
+
+# What replaces the dead section has to be genuinely 24/7, or the edition has
+# swapped one stale claim for another.
+_q_shut_spine = render.pm_spine(_q_shut)[0]
+check_true("funding takes the empty slot",
+           any(l.startswith("**Funding**") for l in _q_shut_spine), _q_shut_spine)
+check_true("with the annual carry, not just the 8h rate",
+           any("%/yr" in l for l in _q_shut_spine), _q_shut_spine)
+check_true("and liquidations, which run at weekends too",
+           any("liquidations" in l.lower() for l in _q_shut_spine), _q_shut_spine)
+check_true("the spine stays capped - no 24h claim sneaks in",
+           not any("24h" in l for l in _q_shut_spine), _q_shut_spine)
 
 # D20. The gap must be visible to whoever calibrates v2: a MISSING key reads
 # as "the dollar did not move", which is a different claim from "the dollar
 # was not trading".
 check_true("a stale reading is shadow-logged as null, not dropped",
-           "dxy" in _sat_shadow and _sat_shadow["dxy"] is None, _sat_shadow)
+           "dxy" in _q_shut_shadow and _q_shut_shadow["dxy"] is None, _q_shut_shadow)
 import json as _json
 check_true("and it survives the JSON round trip the log actually does",
-           _json.loads(_json.dumps(_sat_shadow, sort_keys=True))["dxy"] is None,
-           _sat_shadow)
+           _json.loads(_json.dumps(_q_shut_shadow, sort_keys=True))["dxy"] is None,
+           _q_shut_shadow)
 
-_live = _ca_ctx(datetime(2026, 9, 19, 12, 55, tzinfo=LISBON))  # today's print
-_live_body, _live_shadow = render.pm_body(_live)
+_q_live = _q_ca_ctx(datetime(2026, 9, 19, 12, 55, tzinfo=LISBON))  # today's print
+_q_live_body, _q_live_shadow = render.pm_body(_q_live)
 check_true("a same-day quote fires normally",
-           any("DXY" in l and "on the session" in l for l in _live_body),
-           _live_body)
-check("and is measured, not nulled", round(_live_shadow["dxy"], 2), 0.76)
-_live_md, _ = render.pm_build(_live)
+           any("DXY" in l and "on the session" in l for l in _q_live_body),
+           _q_live_body)
+check("and is measured, not nulled", round(_q_live_shadow["dxy"], 2), 0.76)
+_q_live_md, _ = render.pm_build(_q_live)
 check_true("a live quote carries no date marker",
-           "(Fri 18 Sep)" not in _live_md, _live_md)
+           "(Fri 18 Sep)" not in _q_live_md, _q_live_md)
 check_true("and no staleness footnote",
-           "not today's move" not in _live_md, _live_md)
+           "not today's move" not in _q_live_md, _q_live_md)
 
 # §12.4a. A quote with no clock cannot be shown to be current, so it makes no
 # claim - but it must SAY so rather than go quiet, which is the failure shape
 # this project keeps meeting.
-_noclock = _ca_ctx(None)
-_nc_body, _nc_shadow = render.pm_body(_noclock)
+_q_noclock = _q_ca_ctx(None)
+_q_nc_body, _q_nc_shadow = render.pm_body(_q_noclock)
 check("an undateable quote fires nothing",
-      [l for l in _nc_body if "DXY" in l], [])
+      [l for l in _q_nc_body if "DXY" in l], [])
 check_true("and is nulled in the shadow log",
-           _nc_shadow["dxy"] is None, _nc_shadow)
-_nc_md, _ = render.pm_build(_noclock)
+           _q_nc_shadow["dxy"] is None, _q_nc_shadow)
+_q_nc_md, _ = render.pm_build(_q_noclock)
 check_true("and the brief says the clock is missing",
-           "(no timestamp)" in _nc_md, _nc_md)
+           "(no timestamp)" in _q_nc_md, _q_nc_md)
 
 # The threshold still has to be crossed - freshness is a gate, not a trigger.
-_small = _ca_ctx(datetime(2026, 9, 19, 12, 55, tzinfo=LISBON), pct=0.05)
+_q_small = _q_ca_ctx(datetime(2026, 9, 19, 12, 55, tzinfo=LISBON), pct=0.05)
 check("a fresh quote under the threshold still prints nothing",
-      [l for l in render.pm_body(_small)[0] if "DXY" in l], [])
+      [l for l in render.pm_body(_q_small)[0] if "DXY" in l], [])
 
 
 print("\n-- BRIEF LATE knows which edition it is judging --")

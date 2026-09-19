@@ -1711,6 +1711,88 @@ def _pm_fresh(q, now):
     return False, f" ({as_of:%a %d %b})"
 
 
+def markets_shut(ctx):
+    """Are the cash and futures markets shut, and can that be shown?
+
+    Kabil's call, 2026-09-19: the weekend PM edition runs **crypto only**
+    rather than being skipped. The alternative was printing four Friday quotes
+    behind date markers, which is honest but is not worth opening.
+
+    Driven by the QUOTES' OWN TIMESTAMPS, not by `weekday() >= 5`. A calendar
+    test would need a US holiday list to avoid printing a Thanksgiving close
+    as an afternoon session, and would still miss an unscheduled CME halt.
+    The timestamps already carry the answer, and they carry it for whatever
+    reason the market is shut.
+
+    Four states, because "no fresh quote" has more than one cause and only
+    one of them means the market is closed:
+
+      - **live** - at least one quote printed today. Ordinary weekday.
+      - **shut** - every quote is timestamped and every one is old. This is
+        the only state that turns the edition crypto-only.
+      - **unknown** - the fetch worked but a quote carries no clock. Nothing
+        can be concluded, so nothing is (§12.4a), and the section still
+        prints with its markers.
+      - **failed** - the fetch itself failed. A dead feed is not a closed
+        market, and collapsing the two would hide an outage behind a
+        plausible story - which is §3.16 exactly.
+    """
+    ca = ctx.get("cross_asset")
+    if not ca:
+        return "unknown"
+    if not ca["ok"]:
+        return "failed"
+    quotes = (ca["data"]["quotes"] or {})
+    if not quotes:
+        return "unknown"
+    now = ctx["now"]
+    seen_stale = False
+    for q in quotes.values():
+        if q.get("as_of") is None:
+            return "unknown"
+        if _pm_fresh(q, now)[0]:
+            return "live"
+        seen_stale = True
+    return "shut" if seen_stale else "unknown"
+
+
+def _pm_crypto_lines(ctx):
+    """What replaces the cross-asset line when the other markets are shut.
+
+    Everything here is genuinely 24/7 - Deribit and OKX do not keep NYSE
+    hours - so none of it carries the staleness problem that emptied the
+    section above it. Funding and liquidations rather than more price: price
+    is already the first two lines, and Kabil's own framework opens with
+    liquidation cascades.
+    """
+    out = []
+    bits = []
+    for label, key in (("BTC", "perp_btc"), ("ETH", "perp_eth")):
+        p_ = ctx.get(key)
+        if not (p_ and p_["ok"]):
+            continue
+        f8 = p_["data"].get("funding_8h")
+        if f8 is None:
+            continue
+        carry = _annualised(f8)
+        piece = f"{label} {f8 * 100:+.4f}%/8h"
+        if carry is not None:
+            piece += f" ({carry:+.1f}%/yr)"
+        bits.append(piece)
+    if bits:
+        out.append("**Funding** — " + " · ".join(bits))
+
+    liq = ctx.get("liquidations")
+    if liq:
+        # _liq_line's own footnote is dropped here: the spine is capped and
+        # the caveat lives in the morning brief, which carries the same line.
+        # The test on a leading "*" has to exclude "**bold**", or it eats the
+        # liquidation line itself - which it did, silently, until a test said so.
+        out.extend(l for l in _liq_line(liq, ctx["now"])
+                   if not (l.startswith("*") and not l.startswith("**")))
+    return out
+
+
 def pm_spine(ctx):
     """About six lines, always printed, even on the quietest afternoon.
 
@@ -1742,7 +1824,13 @@ def pm_spine(ctx):
         out.append(f"Prices unavailable — {c['error']}")
 
     ca = ctx.get("cross_asset")
-    if ca and ca["ok"]:
+    shut = markets_shut(ctx) == "shut"
+    if shut:
+        # Kabil's call: crypto only rather than four Friday quotes nobody
+        # opens. The line that says so is in the subtitle, not here - a
+        # spine bullet explaining an absence is one more line to read.
+        out.extend(_pm_crypto_lines(ctx))
+    elif ca and ca["ok"]:
         bits, stale = [], False
         for label in ("DXY", "US 10Y", "S&P 500 fut", "Nasdaq fut"):
             q = (ca["data"]["quotes"] or {}).get(label)
@@ -1875,10 +1963,17 @@ def pm_build(ctx) -> tuple[str, str]:
     """The PM edition: spine, then body only if the body has something."""
     now = ctx["now"]
     md, html = [], []
-    title = f"PM DELTA — {now.strftime('%A, %d %B %Y')}"
+    shut = markets_shut(ctx) == "shut"
+    title = (f"PM DELTA — crypto only — {now.strftime('%A, %d %B %Y')}" if shut
+             else f"PM DELTA — {now.strftime('%A, %d %B %Y')}")
+    # "Pre-NY-open scan" is a claim about a session that is not happening on a
+    # Saturday. The subtitle says which edition this is and why.
+    sub = (f"Cash and futures markets are shut — crypto only. "
+           f"Built {_hhmm(now)} LIS." if shut
+           else f"Pre-NY-open scan — built {_hhmm(now)} LIS.")
     md.append(f"# {title}\n")
-    md.append(f"*Pre-NY-open scan — built {_hhmm(now)} LIS.*\n")
-    html.append(_h_open(title, f"Pre-NY-open scan — built {_hhmm(now)} LIS."))
+    md.append(f"*{sub}*\n")
+    html.append(_h_open(title, sub))
 
     for note in ctx.get("health") or []:
         md.append(f"> **⚠ {note}**\n")
