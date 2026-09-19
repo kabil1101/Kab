@@ -90,17 +90,12 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           SKIP_EMAIL: ${{ inputs.skip_email && '1' || '' }}
           BRIEF_DEBUG: ${{ inputs.debug && '1' || '' }}
-          # Manual dispatch wins; otherwise the edition is resolved from the
-          # cron that fired, next to where those crons are declared. Without
-          # this the PM slots would run the MORNING path, and should_run would
-          # see 12:00 or 13:00 Lisbon, decide the other slot owns today and
-          # exit - so the cron fallback behind the PM edition would silently
-          # never fire, which is the shape of failure this project keeps
-          # meeting.
-          BRIEF_EDITION: >-
-            ${{ inputs.edition
-            || ((github.event.schedule == '0 12 * * *'
-            || github.event.schedule == '0 13 * * *') && 'pm' || '') }}
+          # Only the explicit choice. Resolving the edition from the cron
+          # used to happen here, in a ${{ }} expression, and it silently
+          # evaluated to an empty string on a scheduled run - so both PM slots
+          # ran the morning path and exited on the morning's duplicate guard.
+          # main.edition() does it now, where a test can reach it.
+          BRIEF_EDITION: ${{ inputs.edition }}
           TRIGGER_VERSION: ${{ inputs.trigger_version }}
           # BACKDROP reads three FRED series. Absent, sources.backdrop raises
           # and the section degrades to a named `unavailable` like any other -

@@ -49,13 +49,53 @@ TARGET_HOUR = health.TARGET_HOUR   # 09:xx Lisbon local
 # the same D5 pattern the morning brief already uses, and for the same reason.
 PM_TARGET_HOUR_NY = 8              # 08:xx New York
 NEW_YORK = ZoneInfo("America/New_York")
+
+# The two UTC cron slots registered for the PM edition, as (minute, hour).
+# Declared rather than derived from the New York hour: which of them lands on
+# 08:00 New York changes with US daylight saving, and both must resolve to the
+# PM edition so that should_run_pm is the thing that rejects the non-owner -
+# with its own message - rather than the morning guard rejecting it with a
+# misleading one.
+PM_CRON_SLOTS = ((0, 12), (0, 13))
 SHADOW_PATH = (state.STATE_PATH.parent / "shadow.jsonl")
 
 
-def edition() -> str:
-    """`am` (the default, and every existing caller) or `pm`."""
-    return "pm" if (os.environ.get("BRIEF_EDITION") or "").strip().lower() \
-        == "pm" else "am"
+def _slot(schedule) -> tuple[int, int] | None:
+    """(minute, hour) from a cron expression, or None if it is not one."""
+    parts = (schedule or "").strip().split()
+    if len(parts) < 2:
+        return None
+    try:
+        return int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+
+
+def edition(env=None, schedule=None) -> str:
+    """`am` (the default, and every existing caller) or `pm`.
+
+    An explicit `BRIEF_EDITION` wins - that is the Apps Script dispatch and a
+    manual run. Otherwise it is resolved from the cron that fired.
+
+    **This used to live in the workflow YAML and silently produced an empty
+    string**, so both PM cron slots ran the MORNING path, hit the morning's
+    duplicate guard and exited without a word about the PM edition. The
+    fallback behind the whole afternoon edition was dead on arrival and the
+    run still reported success.
+
+    It lives here now for one reason: this can be tested and a `${{ }}`
+    expression cannot. The test that was supposed to cover it asserted the
+    YAML *contained* the expression, which stayed green while the expression
+    did nothing - a test on a config line's presence rather than its
+    behaviour.
+    """
+    env = (env if env is not None
+           else os.environ.get("BRIEF_EDITION") or "").strip().lower()
+    if env in ("am", "pm"):
+        return env
+    if schedule is None:
+        schedule = os.environ.get("BRIEF_SCHEDULE")
+    return "pm" if _slot(schedule) in PM_CRON_SLOTS else "am"
 
 
 def should_run_pm(now: datetime, prev: dict | None = None) -> bool:

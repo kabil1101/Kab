@@ -277,15 +277,74 @@ _wf = (Path(__file__).resolve().parents[1] / ".github" / "workflows"
        / "market-brief.yml").read_text(encoding="utf-8")
 check_true("the workflow registers both PM cron slots",
            '- cron: "0 12 * * *"' in _wf and '- cron: "0 13 * * *"' in _wf)
-# Without this the PM crons would run the MORNING path, should_run would see
-# 12:00 or 13:00 Lisbon and exit, and the fallback behind the PM edition would
-# silently never fire.
-check_true("and resolves the edition from the cron that fired",
-           "github.event.schedule == '0 12 * * *'" in _wf, _wf[:0])
+# This used to assert the YAML CONTAINED an expression that resolved the
+# edition. It stayed green while that expression silently produced an empty
+# string on every scheduled run, so both PM slots ran the morning path and
+# exited on the morning's duplicate guard. A test on a config line's presence
+# is not a test on its behaviour. The resolution lives in Python now, and
+# what follows exercises it.
+check_true("every cron slot the workflow declares resolves to an edition",
+           all(brief_main.edition("", c) in ("am", "pm")
+               for c in ("25 8 * * *", "25 9 * * *",
+                         "0 12 * * *", "0 13 * * *")))
+check("both PM slots resolve to the PM edition",
+      [brief_main.edition("", c) for c in ("0 12 * * *", "0 13 * * *")],
+      ["pm", "pm"])
+# Both, not just today's owner: should_run_pm rejects the non-owner with its
+# own message, rather than the morning guard rejecting it with a misleading
+# one about a duplicate.
+check("and both morning slots to the morning one",
+      [brief_main.edition("", c) for c in ("25 8 * * *", "25 9 * * *")],
+      ["am", "am"])
+check("an explicit choice beats the cron", brief_main.edition("am", "0 12 * * *"), "am")
+check("a dispatch with no cron and no choice is the morning",
+      brief_main.edition("", ""), "am")
+check("an unparseable cron does not become the PM edition",
+      brief_main.edition("", "nonsense"), "am")
+check_true("and the slots the code knows match the ones the workflow declares",
+           all(f'- cron: "{m} {h} * * *"' in _wf
+               for m, h in brief_main.PM_CRON_SLOTS),
+           brief_main.PM_CRON_SLOTS)
 check_true("the PM guard reads New York from the cron, not the clock",
            "PM_TARGET_HOUR_NY" in (Path(__file__).resolve().parents[1]
                                    / "scripts" / "main.py")
            .read_text(encoding="utf-8"))
+
+# The whole reason there are two of each: across a full year, EXACTLY ONE
+# slot must land on 08:00 New York every single day. The two DST-mismatch
+# windows are where a single slot would be an hour wrong, and they are the
+# only days on which the other one takes over.
+def _owners(day, hours, zone):
+    out = []
+    for h in hours:
+        t = datetime(day.year, day.month, day.day, h, 0, tzinfo=zone)
+        if t.astimezone(ET).hour == 8:
+            out.append(h)
+    return out
+
+
+_lis_bad, _utc_bad, _flipped = [], [], []
+_d = date(2026, 9, 19)
+for _ in range(400):
+    lis = _owners(_d, (12, 13), LISBON)       # the Apps Script timers
+    utc = _owners(_d, (12, 13), timezone.utc)  # the cron fallback
+    if len(lis) != 1:
+        _lis_bad.append((_d, lis))
+    elif lis[0] == 12:
+        _flipped.append(_d)
+    if len(utc) != 1:
+        _utc_bad.append((_d, utc))
+    _d += timedelta(days=1)
+
+check("one Apps Script slot owns every day for a year", _lis_bad, [])
+check("and one cron slot does too", _utc_bad, [])
+# 26 Oct - 1 Nov 2026 and the following March: Lisbon has changed clocks and
+# New York has not, so the EARLIER timer is the one at 08:00 New York.
+check_true("the mismatch windows really do hand over to the 12:00 slot",
+           len(_flipped) > 10, len(_flipped))
+check_true("and they start the day after Lisbon falls back",
+           date(2026, 10, 26) in _flipped and date(2026, 10, 24) not in _flipped,
+           _flipped[:3])
 
 print("\n-- FRED keeps its own calendar, and it is not Lisbon's --")
 # The St. Louis Fed runs on US Central, six hours behind Lisbon in summer, so
