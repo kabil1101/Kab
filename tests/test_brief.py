@@ -794,6 +794,146 @@ check("a fresh quote under the threshold still prints nothing",
       [l for l in render.pm_body(_q_small)[0] if "DXY" in l], [])
 
 
+print("\n-- a source is fetched when something reads it, and not before --")
+# §3.36. gather() used to fetch all 21 sources before either edition rendered
+# a line, so the PM edition waited on FRED - which it never prints - through
+# FRED's own maintenance window. 13s outside it, 100s inside.
+_calls = []
+def _lazy(extra=None):
+    names = ("crypto", "cross_asset", "backdrop", "plumbing", "news",
+             "fear_greed", "watchlist")
+    return main.LazyContext(
+        dict(extra or {}),
+        {n: (lambda n=n: (_calls.append(n), {"ok": True, "data": n,
+                                             "error": None})[1])
+         for n in names})
+
+_calls.clear()
+_lz = _lazy()
+check("building the context fetches nothing", _calls, [])
+check_true("but the keys are all there to be asked for",
+           "backdrop" in _lz and "news" in _lz, sorted(_lz._pending))
+check("reading one fetches exactly one", _lz["crypto"]["data"], "crypto")
+check("and only that one", _calls, ["crypto"])
+_lz["crypto"]
+check("a second read is served from cache", _calls, ["crypto"])
+check("ctx.get fetches too - dict.get is C and skips __getitem__",
+      _lz.get("news")["data"], "news")
+check("so news came through the same path", _calls, ["crypto", "news"])
+check("an absent key with no fetcher is still just a miss",
+      _lz.get("nothing_here"), None)
+
+# An explicit write beats a pending fetcher, which is how main() sets `prev`
+# and `health` without tripping a fetch.
+_calls.clear()
+_lz2 = _lazy()
+_lz2["backdrop"] = {"ok": False, "error": "set by hand", "data": None}
+check("an assigned value cancels the fetcher", _calls, [])
+check("and is what comes back", _lz2["backdrop"]["error"], "set by hand")
+
+# Iteration must force everything. `build` ends by listing what failed, and a
+# half-resolved ctx would under-report that - a degraded run claiming to be
+# healthy is the §3.16 shape.
+for _label, _walk in (("items()", lambda c: list(c.items())),
+                      ("keys()", lambda c: list(c.keys())),
+                      ("iteration", lambda c: [k for k in c]),
+                      ("len()", len)):
+    _calls.clear()
+    _walk(_lazy())
+    check(f"{_label} resolves every pending source", len(_calls), 7)
+
+# The morning brief is the one that iterates, so it must still fetch all 21.
+_calls.clear()
+_full = _lazy()
+_failed_keys = [k for k, v in _full.items()
+                if isinstance(v, dict) and v.get("ok") is False]
+check("the degraded-source footer still sees a complete context",
+      sorted(_calls), sorted(("crypto", "cross_asset", "backdrop", "plumbing",
+                              "news", "fear_greed", "watchlist")))
+check("and finds nothing failed when nothing failed", _failed_keys, [])
+
+# The real gather(), against the real fetcher table.
+_real = main.gather(datetime(2026, 9, 19, 13, 0, tzinfo=LISBON))
+check_true("the real gather returns a lazy context",
+           isinstance(_real, main.LazyContext), type(_real))
+check("and fetches nothing on the way out", len(_real._pending), 21)
+check_true("`now` is a plain value, never a fetcher",
+           _real["now"].hour == 13 and "now" not in _real._pending, _real["now"])
+check_true("every source the old gather fetched still has a fetcher",
+           {"calendar", "crypto", "fear_greed", "flows_btc", "perp_btc",
+            "perp_eth", "options_btc", "cross_asset", "global_mcap",
+            "policy_radar", "fed_officials", "treasury_ops", "policy_rate",
+            "fed_odds", "inflation", "backdrop", "news", "liquidations",
+            "yahoo_extra", "plumbing", "watchlist"} == set(_real._pending),
+           sorted(_real._pending))
+
+
+# End to end, and this is the claim the whole change rests on: the PM edition
+# must actually fetch less than the morning one. Every source answers "down",
+# which the suite already proves both editions render cleanly, so the only
+# thing varying here is WHICH sources get asked at all.
+_ALL_SOURCES = ("calendar", "crypto", "fear_greed", "flows_btc", "perp_btc",
+                "perp_eth", "options_btc", "cross_asset", "global_mcap",
+                "policy_radar", "fed_officials", "treasury_ops",
+                "policy_rate", "fed_odds", "inflation", "backdrop", "news",
+                "liquidations", "yahoo_extra", "plumbing", "watchlist")
+
+def _counting_ctx(seen):
+    def mk(name):
+        def fetch():
+            seen.append(name)
+            if name == "watchlist":
+                return {"events": [], "problems": []}
+            return {"ok": False, "error": "down for this test", "data": None}
+        return fetch
+    return main.LazyContext(
+        {"now": datetime(2026, 9, 19, 13, 0, tzinfo=LISBON),
+         "prev": {"am": {"btc": 80000.0}}, "health": []},
+        {n: mk(n) for n in _ALL_SOURCES})
+
+_pm_seen, _am_seen = [], []
+render.pm_build(_counting_ctx(_pm_seen))
+render.build(_counting_ctx(_am_seen))
+check("the morning edition still fetches every source",
+      sorted(_am_seen), sorted(_ALL_SOURCES))
+check_true("the PM edition fetches strictly fewer",
+           set(_pm_seen) < set(_am_seen),
+           (sorted(set(_pm_seen)), sorted(set(_am_seen))))
+check_true("and never asks FRED, which it does not print",
+           not ({"backdrop", "plumbing"} & set(_pm_seen)), sorted(set(_pm_seen)))
+check_true("nor the other nine the morning owns",
+           not ({"news", "fear_greed", "flows_btc", "inflation", "fed_odds",
+                 "fed_officials", "policy_rate", "yahoo_extra"}
+                & set(_pm_seen)), sorted(set(_pm_seen)))
+check_true("no source is fetched twice in one render",
+           len(_pm_seen) == len(set(_pm_seen)), _pm_seen)
+check_true("and the same holds for the morning",
+           len(_am_seen) == len(set(_am_seen)), _am_seen)
+check_true("a failed cross-asset feed means no crypto-only block to feed",
+           "perp_eth" not in _pm_seen, sorted(set(_pm_seen)))
+
+# ...and on a shut day it IS needed, because the crypto-only block renders.
+# This is the case no static list handles well: the sources an edition needs
+# depend on the DATA, not only on the edition. A hand-written list either
+# over-fetches perp_eth every day or misses it on the day it matters.
+_shut_seen = []
+_shut_lazy = _counting_ctx(_shut_seen)
+_shut_lazy["cross_asset"] = {"ok": True, "error": None, "data": {
+    "quotes": {"DXY": {"last": 100.22, "pct_change": 0.76,
+                       "as_of": datetime(2026, 9, 18, 21, 0, tzinfo=LISBON)}},
+    "errors": {}}}
+render.pm_build(_shut_lazy)
+check("the shut day renders the crypto-only block", 
+      render.markets_shut(_shut_lazy), "shut")
+check_true("so perp_eth is fetched, though no literal key names it",
+           "perp_eth" in _shut_seen, sorted(set(_shut_seen)))
+check_true("and liquidations with it",
+           "liquidations" in _shut_seen, sorted(set(_shut_seen)))
+check_true("still without touching FRED",
+           not ({"backdrop", "plumbing"} & set(_shut_seen)),
+           sorted(set(_shut_seen)))
+
+
 print("\n-- BRIEF LATE knows which edition it is judging --")
 # Every PM edition carried a BRIEF LATE banner, because 13:00 Lisbon is three
 # and a half hours past an 09:25 target and the check knew of one edition.

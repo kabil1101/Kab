@@ -166,45 +166,137 @@ def safe(fn, *args, **kwargs):
         return {"ok": False, "data": None, "error": msg}
 
 
-def gather(now):
-    print("Fetching sources...", file=sys.stderr)
-    ctx = {"now": now}
-    ctx["calendar"] = safe(sources.calendar)
-    ctx["crypto"] = safe(sources.crypto)
-    ctx["fear_greed"] = safe(sources.fear_greed)
-    ctx["flows_btc"] = safe(sources.etf_flows_btc)
-    ctx["perp_btc"] = safe(sources.perp_stats, "BTC")
-    ctx["perp_eth"] = safe(sources.perp_stats, "ETH")
-    ctx["options_btc"] = safe(sources.options, "BTC")
-    ctx["cross_asset"] = safe(sources.cross_asset)
-    ctx["global_mcap"] = safe(sources.coingecko_global)
-    ctx["policy_radar"] = safe(sources.policy_radar, now.date())
-    ctx["fed_officials"] = safe(sources.fed_officials, now.date())
-    ctx["treasury_ops"] = safe(sources.treasury_ops, now.date())
-    ctx["policy_rate"] = safe(sources.policy_rate)
-    ctx["fed_odds"] = safe(sources.fed_odds, now.date())
-    ctx["inflation"] = safe(sources.inflation)
-    # Commit 3. Both degrade to a named `unavailable` like everything else:
-    # backdrop needs FRED_API_KEY and FRED has a scheduled outage in the
-    # watchlist; news is two independent feeds and either can go quiet.
-    ctx["backdrop"] = safe(sources.backdrop, now.date())
-    ctx["news"] = safe(sources.news, now)
-    # Rounds 18 and 19. Liquidations close the largest gap between Kabil's
-    # framework and this brief; the Yahoo extras and the plumbing come from
-    # the addendum, now closed.
-    ctx["liquidations"] = safe(sources.liquidations)
-    ctx["yahoo_extra"] = safe(sources.yahoo_extra)
-    ctx["plumbing"] = safe(sources.plumbing, now.date())
-    # Not wrapped in safe(): the watchlist reads a local file and already
-    # degrades to an empty list, so the only thing left to guard against is a
-    # bug in the parser itself.
+class LazyContext(dict):
+    """A ctx that fetches a source the first time something reads it.
+
+    §3.36. `gather` used to fetch all 21 sources before either edition
+    rendered a line. The PM edition renders about half of them, so it sat
+    waiting on FRED - which it never prints - through FRED's own scheduled
+    maintenance. Measured on three identical runs: 13s outside the window,
+    43s as it opened, 100s inside it.
+
+    **Why lazy rather than a per-edition list of what to skip.** A skip list
+    is a claim about what the renderer reads, and §12.4a is the section about
+    claims decaying. Two attempts to derive that list were both wrong, in two
+    different ways:
+
+      - an AST trace missed `perp_eth`, because it is reached through a loop
+        variable rather than a literal key;
+      - a runtime recorder missed `plumbing`, because the read sits inside
+        `if backdrop is not None` and the fixture had no backdrop. A
+        measurement only sees the branches its data reaches.
+
+    Either error ships a section that is silently empty, which is the failure
+    this file already has three sections about. **Lazy needs no list**: what
+    is read is fetched, what is not read is not, and a line added tomorrow
+    fetches its own source without anyone remembering to update anything.
+
+    Iteration forces everything, because `build` ends by listing the sources
+    that failed and a half-resolved ctx would under-report that. The morning
+    edition therefore still fetches all 21; the PM edition never iterates.
+    """
+
+    def __init__(self, base=None, fetchers=None):
+        super().__init__(base or {})
+        self._pending = dict(fetchers or {})
+
+    def _resolve(self, key):
+        fn = self._pending.pop(key, None)
+        if fn is None:
+            return
+        print(f"  fetching {key}", file=sys.stderr)
+        dict.__setitem__(self, key, fn())
+
+    def _resolve_all(self):
+        for key in list(self._pending):
+            self._resolve(key)
+
+    # --- reads ----------------------------------------------------------
+    def __getitem__(self, key):
+        self._resolve(key)
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        # dict.get is implemented in C and never calls __getitem__, so it has
+        # to be overridden explicitly or every ctx.get() would miss its fetch.
+        self._resolve(key)
+        return super().get(key, default)
+
+    def __contains__(self, key):
+        return key in self._pending or super().__contains__(key)
+
+    # --- writes ---------------------------------------------------------
+    def __setitem__(self, key, value):
+        self._pending.pop(key, None)   # an explicit value beats a fetcher
+        super().__setitem__(key, value)
+
+    # --- anything that walks the whole thing ----------------------------
+    def keys(self):
+        self._resolve_all()
+        return super().keys()
+
+    def values(self):
+        self._resolve_all()
+        return super().values()
+
+    def items(self):
+        self._resolve_all()
+        return super().items()
+
+    def __iter__(self):
+        self._resolve_all()
+        return super().__iter__()
+
+    def __len__(self):
+        self._resolve_all()
+        return super().__len__()
+
+
+def _watchlist():
+    """Not wrapped in safe(): the watchlist reads a local file and already
+    degrades to an empty list, so the only thing left to guard against is a
+    bug in the parser itself."""
     try:
-        ctx["watchlist"] = watchlist.load()
+        return watchlist.load()
     except Exception as exc:  # noqa: BLE001
         traceback.print_exc()
-        ctx["watchlist"] = {"events": [],
-                            "problems": [f"unreadable ({type(exc).__name__})"]}
-    return ctx
+        return {"events": [],
+                "problems": [f"unreadable ({type(exc).__name__})"]}
+
+
+def gather(now):
+    print("Fetching sources...", file=sys.stderr)
+    today = now.date()
+    return LazyContext({"now": now}, {
+        "calendar": lambda: safe(sources.calendar),
+        "crypto": lambda: safe(sources.crypto),
+        "fear_greed": lambda: safe(sources.fear_greed),
+        "flows_btc": lambda: safe(sources.etf_flows_btc),
+        "perp_btc": lambda: safe(sources.perp_stats, "BTC"),
+        "perp_eth": lambda: safe(sources.perp_stats, "ETH"),
+        "options_btc": lambda: safe(sources.options, "BTC"),
+        "cross_asset": lambda: safe(sources.cross_asset),
+        "global_mcap": lambda: safe(sources.coingecko_global),
+        "policy_radar": lambda: safe(sources.policy_radar, today),
+        "fed_officials": lambda: safe(sources.fed_officials, today),
+        "treasury_ops": lambda: safe(sources.treasury_ops, today),
+        "policy_rate": lambda: safe(sources.policy_rate),
+        "fed_odds": lambda: safe(sources.fed_odds, today),
+        "inflation": lambda: safe(sources.inflation),
+        # Commit 3. Both degrade to a named `unavailable` like everything
+        # else: backdrop needs FRED_API_KEY and FRED has a scheduled outage
+        # in the watchlist; news is two independent feeds and either can go
+        # quiet.
+        "backdrop": lambda: safe(sources.backdrop, today),
+        "news": lambda: safe(sources.news, now),
+        # Rounds 18 and 19. Liquidations close the largest gap between
+        # Kabil's framework and this brief; the Yahoo extras and the plumbing
+        # come from the addendum, now closed.
+        "liquidations": lambda: safe(sources.liquidations),
+        "yahoo_extra": lambda: safe(sources.yahoo_extra),
+        "plumbing": lambda: safe(sources.plumbing, today),
+        "watchlist": _watchlist,
+    })
 
 
 def credentials() -> tuple[str, str]:
