@@ -867,6 +867,137 @@ check_true("the series table no longer declares a unit at all",
            sources.PLUMBING_SERIES)
 
 
+print("\n-- headlines in both editions, on different windows --")
+# Kabil asked whether the brief watches @DeItaone, @zerohedge, @financialjuice
+# and @WatcherGuru. It watched one, through its website. Round 21 probed the
+# free primaries and the measure that decided it was CADENCE - a feed under
+# ~1 item/hour fills the 18h morning window and is empty most afternoons.
+check_true("Reuters is wired as a wire",
+           ("Reuters", "wire") in [(f[0], f[2]) for f in sources.NEWS_FEEDS],
+           sources.NEWS_FEEDS)
+check_true("ZeroHedge is still commentary, not press",
+           ("ZeroHedge", "commentary") in
+           [(f[0], f[2]) for f in sources.NEWS_FEEDS], sources.NEWS_FEEDS)
+check_true("trade press is marked press, never wire",
+           all(k == "press" for lbl, _u, k in sources.NEWS_FEEDS
+               if lbl in ("ForexLive", "CoinDesk", "Cointelegraph")),
+           sources.NEWS_FEEDS)
+check_true("every feed round 21 rejected stays out",
+           not ({"FinancialJuice", "MarketWatch RT", "Investing.com",
+                 "Yahoo Finance", "The Block", "Decrypt"}
+                & {f[0] for f in sources.NEWS_FEEDS}),
+           [f[0] for f in sources.NEWS_FEEDS])
+
+# Only opinion carries a warning. Reported news reads as reported news.
+def _nw(items, window=18.0):
+    return {"ok": True, "error": None, "data": {
+        "items": items, "window_hours": window, "partial": None,
+        "source": "test"}}
+_when = datetime(2026, 9, 20, 12, 30, tzinfo=LISBON)
+_kinds = _nw([
+    {"title": "Wire item", "url": "u", "when": _when, "source": "Reuters",
+     "kind": "wire"},
+    {"title": "Press item", "url": "u", "when": _when, "source": "CoinDesk",
+     "kind": "press"},
+    {"title": "Opinion item", "url": "u", "when": _when, "source": "ZeroHedge",
+     "kind": "commentary"}])
+_kl = "\n".join(render._news_lines(_kinds, datetime(2026, 9, 20, 13, 0,
+                                                    tzinfo=LISBON)))
+check_true("a wire reads as via", "Wire item · via Reuters" in _kl, _kl)
+check_true("press reads as reporting too", "via CoinDesk" in _kl, _kl)
+check_true("and press is NOT branded commentary",
+           "CoinDesk — commentary" not in _kl, _kl)
+check_true("only opinion is warned about",
+           "**ZeroHedge — commentary, not a wire**" in _kl, _kl)
+check("exactly one warning among the three", _kl.count("commentary, not a wire"), 1)
+
+# The total cap trims opinion before reporting.
+_many = _nw([{"title": f"c{i}", "url": "u", "when": _when, "source": "ZeroHedge",
+              "kind": "commentary"} for i in range(20)])
+check_true("the cap is a number the fetcher owns, not the renderer",
+           isinstance(sources.NEWS_TOTAL_CAP, int)
+           and sources.NEWS_TOTAL_CAP > 0, sources.NEWS_TOTAL_CAP)
+check("wires sort ahead of press, and press ahead of opinion",
+      [sources.NEWS_KIND_ORDER[k] for k in ("wire", "press", "commentary")],
+      [0, 1, 2])
+
+# --- the PM window -------------------------------------------------------
+_am_at = datetime(2026, 9, 20, 9, 20, tzinfo=LISBON)
+_pmctx = dict(healthy)
+_pmctx["now"] = datetime(2026, 9, 20, 13, 0, tzinfo=LISBON)
+_pmctx["prev"] = {"am": {"btc": 80000.0, "at": _am_at.isoformat()}}
+check("the PM window starts at the morning brief",
+      render.am_built_at(_pmctx), _am_at)
+check("no am stamp means no window, never a guessed one",
+      render.am_built_at(dict(_pmctx, prev={"am": {"btc": 1.0}})), None)
+check("an unparseable stamp makes no claim",
+      render.am_built_at(dict(_pmctx, prev={"am": {"at": "not-a-date"}})), None)
+check("a naive stamp makes no claim",
+      render.am_built_at(dict(_pmctx, prev={"am": {"at": "2026-09-20T09:20:00"}})),
+      None)
+check("a stamp from the future makes no claim",
+      render.am_built_at(dict(_pmctx, prev={"am": {
+          "at": datetime(2026, 9, 20, 18, 0, tzinfo=LISBON).isoformat()}})), None)
+check("and so does one from more than a day ago",
+      render.am_built_at(dict(_pmctx, prev={"am": {
+          "at": datetime(2026, 9, 18, 9, 20, tzinfo=LISBON).isoformat()}})), None)
+
+# The fetcher honours it: only items after the morning brief survive.
+_calls = {}
+def _feed_stub(url, **kw):
+    class R:
+        content = (b'<rss><channel>'
+                   b'<item><title>Before the AM brief</title><link>a</link>'
+                   b'<pubDate>Sun, 20 Sep 2026 07:00:00 +0100</pubDate></item>'
+                   b'<item><title>After the AM brief</title><link>b</link>'
+                   b'<pubDate>Sun, 20 Sep 2026 11:30:00 +0100</pubDate></item>'
+                   b'</channel></rss>')
+    _calls[url] = _calls.get(url, 0) + 1
+    return R()
+_orig_get = sources._get
+try:
+    sources._get = _feed_stub
+    _pm_news = sources.news(now=datetime(2026, 9, 20, 13, 0, tzinfo=LISBON),
+                            since=_am_at)
+    _am_news = sources.news(now=datetime(2026, 9, 20, 13, 0, tzinfo=LISBON))
+finally:
+    sources._get = _orig_get
+check_true("the PM window drops what the morning brief already carried",
+           all("Before" not in i["title"] for i in _pm_news["items"]),
+           [i["title"] for i in _pm_news["items"]])
+check_true("and keeps what arrived after it",
+           any("After" in i["title"] for i in _pm_news["items"]),
+           [i["title"] for i in _pm_news["items"]])
+check("the PM window is measured, not assumed",
+      _pm_news["window_hours"], 3.7)
+check_true("the morning window still reaches back 18h and keeps both",
+           len(_am_news["items"]) > len(_pm_news["items"]),
+           (len(_am_news["items"]), len(_pm_news["items"])))
+check("and says so", _am_news["window_hours"], 18.0)
+
+# And it reaches the rendered PM edition.
+_pm_render = dict(_pmctx)
+_pm_render["news"] = _nw([{"title": "Fresh headline", "url": "u",
+                           "when": datetime(2026, 9, 20, 11, 30, tzinfo=LISBON),
+                           "source": "Reuters", "kind": "wire"}], window=3.7)
+_pm_render["health"] = []
+_pmd, _pmh = render.pm_build(_pm_render)
+check_true("the PM edition carries a news section",
+           "## SINCE THE MORNING BRIEF" in _pmd, _pmd[:400])
+check_true("with the headline in it", "Fresh headline" in _pmd, _pmd)
+check_true("and it never calls itself the 09:20 window",
+           "SINCE THE MORNING BRIEF" in _pmd and "last 18h" not in _pmd, _pmd)
+check_true("the marking survives into the HTML of the PM edition too",
+           "Reuters" in _pmh, _pmh[-600:])
+# A PM edition with no news key at all prints no heading, rather than an
+# empty one that reads as "nothing happened".
+_no_news = dict(_pm_render)
+del _no_news["news"]
+check_true("no news source means no heading at all",
+           "SINCE THE MORNING BRIEF" not in render.pm_build(_no_news)[0],
+           render.pm_build(_no_news)[0][:300])
+
+
 print("\n-- an ordinal that is not always 'th' --")
 # Live in the brief on 20 Sep: "2th straight inflow".
 for _n, _want in ((1, "1st"), (2, "2nd"), (3, "3rd"), (4, "4th"), (5, "5th"),
@@ -918,7 +1049,7 @@ def _run_main(skip_email, shadow_path):
         else:
             _os.environ.pop("SKIP_EMAIL", None)
         ctx = dict(_q_shut)
-        main.gather = lambda now: dict(ctx, now=now)
+        main.gather = lambda now, edition="am": dict(ctx, now=now)
         main.send_email = lambda *a, **kw: sent.append(a)
         main.SHADOW_PATH = shadow_path
         state.load = lambda *a, **kw: {"am": {"btc": 80000.0, "eth": 2500.0}}
@@ -1066,10 +1197,15 @@ check_true("the PM edition fetches strictly fewer",
            (sorted(set(_pm_seen)), sorted(set(_am_seen))))
 check_true("and never asks FRED, which it does not print",
            not ({"backdrop", "plumbing"} & set(_pm_seen)), sorted(set(_pm_seen)))
-check_true("nor the other nine the morning owns",
-           not ({"news", "fear_greed", "flows_btc", "inflation", "fed_odds",
+check_true("nor the seven others the morning owns",
+           not ({"fear_greed", "flows_btc", "inflation", "fed_odds",
                  "fed_officials", "policy_rate", "yahoo_extra"}
                 & set(_pm_seen)), sorted(set(_pm_seen)))
+# news moved INTO the PM set when the section was added, and nothing had to
+# be told about it. That is the whole argument for lazy over a skip list: a
+# line added today fetches its own source. §3.36.
+check_true("but news, which the PM edition now prints, is fetched",
+           "news" in _pm_seen, sorted(set(_pm_seen)))
 check_true("no source is fetched twice in one render",
            len(_pm_seen) == len(set(_pm_seen)), _pm_seen)
 check_true("and the same holds for the morning",

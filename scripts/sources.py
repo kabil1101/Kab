@@ -1478,10 +1478,37 @@ NEWS_FEEDS = (
     # condition that it is visibly marked as such. In a brief where every line
     # is a fetched number with a source and an age stamp, an opinion headline
     # renders with identical authority - §3.9 inverted.
+    #
+    # THREE kinds, not two. "wire" is a wire service. "press" is reported news
+    # from trade or market press - not opinion, but not a wire either, and
+    # calling CoinDesk a wire would be the same class of small lie this file
+    # keeps finding. "commentary" is opinion and is the only one that carries
+    # a warning.
+    #
+    # Round 21 added four and rejected six. The measure that decided it was
+    # CADENCE, which round 14 never took: a feed under ~1 item/hour can fill
+    # the 18h morning window and will be empty most afternoons.
+    ("Reuters", "https://news.google.com/rss/search?q=when:1d+site:reuters.com"
+                "&hl=en-US&gl=US&ceid=US:en", "wire"),          # 4.3/h
     ("CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml"
              "?partnerId=wrss01&id=100003114", "wire"),
-    ("ZeroHedge", "https://feeds.feedburner.com/zerohedge/feed", "commentary"),
+    ("ForexLive", "https://www.forexlive.com/feed/", "press"),          # 0.5/h
+    ("CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/",
+     "press"),                                                         # 0.4/h
+    ("Cointelegraph", "https://cointelegraph.com/rss", "press"),        # 0.4/h
+    ("ZeroHedge", "https://feeds.feedburner.com/zerohedge/feed",
+     "commentary"),
 )
+
+# Rejected by round 21, recorded so nobody re-probes them on a hunch:
+#   FinancialJuice   HTTP 404 - no free primary at that path
+#   MarketWatch RT   newest item 11,189h old. A 200 from an abandoned feed,
+#                    which is §3.7 exactly: a 200 is not signal.
+#   Investing.com    no parseable timestamps
+#   Yahoo Finance    no parseable timestamps
+#   CNBC economy     newest 7.4h old - too slow for the PM window
+#   The Block        newest 18.4h old
+#   Decrypt          newest 19.4h old
 
 # How far back to look. The brief builds at 09:20 Lisbon, so this has to cover
 # the whole US session and the Asian one after it. ZeroHedge's window was
@@ -1489,17 +1516,32 @@ NEWS_FEEDS = (
 # silently return less from one source than the other.
 NEWS_WINDOW_HOURS = 18
 NEWS_PER_SOURCE = 4
+# Six feeds at four apiece is twenty-four headlines, which is a wall rather
+# than a brief. The per-source cap keeps one loud feed from crowding out the
+# rest; the total cap keeps the section readable. Wires are taken first.
+NEWS_TOTAL_CAP = 12
+NEWS_KIND_ORDER = {"wire": 0, "press": 1, "commentary": 2}
 
 
-def news(now: datetime | None = None) -> dict:
+def news(now: datetime | None = None, since: datetime | None = None) -> dict:
     """Recent headlines, each tagged with where it came from and how old.
 
     Nothing here is a number, which makes it the only section in the brief
     that is not a fetched figure. That is exactly why every item carries its
     source and its age, and why commentary is marked apart from a wire.
+
+    `since` is the PM edition's whole difference: it asks what has come in
+    since the morning brief was built, rather than repeating an eighteen-hour
+    window the reader already saw at 09:20. D17 - a second edition that
+    repeats the first is what trains someone to stop opening both.
     """
     now = now or datetime.now(LISBON)
-    cutoff = now - timedelta(hours=NEWS_WINDOW_HOURS)
+    if since is not None:
+        cutoff = since.astimezone(LISBON)
+        window = max((now - cutoff).total_seconds() / 3600.0, 0.0)
+    else:
+        window = float(NEWS_WINDOW_HOURS)
+        cutoff = now - timedelta(hours=NEWS_WINDOW_HOURS)
     items, notes = [], []
     for label, url, kind in NEWS_FEEDS:
         try:
@@ -1519,16 +1561,22 @@ def news(now: datetime | None = None) -> dict:
             fresh.append({"title": title, "url": link, "when": when,
                           "source": label, "kind": kind})
         if not fresh:
-            notes.append(f"{label}: nothing in the last {NEWS_WINDOW_HOURS}h")
+            notes.append(f"{label}: nothing in the last {window:.0f}h")
         fresh.sort(key=lambda i: i["when"], reverse=True)
         items.extend(fresh[:NEWS_PER_SOURCE])
 
-    if not items and notes:
+    if not items and notes and len(notes) == len(NEWS_FEEDS):
+        # Every feed failed or was empty. One quiet feed is not an outage.
         raise RuntimeError("; ".join(notes))
+    # Newest first WITHIN a kind, wires before press before commentary, so the
+    # total cap trims opinion before it trims reporting.
+    items.sort(key=lambda i: (NEWS_KIND_ORDER.get(i["kind"], 9),
+                              -i["when"].timestamp()))
+    items = items[:NEWS_TOTAL_CAP]
     items.sort(key=lambda i: i["when"], reverse=True)
-    return {"items": items, "window_hours": NEWS_WINDOW_HOURS,
+    return {"items": items, "window_hours": round(window, 1),
             "partial": "; ".join(notes) or None,
-            "source": "CNBC + ZeroHedge"}
+            "source": " + ".join(f[0] for f in NEWS_FEEDS)}
 
 
 # ----------------------------------------------------------- liquidations

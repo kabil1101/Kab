@@ -264,10 +264,29 @@ def _watchlist():
                 "problems": [f"unreadable ({type(exc).__name__})"]}
 
 
-def gather(now):
+def _news_since(ctx_ref, edition):
+    """The PM edition's news window: since the morning brief was built.
+
+    None for the morning edition, which keeps its eighteen-hour look-back.
+    None also when there is no usable `am.at` - then the PM falls back to the
+    standard window rather than inventing a start time, and the section says
+    how far back it actually looked.
+    """
+    if edition != "pm":
+        return None
+    ctx = ctx_ref.get("ctx")
+    return render.am_built_at(ctx) if ctx is not None else None
+
+
+def gather(now, edition="am"):
     print("Fetching sources...", file=sys.stderr)
     today = now.date()
-    return LazyContext({"now": now}, {
+    # The news fetcher needs the context it is being built into, because the
+    # PM window comes out of `prev`, which main() assigns after gather()
+    # returns. Lazy fetching makes that safe: nothing is read until the
+    # renderer asks, and by then prev is in place.
+    ctx_ref = {}
+    ctx = LazyContext({"now": now}, {
         "calendar": lambda: safe(sources.calendar),
         "crypto": lambda: safe(sources.crypto),
         "fear_greed": lambda: safe(sources.fear_greed),
@@ -288,7 +307,14 @@ def gather(now):
         # in the watchlist; news is two independent feeds and either can go
         # quiet.
         "backdrop": lambda: safe(sources.backdrop, today),
-        "news": lambda: safe(sources.news, now),
+        # The PM edition asks a different question of the same feeds: what
+        # has come in SINCE the morning brief. The window is resolved here
+        # rather than in the fetcher because only this layer knows which
+        # edition is running and what the state file says. `prev` is read
+        # lazily through the closure, so it is whatever main() has set by the
+        # time something reads `news` - which is after ctx["prev"] is
+        # assigned, because the renderer is what triggers the fetch.
+        "news": lambda: safe(sources.news, now, _news_since(ctx_ref, edition)),
         # Rounds 18 and 19. Liquidations close the largest gap between
         # Kabil's framework and this brief; the Yahoo extras and the plumbing
         # come from the addendum, now closed.
@@ -297,6 +323,8 @@ def gather(now):
         "plumbing": lambda: safe(sources.plumbing, today),
         "watchlist": _watchlist,
     })
+    ctx_ref["ctx"] = ctx
+    return ctx
 
 
 def credentials() -> tuple[str, str]:
@@ -413,7 +441,7 @@ def main() -> int:
               "brief will be built but cannot be emailed. See README.md.",
               file=sys.stderr)
 
-    ctx = gather(now)
+    ctx = gather(now, mode)
     ctx["prev"] = prev          # yesterday's figures, for day-over-day deltas
     # Whether the delivery system itself is healthy. Computed here, not in the
     # renderer, because this is the only layer that can see the environment.
