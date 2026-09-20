@@ -555,6 +555,60 @@ dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
 
+**§3.39 — Cadence was the right metric, and it nearly handed me a worse feed
+than the one it rejected.** Rounds 21 and 22, 2026-09-20, after Kabil asked
+whether the brief watches his four X accounts. It watched one, through its
+website.
+
+X costs $0.005/read with no free tier and Nitter is under cease-and-desist, so
+round 21 probed twelve free primaries. **The measure that decided it was
+cadence — items per hour — which round 14 never took.** The AM edition looks
+back eighteen hours and almost anything fills it; the PM edition looks back
+about three and a half, and a feed under ~1 item/hour is empty most
+afternoons. *An empty section that is empty by construction reads as "nothing
+happened", in the one part of the brief carrying no numbers to contradict it.*
+
+Round 21's winner was Reuters via Google News at **4.3/h**, roughly nine times
+everything else. **The first live PM edition printed:**
+
+```
+Pirates' Brandon Lowe takes HR barrage into finale vs. Royals - Reuters
+Olympic dreams flicker as teqball awards first Asian Games medals
+```
+
+**A title deny-list does not fix that** — those contain no sports word any
+filter would catch. Reuters files sport under `/sports`, so the scope belongs
+in the query: structural, not a guess about what a headline is *about*, which
+is the only kind of filter §3.6 trusts after `trade` ⊂ `Trademark`.
+
+**Round 22 then found a worse trap than the one it went looking for:**
+
+| scope | cadence | what it actually returns |
+|---|---|---|
+| unscoped | 4.3/h | baseball |
+| `/markets` | **4.7/h** | **`1928.SG — Stock Price & Latest News`** — quote pages |
+| `/markets+/business` | 4.7/h | same |
+| `/business` | 0.9/h | clean, too thin for the PM window |
+| **`/markets+/business+/world`** | **4.2/h** | Bessent–China, China LPR, TotalEnergies |
+
+`/markets` returns Reuters **ticker landing pages** at nearly five an hour, and
+**cadence alone rates it the best feed of the five.** A metric that was right
+about the first problem was one step from handing over a worse one. That is
+why the probe prints sample titles and says to read them, and why the round
+that follows a successful metric is the dangerous one.
+
+Shipped: the three-section scope, plus a **structural** filter for the quote
+pages — Reuters' own page-title template and a bare exchange-suffixed ticker,
+both anchored so `SAP.DE beats estimates as cloud revenue climbs` survives. *A
+ticker inside a sentence is a story; a ticker that **is** the sentence is a
+landing page.*
+
+**Open, and Kabil's call.** `/world` is what carries the geopolitics — and it
+also carried *"Diana's brother compares media treatment of Harry, Meghan"* and
+*"Billionaires abound in California. Why not tax their wealth?"*. Dropping it
+costs the macro geopolitics and takes cadence to 0.9/h. There is no structural
+answer left: the remaining choice is taste.
+
 **§3.38 — The brief printed US bank reserves as three quadrillion dollars,
 every morning.** Found by reading run #103 — the real, emailed Sunday brief —
 rather than by any test. Probe round 20 settled it the same day.
@@ -1975,7 +2029,7 @@ What changed is the claim built on them.
 | Field | Was | Now |
 |---|---|---|
 | BACKDROP | designed, FRED probed three rounds, unwired | **live** — UNRATE, 10Y–2Y, CPI y/y and 3m annualised |
-| NEWS | decided (D16, §12.8), unwired | **live** — CNBC wire, ZeroHedge marked commentary |
+| NEWS | decided (D16, §12.8), unwired | **live in BOTH editions** — Reuters (scoped) + CNBC as wires, ForexLive/CoinDesk/Cointelegraph as press, ZeroHedge marked commentary. PM window = since the morning brief (§3.39) |
 | §12.10's rule | written in this file | **written in the fetcher** |
 | D16's marking | a decision | **proven necessary on its first run (§3.30)** |
 | Sections | thirteen | **fifteen** |
