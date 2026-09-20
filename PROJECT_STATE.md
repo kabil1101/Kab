@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed (3 confirmed)** · 🟡 **v8 banner clears on a dispatch carrying v8; the INSTALLED copy is unproven until Google dispatches** · 🟠 **five PM-path bugs found by running it, all fixed (§3.33–§3.37)** · 🟢 **weekend PM edition is crypto only (D25)** · 📋 **build order in §13** |
-| **Last updated** | 2026-09-19 |
-| **Revision** | 29 (was: 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed (3 confirmed)** · 🟡 **v8 banner clears on a dispatch carrying v8; the INSTALLED copy is unproven until Google dispatches** · 🟠 **seven bugs found by running it, all fixed (§3.33–§3.38)** · 🟢 **COMMIT 5 CLOSED — v8 proven from Google's own dispatch, PM landed 13:00 on the dot** · 🟢 **weekend PM edition is crypto only (D25)** · 📋 **build order in §13** |
+| **Last updated** | 2026-09-20 |
+| **Revision** | 30 (was: 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -554,6 +554,47 @@ permission is silently dropped**, producing a token that reads fine and cannot
 dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
+
+**§3.38 — The brief printed US bank reserves as three quadrillion dollars,
+every morning.** Found by reading run #103 — the real, emailed Sunday brief —
+rather than by any test. Probe round 20 settled it the same day.
+
+```
+- **Treasury account** $877,028bn        ← $877 trillion
+- **Bank reserves**  $3,013,794bn        ← $3 quadrillion
+```
+
+Bank reserves are about **$3.0 trillion**. Probe round 20 asked FRED what it
+actually returns:
+
+| series | brief said | FRED says | |
+|---|---|---|---|
+| `RRPONTSYD` | `$bn` | Bil. of US $ | ✅ |
+| `WTREGEN` | `$bn` | **Mil. of U.S. $** | ❌ 1000× |
+| `WRESBAL` | `$bn` | **Mil. of U.S. $** | ❌ 1000× |
+
+**Two layers asserted the scale and neither checked it.** `PLUMBING_SERIES`
+carried a `unit` field — and `_plumbing_lines` ignored it and hardcoded `"bn"`
+anyway. Either alone is a guess; together they are a guess that *looks* like it
+was considered twice. §3.9 for the sixth time.
+
+**The unit column was deleted rather than corrected.** Writing the right answer
+into the table is still a declaration, and the next series added would be
+another coin flip. `plumbing()` now asks FRED what the series is measured in
+and scales from that; the renderer prints the unit it is handed.
+
+An unrecognised unit is not a licence to guess: the value prints unscaled
+carrying FRED's own words, and a failed lookup degrades to `unit unknown` with
+the reason in `partial`. **Better an unlabelled figure than a confident wrong
+label** (§12.4a). Cost is three extra calls to a host the morning brief already
+uses; the PM edition pays nothing since §3.36.
+
+> **The old test was green and would have rendered `$3,120$bn`.** The fixture
+> said `"unit": "$bn"` while the renderer hardcoded `"bn"` — and no assertion
+> ever looked at the unit. The third test in three days that passed while
+> describing something that did not happen.
+
+*Verified live on run #105: `$877bn` and `$3,014bn`.*
 
 **§3.37 — The shadow log was recording test dispatches as if they were
 editions.** Found while verifying §3.36 on a runner, 2026-09-19.
@@ -1595,6 +1636,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 28 | 2026-09-20 | **Commit 5 closes itself.** The morning brief dispatched from Google carrying `TRIGGER_VERSION: 8` and the PM edition fired at **12:00:09Z — 13:00 Lisbon to the second** — `sendPm` exists only in v8, so it is proof twice over of the thing rev 29 had to mark amber. Both sent; the PM wrote its marker and left the daily baseline alone. Saturday's PM had gone out 3h26m late via the **cron fallback**, which is the fallback doing its job and saying so. Then reading the delivered brief found two more defects the suite had never seen: `2th straight inflow`, and **bank reserves printed as three quadrillion dollars** because two layers each asserted a unit and neither checked it (§3.38). Probe round 20 asked FRED rather than guessing a second time |
 | 27 | 2026-09-19 | **Commit 5 and the first PM editions — five bugs, none of which a test could have caught.** Probe round 19 sized the OKX page (100 rows / 28 minutes) and settled that `sz` is in contracts, so liquidations ship as counts and skew with **no dollar figure**. The addendum was closed by building all of it. Then Commit 5 installed the PM timers and bumped the trigger to v8 — Kabil re-pasted, three timers confirmed, banner cleared. **Then the running started, and it found what reading had not:** the PM cron fallback was inert and its test only checked that a string was present (§3.33); `BRIEF LATE` judged every PM edition against the morning's 09:25 target and would have fired on half of all briefs for ever (§3.34); and the PM edition announced Friday's session as today's, poisoning the first row of the D20 shadow log on the way (§3.35). Then Kabil's weekend call (D25) and two more found while verifying it: the PM edition waited on FRED, which it never prints — 100s inside FRED's maintenance window against 4s after the fix (§3.36) — and the shadow log had been recording `skip_email` test dispatches as if they were editions (§3.37). **All five were found by dispatching, not by reading** — the suite was green through every one of them |
 | 26 | 2026-09-18 | **Probe round 18 and Commit 4.** The round overturned a verdict carried since rev 1: OKX returns liquidation orders keyless, with size, timestamp and side, so **the largest gap between Kabil's framework and this system is a wiring job rather than a subscription** (§3.31). Three other results corrected things this file asserted, two of them my own errors. Then Commit 4 — the state bundle and the PM edition, **the largest change on the delivery path** — with D21 proving itself on the first live render (§2.6). Two bugs of mine inside it: a per-cent change compared against a basis-point threshold, which would have fired the body on almost every afternoon, and a "still ahead today" line printing tomorrow's entry (§3.32) |
 | 25 | 2026-09-18 | **Commit 3 — BACKDROP and NEWS.** The FRED work repurposed from release-minute actuals to the economic picture, with round 16's explicit realtime window written into the fetcher rather than only into this file. NEWS ships CNBC as the wire and ZeroHedge marked as commentary — and the first live run returned three ZeroHedge items of which one was a culture-war headline with no market content, which is D16's warning arriving as evidence (§3.30). Two of my own mistakes: the commit message claimed 443 checks when the suite reports **430**, and `FRED_API_KEY` had been wired into `probe.yml` and never into the job that builds the brief, so BACKDROP would have degraded to `unavailable` every morning — caught by dispatching rather than by reading |
@@ -1636,6 +1678,59 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 30 · 2026-09-20 · Commit 5 closes itself, and the brief turns out to have been printing quadrillions
+
+**Sections touched:** header, §3.38 (new), §10, §12.2
+**Type:** DELIVERY / DEFECT
+**Evidence:** runs #101–#105, probe round 20. 640 offline checks, 0.22s.
+
+**COMMIT 5 IS CLOSED. The whole chain ran unattended, twice, and proved
+itself:**
+
+| | |
+|---|---|
+| Morning, run #103 | dispatch 08:26:13Z · `TRIGGER_VERSION: 8` · no banner · **sent** |
+| PM, run #104 | dispatch **12:00:09Z — 13:00 Lisbon to the second** · crypto only · **sent** |
+
+**`TRIGGER_VERSION: 8` came out of Google's own dispatch**, which is what rev
+29 marked amber and said only a real firing could settle. It is settled.
+`sendPm` exists **only** in v8, so #104 firing at all is a second, independent
+proof of the same thing.
+
+`PM marker written; the daily baseline is untouched.` — D21 working in
+production on a real send, not a fixture.
+
+**Saturday, for the record: the fallback earned its place.** The Apps Script PM
+timer never fired on the 19th — almost certainly because `install()` was run
+after 13:00 that day. The cron fallback caught it at **16:26 Lisbon** and the
+banner said exactly which path had built it and why:
+
+> *No brief had gone out today, so the fallback schedule built this one — the
+> on-time trigger did not deliver.*
+
+A second scheduled run at 17:14 exited in **0 seconds** on the PM duplicate
+guard. Both halves of §3.33's fix, working, on their first real outing.
+
+**And then reading the delivered brief found two defects no test had.**
+
+- **`2th straight inflow`** — the streak counter hardcoded `th`. Fixed, teens
+  included.
+- **§3.38 — bank reserves printed as three quadrillion dollars**, every
+  morning, because two layers each asserted a unit and neither checked it.
+
+**The pattern is now five days old and has not changed once:** every defect
+this week was found by *running* the thing and *reading the output*, never by
+the suite. Seven in a row. §8's rule earns its keep daily; the corollary is
+the one worth carrying — **a green suite is evidence about the fixtures, not
+about production.**
+
+> Also worth naming: a `state file unreadable (JSONDecodeError)` warning shows
+> on every run's annotations and is **the test suite's own** corrupt-file test
+> proving honest degradation. It is not a production fault, and it was nearly
+> reported as one.
+
+---
 
 ## rev 29 · 2026-09-19 · Commit 5 ships, and then three PM bugs fall out of actually running it
 
