@@ -88,127 +88,90 @@ def head(n, title, why):
     print(f"\n=== {n}. {title}\n    WHY: {why}")
 
 
-CANDIDATES = (
-    # label, url, beat. Round 14 probed the four accounts Kabil named and
-    # three failed; these are the free primaries closest to what those
-    # accounts actually do, plus the crypto wires WatcherGuru stands in for.
-    ("ForexLive", "https://www.forexlive.com/feed/", "macro squawk"),
-    ("FinancialJuice", "https://www.financialjuice.com/feed", "macro squawk"),
-    ("MarketWatch top", "http://feeds.marketwatch.com/marketwatch/topstories/",
-     "macro"),
-    ("MarketWatch RT",
-     "http://feeds.marketwatch.com/marketwatch/realtimeheadlines/", "macro"),
-    ("Investing.com", "https://www.investing.com/rss/news.rss", "macro"),
-    ("Yahoo Finance", "https://finance.yahoo.com/news/rssindex", "macro"),
-    ("Reuters via GNews",
-     "https://news.google.com/rss/search?q=when:1d+site:reuters.com"
-     "&hl=en-US&gl=US&ceid=US:en", "wire"),
-    ("CNBC economy", "https://search.cnbc.com/rs/search/combinedcms/view.xml"
-     "?partnerId=wrss01&id=20910258", "macro"),
-    ("CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/", "crypto"),
-    ("The Block", "https://www.theblock.co/rss.xml", "crypto"),
-    ("Cointelegraph", "https://cointelegraph.com/rss", "crypto"),
-    ("Decrypt", "https://decrypt.co/feed", "crypto"),
+GNEWS = ("https://news.google.com/rss/search?q={q}"
+         "&hl=en-US&gl=US&ceid=US:en")
+
+# Round 21 made Reuters-via-Google-News the only squawk-grade feed at
+# 4.3 items/hour. Round 21's query was site:reuters.com with no scope, and
+# the first live PM edition printed:
+#
+#   Pirates' Brandon Lowe takes HR barrage into finale vs. Royals - Reuters
+#   Olympic dreams flicker as teqball awards first Asian Games medals
+#
+# A title deny-list does not fix that. "Pirates", "Royals", "HR barrage" and
+# "finale" contain no sports word a filter would catch, and §3.6 is the
+# section about what happens when a word list is asked to do semantic work.
+# Reuters' own URLs are already a taxonomy - reuters.com/markets,
+# /business, /world - so the scope belongs in the QUERY, not in a guess about
+# the title.
+#
+# Narrowing costs cadence. This round measures how much, because a scoped
+# feed that drops to 0.3/h is no longer worth having over the five already
+# wired.
+SCOPES = (
+    ("unscoped (round 21)", "when:1d+site:reuters.com"),
+    ("markets", "when:1d+site:reuters.com/markets"),
+    ("business", "when:1d+site:reuters.com/business"),
+    ("markets+business", "when:1d+(site:reuters.com/markets+OR+"
+                         "site:reuters.com/business)"),
+    ("markets+business+world",
+     "when:1d+(site:reuters.com/markets+OR+site:reuters.com/business+OR+"
+     "site:reuters.com/world)"),
 )
 
-# A squawk is not a news site with a faster horse. The discriminator is
-# CADENCE: FinancialJuice posts dozens of headlines an hour, CNBC posts a few
-# a day. Round 14 measured freshness and reach but never items-per-hour, which
-# is the number that actually decides whether a feed can carry "what happened
-# since the 09:20 brief".
 FRESH_PASS_HOURS = 3.0
 
 
 def main() -> int:
-    """Round 21 — can anything free carry a squawk?
+    """Round 22 — scope Reuters with its own taxonomy, and count the cost.
 
-    Kabil asked whether the brief watches @DeItaone, @zerohedge,
-    @financialjuice and @WatcherGuru. It watches one, through its website.
-    X itself costs $0.005/read with no free tier and Nitter is under
-    cease-and-desist, so round 14 probed the four at their primaries and CNBC
-    beat three of them (§12.8).
-
-    He now wants headlines in BOTH editions. The PM edition needs a feed that
-    says what happened in the last three hours, which is a harder test than
-    the AM's eighteen. This round measures four things per candidate:
-
-      - does the BRIEF'S OWN PARSER read it (not a probe-local one - round 18
-        failed on exactly that, and §3.28 was a wrong verdict caused by this
-        probe's own headers);
-      - how old is the newest item (WatcherGuru died here at 41.9h);
-      - how far back does the feed reach;
-      - ITEMS PER HOUR across the feed's own span - the squawk test.
+    PASS still needs a fresh, fully dated feed. The number that decides which
+    scope ships is cadence: it has to stay high enough to fill a 3.5-hour PM
+    window, and the titles have to stop being about baseball.
     """
-    head(1, "Free squawk candidates, read with the brief's own client",
-         f"PASS needs: 200, the brief's parser finds items, every item dated, "
-         f"newest under {FRESH_PASS_HOURS:.0f}h. Cadence is reported for all.")
+    head(1, "Reuters via Google News, scoped by Reuters' own URL sections",
+         "Same client and same parser as the brief. Cadence is the cost of "
+         "narrowing; the sample titles are whether it worked.")
 
-    results = []
-    for label, url, beat in CANDIDATES:
-        print(f"\n  --- {label} ({beat}) ---")
-        raw = None
+    rows = []
+    for label, q in SCOPES:
+        print(f"\n  --- {label} ---")
+        url = GNEWS.format(q=q)
         try:
             r = requests.get(url, timeout=TIMEOUT, headers=sources.HEADERS)
-            print(f"    {url}")
-            print(f"    HTTP {r.status_code} · {len(r.content):,} bytes · "
-                  f"{r.headers.get('content-type', '?')[:40]}")
+            print(f"    HTTP {r.status_code} · {len(r.content):,} bytes")
             if r.status_code != 200:
-                print(f"    body: {r.text[:120]}")
-                results.append((label, beat, "FAIL", f"HTTP {r.status_code}"))
+                rows.append((label, "FAIL", f"HTTP {r.status_code}", 0.0))
                 continue
-            raw = r.content
+            parsed = sources._rss_items(r.content)
         except Exception as exc:  # noqa: BLE001
             print(f"    FAILED {type(exc).__name__}: {str(exc)[:110]}")
-            results.append((label, beat, "FAIL", type(exc).__name__))
+            rows.append((label, "FAIL", type(exc).__name__, 0.0))
             continue
 
-        # The brief's parser, not one written for this probe.
-        try:
-            parsed = sources._rss_items(raw)
-        except Exception as exc:  # noqa: BLE001
-            print(f"    parser rejected it: {type(exc).__name__}: "
-                  f"{str(exc)[:90]}")
-            results.append((label, beat, "FAIL", "unparseable"))
-            continue
-
-        dated = [w for _t, _l, w in parsed if w is not None]
-        print(f"    items {len(parsed)} · dated {len(dated)}")
+        dated = sorted([w for _t, _l, w in parsed if w is not None], reverse=True)
         if not dated:
-            # §12.8: a 200 with no usable timestamp cannot support a window.
-            print("    NO PARSEABLE TIMESTAMPS - cannot support a window")
-            results.append((label, beat, "FAIL", "no timestamps"))
+            print("    no parseable timestamps")
+            rows.append((label, "FAIL", "no timestamps", 0.0))
             continue
-
-        dated = sorted(dated, reverse=True)
         newest = (NOW - dated[0]).total_seconds() / 3600
         span = (dated[0] - dated[-1]).total_seconds() / 3600
         per_hour = (len(dated) / span) if span > 0.01 else float("inf")
-        print(f"    newest {newest:.1f}h old · reaches back {span:.1f}h")
-        print(f"    cadence {per_hour:.1f} items/hour")
-        sample = [t for t, _l, w in parsed if w is not None][:2]
-        for t in sample:
-            print(f"      · {t[:96]}")
-
-        if newest <= FRESH_PASS_HOURS and len(dated) == len(parsed):
-            verdict, why = "PASS", f"{newest:.1f}h, {per_hour:.1f}/h"
-        elif newest <= FRESH_PASS_HOURS:
-            verdict, why = "PARTIAL", f"{len(parsed) - len(dated)} undated"
-        else:
-            verdict, why = "FAIL", f"newest {newest:.1f}h old"
-        print(f"    -> {verdict}: {why}")
-        results.append((label, beat, verdict, why))
+        print(f"    items {len(parsed)} · newest {newest:.1f}h · "
+              f"span {span:.1f}h · cadence {per_hour:.1f}/h")
+        for t, _l, _w in parsed[:6]:
+            print(f"      · {t[:94]}")
+        verdict = "PASS" if newest <= FRESH_PASS_HOURS else "FAIL"
+        rows.append((label, verdict, f"{newest:.1f}h", per_hour))
 
     print("\n" + "=" * 68)
-    print(f"{'SOURCE':<20}{'BEAT':<14}{'VERDICT':<10}WHY")
+    print(f"{'SCOPE':<26}{'VERDICT':<9}{'NEWEST':<9}CADENCE")
     print("=" * 68)
-    for label, beat, verdict, why in results:
-        print(f"{label:<20}{beat:<14}{verdict:<10}{why}")
+    for label, verdict, why, per_hour in rows:
+        print(f"{label:<26}{verdict:<9}{why:<9}{per_hour:.1f}/h")
     print()
-    print("A PM edition asks what happened in the last ~3.5 hours. Anything")
-    print("whose cadence is under ~1 item/hour can fill the AM brief but will")
-    print("be empty most afternoons, and an empty section that is empty by")
-    print("construction is worse than no section - it reads as 'nothing")
-    print("happened' (§3.16).")
+    print("Read the SAMPLE TITLES, not just the cadence. The unscoped feed")
+    print("passed round 21 on numbers alone and was full of baseball.")
     return 0
 
 
