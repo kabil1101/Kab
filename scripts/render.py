@@ -739,7 +739,7 @@ def _news_lines(nw, now):
     items = nw["data"]["items"]
     if not items:
         return [f"Nothing on the wire in the last "
-                f"{nw['data']['window_hours']:g}h."]
+                f"{nw['data']['window_hours']}h."]
     out = []
     for i in items:
         age = (now - i["when"]).total_seconds() / 3600
@@ -748,11 +748,9 @@ def _news_lines(nw, now):
         if len(title) > 150:
             title = title[:149].rstrip() + "\u2026"
         # A commentary headline typeset like a wire item is an opinion wearing
-        # a fetched number's clothes. The tag is the whole of D16. "press" is
-        # reported news that is not a wire service; it reads like reporting
-        # because it is, and only opinion carries the warning.
-        tag = (f"**{i['source']} — commentary, not a wire**"
-               if i["kind"] == "commentary" else f"via {i['source']}")
+        # a fetched number's clothes. The tag is the whole of D16.
+        tag = (f"via {i['source']}" if i["kind"] == "wire"
+               else f"**{i['source']} — commentary, not a wire**")
         out.append(f"**{stamp}** — {title} · {tag}")
     return out
 
@@ -1814,31 +1812,6 @@ def _pm_crypto_lines(ctx):
     return out
 
 
-def am_built_at(ctx):
-    """When this morning's brief was built, as a datetime, or None.
-
-    `state.snapshot` stamps `am.at` on every morning send. It is the only
-    honest start for the PM edition's news window: "since the 09:20 brief"
-    has to mean the brief that actually went out, not a fixed number of hours
-    guessed from the clock.
-    """
-    at = (state.am_baseline(ctx.get("prev") or {}) or {}).get("at")
-    if not isinstance(at, str):
-        return None
-    try:
-        when = datetime.fromisoformat(at)
-    except ValueError:
-        return None
-    if when.tzinfo is None:
-        return None
-    now = ctx.get("now")
-    # A stamp from the future, or from another day, is not a window.
-    if isinstance(now, datetime) and not (timedelta(0) <= now - when
-                                          <= timedelta(hours=24)):
-        return None
-    return when
-
-
 def pm_spine(ctx):
     """About six lines, always printed, even on the quietest afternoon.
 
@@ -2054,25 +2027,6 @@ def pm_build(ctx) -> tuple[str, str]:
         md.append(f"- {line}")
         html.append(f"<ul><li>{_hb(line)}</li></ul>")
     md.append("")
-
-    # NEWS, on the delta window. The AM edition looks back eighteen hours;
-    # repeating that at 13:00 would reprint headlines Kabil read at 09:20,
-    # which is exactly what D17 says makes a second email feel like a
-    # duplicate. The window is "since the morning brief was built".
-    nw = ctx.get("news")
-    if nw is not None:
-        md.append("## SINCE THE MORNING BRIEF\n")
-        html.append(_h_section("Since the morning brief"))
-        nlines = _news_lines(nw, now)
-        for l in nlines:
-            md.append(f"- {l}")
-        html.append("<ul>" + "".join(f"<li>{_hb(l)}</li>" for l in nlines)
-                    + "</ul>")
-        note = ("Headlines, not data. A wire item is reported; a ZeroHedge "
-                "item is commentary and is marked as such.")
-        md.append(f"\n*{note}*\n")
-        html.append(f"<p class='muted'><em>{_esc(note)}</em></p>")
-
     html.append(_h_close())
     return "\n".join(md), "\n".join(html)
 
