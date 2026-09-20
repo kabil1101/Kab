@@ -253,12 +253,16 @@ tests/test_brief.py                  offline suite, no network
 state/latest.json                    yesterday's figures, committed by the run
 trigger/apps-script.gs               the on-time trigger (see docs/)
 docs/trigger-setup.md                how to install it, step by step
+docs/HANDOFF.md                      read first on a new chat
+docs/SYNOPSIS.md                     the narrative account of how it got here
 PROJECT_STATE.md                     decisions, dead sources, what is blocked
 ```
 
-**Start here on a new session:** `PROJECT_STATE.md`. It carries the decisions,
-the retractions, every data source ever tried including the dead ones, and the
-single item that is actually blocking the project.
+**Start here on a new session:** `docs/HANDOFF.md` first — it is one screen of
+what this is, the three rules that have each been learned the expensive way,
+and the open questions in priority order. Then `PROJECT_STATE.md` in full. It
+carries the decisions, the retractions, every data source ever tried including
+the dead ones, and the single item that is actually blocking the project.
 
 ## Tests
 
