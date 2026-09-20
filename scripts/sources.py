@@ -1386,6 +1386,23 @@ def _fred_obs(series_id: str, key: str, limit: int, today: date):
     return out
 
 
+def _fred_units(series_id: str, key: str) -> str:
+    """What FRED says a series is measured in, in its own words.
+
+    One extra call per plumbing series. That is three requests to a host the
+    morning brief already talks to, and it buys the difference between
+    "$3,014bn" and "$3,013,794bn" - which is the difference between a number
+    and a typo with a dollar sign on it.
+    """
+    r = requests.get(FRED_SERIES_META, headers=HEADERS, timeout=TIMEOUT,
+                     params={"series_id": series_id, "api_key": key,
+                             "file_type": "json"})
+    if r.status_code != 200:
+        raise RuntimeError(f"HTTP {r.status_code}")
+    return str(((r.json().get("seriess") or [{}])[0]
+                .get("units_short") or "")).strip()
+
+
 def backdrop(today: date | None = None) -> dict:
     """The economic backdrop: labour, the curve, and the trend in prices.
 
@@ -1618,10 +1635,33 @@ def yahoo_extra() -> dict:
 # wearing a fetched number's clothes - §3.9 inverted, which is the one thing
 # this brief has never done. The three components print with their own dates.
 PLUMBING_SERIES = (
-    ("RRPONTSYD", "Reverse repo", "$bn", 10),
-    ("WTREGEN", "Treasury account", "$bn", 6),
-    ("WRESBAL", "Bank reserves", "$bn", 6),
+    # id, label, how many observations we need. THE UNIT IS DELIBERATELY NOT
+    # HERE. It used to be, declared "$bn" for all three, and two of the three
+    # are millions - so the brief printed bank reserves as $3,013,794bn, three
+    # quadrillion dollars, every morning. Probe round 20 read the units back
+    # from FRED: RRPONTSYD is billions, WTREGEN and WRESBAL are millions.
+    # Declaring the answer here a second time would just be a better guess;
+    # the scale is FRED's to state, so it is asked for and honoured.
+    ("RRPONTSYD", "Reverse repo", 10),
+    ("WTREGEN", "Treasury account", 6),
+    ("WRESBAL", "Bank reserves", 6),
 )
+
+FRED_SERIES_META = "https://api.stlouisfed.org/fred/series"
+
+# FRED's own `units_short`, as probe round 20 read them back, mapped to the
+# multiplier that turns the value into BILLIONS. A unit missing from here is
+# not guessed at: the value prints unscaled, carrying FRED's own words.
+FRED_TO_BILLIONS = {
+    "Bil. of US $": 1.0,
+    "Bil. of U.S. $": 1.0,
+    "Bil. of $": 1.0,
+    "Mil. of US $": 1e-3,
+    "Mil. of U.S. $": 1e-3,
+    "Mil. of $": 1e-3,
+    "Thous. of US $": 1e-6,
+    "Thous. of U.S. $": 1e-6,
+}
 
 
 def plumbing(today: date | None = None) -> dict:
@@ -1631,7 +1671,7 @@ def plumbing(today: date | None = None) -> dict:
         raise RuntimeError("FRED_API_KEY is not set")
     today = _fred_today(today)
     out, notes = [], []
-    for sid, label, unit, limit in PLUMBING_SERIES:
+    for sid, label, limit in PLUMBING_SERIES:
         try:
             obs = _fred_obs(sid, key, limit, today)
         except Exception as exc:  # noqa: BLE001
@@ -1640,10 +1680,25 @@ def plumbing(today: date | None = None) -> dict:
         if not obs:
             notes.append(f"{label}: no observations")
             continue
+        try:
+            units = _fred_units(sid, key)
+        except Exception as exc:  # noqa: BLE001
+            # A series whose scale cannot be established makes no claim about
+            # its scale. Better an unlabelled figure than a wrong label.
+            notes.append(f"{label}: units unknown ({_reason(exc)})")
+            units = ""
+        factor = FRED_TO_BILLIONS.get(units)
         when, value = obs[0]
         prior = obs[1][1] if len(obs) > 1 else None
+        if factor is not None:
+            value *= factor
+            prior = prior * factor if prior is not None else None
+            unit = "bn"
+        else:
+            # Unrecognised: print FRED's own words rather than invent a scale.
+            unit = units or "unit unknown"
         out.append({"id": sid, "label": label, "unit": unit, "as_of": when,
-                    "value": value, "prior": prior})
+                    "value": value, "prior": prior, "fred_units": units})
     if not out:
         raise RuntimeError("; ".join(notes) or "no series returned")
     return {"series": out, "partial": "; ".join(notes) or None,

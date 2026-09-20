@@ -413,11 +413,11 @@ check("no stored OI means no claim",
 
 print("\n-- liquidity plumbing: three components, never a composite --")
 _PL = {"ok": True, "error": None, "data": {"series": [
-    {"id": "RRPONTSYD", "label": "Reverse repo", "unit": "$bn",
+    {"id": "RRPONTSYD", "label": "Reverse repo", "unit": "bn",
      "as_of": date(2026, 9, 17), "value": 412.0, "prior": 455.0},
-    {"id": "WTREGEN", "label": "Treasury account", "unit": "$bn",
+    {"id": "WTREGEN", "label": "Treasury account", "unit": "bn",
      "as_of": date(2026, 9, 10), "value": 811.0, "prior": 760.0},
-    {"id": "WRESBAL", "label": "Bank reserves", "unit": "$bn",
+    {"id": "WRESBAL", "label": "Bank reserves", "unit": "bn",
      "as_of": date(2026, 9, 10), "value": 3120.0, "prior": 3180.0},
 ], "partial": None, "source": "FRED (St. Louis Fed)"}}
 _pl = "\n".join(render._plumbing_lines(_PL, _NOW19))
@@ -425,6 +425,12 @@ check_true("all three components print",
            all(k in _pl for k in ("Reverse repo", "Treasury account",
                                   "Bank reserves")), _pl)
 check_true("each carries its own date", _pl.count("as of") == 3, _pl)
+# The fixture carried "$bn" as the unit and the renderer hardcoded "bn" on
+# top, so nothing ever checked the two agreed. §3.38.
+check_true("the dollar sign is not doubled", "$$" not in _pl and "$bn" not in
+           _pl.replace("**", ""), _pl)
+check_true("bank reserves read as trillions of dollars, not quadrillions",
+           "$3,120bn" in _pl, _pl)
 check_true("and the move on the prior print", "-43bn on the prior print" in _pl
            or "-43" in _pl, _pl)
 # The common construct has modelling choices baked in and different desks
@@ -792,6 +798,73 @@ check_true("and the brief says the clock is missing",
 _q_small = _q_ca_ctx(datetime(2026, 9, 19, 12, 55, tzinfo=LISBON), pct=0.05)
 check("a fresh quote under the threshold still prints nothing",
       [l for l in render.pm_body(_q_small)[0] if "DXY" in l], [])
+
+
+print("\n-- FRED states the scale; the brief no longer assumes it --")
+# The brief printed "**Bank reserves** $3,013,794bn" on 20 Sep - three
+# quadrillion dollars. PLUMBING_SERIES declared all three series "$bn" and
+# _plumbing_lines hardcoded "bn" on top, so two layers asserted a scale and
+# neither checked it. Probe round 20 asked FRED: RRPONTSYD is billions,
+# WTREGEN and WRESBAL are millions.
+_fred_units_seen = []
+def _with_fred(units_by_id, obs=None):
+    """sources.plumbing() against canned FRED answers, no network."""
+    _orig = (sources._fred_obs, sources._fred_units, _os.environ.get("FRED_API_KEY"))
+    try:
+        _os.environ["FRED_API_KEY"] = "test-key-not-real"
+        sources._fred_obs = lambda sid, key, limit, today: (
+            obs or [(date(2026, 9, 18), 3013794.0), (date(2026, 9, 11), 2991310.0)])
+        def _units(sid, key):
+            _fred_units_seen.append(sid)
+            u = units_by_id.get(sid)
+            if isinstance(u, Exception):
+                raise u
+            return u
+        sources._fred_units = _units
+        return sources.plumbing(date(2026, 9, 20))
+    finally:
+        sources._fred_obs, sources._fred_units = _orig[0], _orig[1]
+        if _orig[2] is None:
+            _os.environ.pop("FRED_API_KEY", None)
+        else:
+            _os.environ["FRED_API_KEY"] = _orig[2]
+
+_mil = _with_fred({sid: "Mil. of U.S. $" for sid, _l, _n in sources.PLUMBING_SERIES})
+_row = _mil["series"][0]
+check("a millions series is scaled to billions", round(_row["value"], 3), 3013.794)
+check("and so is its prior", round(_row["prior"], 3), 2991.310)
+check("and it is labelled bn", _row["unit"], "bn")
+check_true("FRED's own words are kept for the record",
+           _row["fred_units"] == "Mil. of U.S. $", _row)
+
+_bil = _with_fred({sid: "Bil. of US $" for sid, _l, _n in sources.PLUMBING_SERIES})
+check("a billions series is left alone",
+      round(_bil["series"][0]["value"], 3), 3013794.0)
+check("and is also labelled bn", _bil["series"][0]["unit"], "bn")
+
+# §12.4a. An unrecognised unit is not a licence to guess a scale.
+_unk = _with_fred({sid: "Fathoms" for sid, _l, _n in sources.PLUMBING_SERIES})
+check("an unknown unit is never scaled",
+      _unk["series"][0]["value"], 3013794.0)
+check("and prints FRED's own words instead of bn",
+      _unk["series"][0]["unit"], "Fathoms")
+_unk_md = "\n".join(render._plumbing_lines(
+    {"ok": True, "error": None, "data": _unk}, _NOW19))
+check_true("so the brief never calls an unknown unit billions",
+           "bn" not in _unk_md and "Fathoms" in _unk_md, _unk_md)
+
+# A units call that fails is a named degradation, not a silent "bn".
+_err = _with_fred({sid: RuntimeError("HTTP 500")
+                   for sid, _l, _n in sources.PLUMBING_SERIES})
+check("a failed units lookup leaves the value unscaled",
+      _err["series"][0]["value"], 3013794.0)
+check("and says the unit is unknown", _err["series"][0]["unit"], "unit unknown")
+check_true("and the reason is carried, not dropped",
+           "units unknown" in (_err["partial"] or ""), _err["partial"])
+
+check_true("the series table no longer declares a unit at all",
+           all(len(row) == 3 for row in sources.PLUMBING_SERIES),
+           sources.PLUMBING_SERIES)
 
 
 print("\n-- an ordinal that is not always 'th' --")

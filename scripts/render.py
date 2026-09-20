@@ -859,9 +859,15 @@ def _plumbing_lines(pl, now):
         return [f"Liquidity plumbing unavailable — {pl['error']}"]
     out = []
     for e in pl["data"]["series"]:
-        bits = [f"**{e['label']}** ${e['value']:,.0f}bn"]
+        # The unit comes from FRED, via the fetcher. It used to be hardcoded
+        # "bn" here on top of a table that also said "bn", so two layers
+        # asserted a scale and neither checked it - and two of the three
+        # series are millions. §3.38.
+        unit = e.get("unit") or "unit unknown"
+        bits = [f"**{e['label']}** ${e['value']:,.0f}{unit}"]
         if e["prior"] is not None:
-            bits.append(f"{e['value'] - e['prior']:+,.0f}bn on the prior print")
+            bits.append(f"{e['value'] - e['prior']:+,.0f}{unit} "
+                        f"on the prior print")
         bits.append(f"as of {e['as_of']:%d %b}")
         out.append(" · ".join(bits))
     return out
