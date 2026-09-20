@@ -794,6 +794,25 @@ check("a fresh quote under the threshold still prints nothing",
       [l for l in render.pm_body(_q_small)[0] if "DXY" in l], [])
 
 
+print("\n-- an ordinal that is not always 'th' --")
+# Live in the brief on 20 Sep: "2th straight inflow".
+for _n, _want in ((1, "1st"), (2, "2nd"), (3, "3rd"), (4, "4th"), (5, "5th"),
+                  (11, "11th"), (12, "12th"), (13, "13th"), (21, "21st"),
+                  (22, "22nd"), (23, "23rd"), (101, "101st"), (111, "111th")):
+    check(f"{_n} reads as {_want}", render._ordinal(_n), _want)
+_flow_ctx = copy.deepcopy(healthy)
+_flow_ctx["flows_btc"]["data"]["recent"] = [
+    {"date": date(2026, 9, 17), "total": 159.0, "ibit": 100.0, "fbtc": 59.0},
+    {"date": date(2026, 9, 18), "total": 433.0, "ibit": 108.4, "fbtc": 310.7}]
+_flow_ctx["flows_btc"]["data"]["latest_total"] = 433.0
+_flow_ctx["flows_btc"]["data"]["latest_date"] = date(2026, 9, 18)
+_flow_md, _ = render.build(_flow_ctx)
+check_true("and the brief says 2nd, not 2th",
+           "2nd straight inflow" in _flow_md,
+           [l for l in _flow_md.split("\n") if "straight" in l])
+check_true("'2th' appears nowhere", "2th" not in _flow_md, _flow_md)
+
+
 print("\n-- the shadow log records editions that were sent, not test runs --")
 # Three rows landed in the D20 dataset from skip_email dispatches at 14:30,
 # 15:25 and 15:38 Lisbon. None is a 13:00 edition, so each measures a

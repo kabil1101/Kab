@@ -313,7 +313,7 @@ def build(ctx) -> tuple[str, str]:
         n = _streak(run)
         if n > 1:
             word = "inflow" if run[-1] > 0 else "outflow"
-            line += f" · **{n}th straight {word}**"
+            line += f" · **{_ordinal(n)} straight {word}**"
         ibit, fbtc = d["recent"][-1].get("ibit"), d["recent"][-1].get("fbtc")
         if ibit is not None or fbtc is not None:
             line += f" · IBIT {_money(ibit)} · FBTC {_money(fbtc)}"
@@ -936,6 +936,19 @@ def _basis(perp):
 def _strike_list(rows):
     """Top strikes as `$85,000 (2,140)`, biggest open interest first."""
     return " · ".join(f"${k:,.0f} ({v:,.0f})" for k, v in rows)
+
+
+def _ordinal(n: int) -> str:
+    """2 -> 2nd. The brief printed "2th straight inflow" on 20 Sep.
+
+    The teens are the whole reason this is not just a lookup on the last
+    digit: 11th, 12th and 13th do not follow 1st, 2nd, 3rd.
+    """
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
 
 
 def _streak(run):

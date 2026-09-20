@@ -89,85 +89,74 @@ def head(n, title, why):
 
 
 def main() -> int:
-    print(f"Round 19 · {NOW:%Y-%m-%d %H:%M} UTC · using sources.HEADERS\n")
+    """Round 20 — what unit does FRED actually return?
 
-    # ---- 1-3. can OKX support a 24h aggregate? --------------------------
-    for n, params, note in (
-        # `state` is REQUIRED and round 19's first attempt dropped it, so
-        # targets 1-3 tested nothing and returned `50014 Parameter state can
-        # not be empty`. Third probe bug of mine in three rounds, after the
-        # Senate parser and the Yahoo headers. Logged rather than quietly
-        # fixed - a probe that fails because of its own client looks exactly
-        # like a source that does not work.
-        (1, {"instType": "SWAP", "uly": "BTC-USD", "state": "filled",
-             "limit": "100"},
-         "coin-margined BTC, the biggest page OKX allows"),
-        (2, {"instType": "SWAP", "uly": "BTC-USDT", "state": "filled",
-             "limit": "100"},
-         "USDT-margined BTC - a different book, usually the deeper one"),
-        (3, {"instType": "SWAP", "instFamily": "ETH-USDT", "state": "filled",
-             "limit": "100"},
-         "ETH, to see whether one call per underlying is the shape"),
-    ):
-        head(n, f"OKX liquidations · {note.split(' - ')[0]}",
-             "Round 18 proved the endpoint answers. This asks whether one "
-             "call can carry a 24h total, or whether the line has to be "
-             "'recent' instead.")
-        d = _get(OKX, params, note=note)
-        rows = _rows(d)
-        print(f"    flattened rows: {len(rows)}")
-        sp = _span(rows)
-        if sp:
-            newest, oldest, hours = sp
-            print(f"    newest {newest:%Y-%m-%d %H:%M}Z · oldest "
-                  f"{oldest:%Y-%m-%d %H:%M}Z · span {hours:.2f}h")
-            # The claim worth printing needs a notional, so check the pieces
-            # are actually there rather than assuming the shape from one row.
-            longs = [r for r in rows if r.get("posSide") == "long"]
-            shorts = [r for r in rows if r.get("posSide") == "short"]
-            missing = [k for k in ("sz", "bkPx", "ts", "posSide")
-                       if any(k not in r for r in rows)]
-            print(f"    longs {len(longs)} · shorts {len(shorts)} · "
-                  f"missing keys: {missing or 'none'}")
+    The brief printed, on 20 September 2026:
+
+        **Treasury account** $877,028bn
+        **Bank reserves** $3,013,794bn
+
+    Bank reserves are about $3.0 trillion. Printed as billions, that line
+    claims three quadrillion dollars. `PLUMBING_SERIES` declares all three
+    series as "$bn" and `_plumbing_lines` hardcodes "bn" on the value without
+    reading even that field - so the label is an assumption twice over.
+
+    §3.9 for the sixth time: present, sourced, correctly stamped, materially
+    misleading. The assumption was never checked against FRED's own metadata,
+    and this round checks it rather than guessing a second time. The key stays
+    out of the log: _get prints the URL, never the params.
+    """
+    key = (os.environ.get("FRED_API_KEY") or "").strip()
+    if not key:
+        print("FRED_API_KEY is not set; nothing to probe.")
+        return 1
+
+    head(1, "FRED series metadata — the declared unit of every series we read",
+         "Nine series across BACKDROP and the plumbing. `units` is what FRED "
+         "says the numbers are in; the brief currently asserts its own.")
+    rows = []
+    for sid, label, assumed in (
+            ("UNRATE", "Unemployment", "%"),
+            ("T10Y2Y", "10Y-2Y spread", "pp"),
+            ("CPIAUCSL", "CPI", "index"),
+            ("RRPONTSYD", "Reverse repo", "$bn"),
+            ("WTREGEN", "Treasury account", "$bn"),
+            ("WRESBAL", "Bank reserves", "$bn")):
+        meta = _get("https://api.stlouisfed.org/fred/series",
+                    {"series_id": sid, "api_key": key, "file_type": "json"},
+                    note=f"{label} — brief assumes {assumed}")
+        units = units_short = title = "?"
+        if meta:
             try:
-                notional = sum(float(r["sz"]) * float(r["bkPx"]) for r in rows)
-                print(f"    notional across the page: ${notional:,.0f} "
-                      f"(units unverified - sz may be contracts, not coins)")
-            except Exception as exc:  # noqa: BLE001
-                print(f"    could not total: {exc}")
-        if rows[:1]:
-            print(f"    sample row: {json.dumps(rows[0], sort_keys=True)}")
-
-    # ---- 4. was the Yahoo verdict mine? ---------------------------------
-    head(4, "Yahoo, with the brief's own headers",
-         "§3.28 claims Yahoo rate-limits a runner. Two probe rounds drew 429 "
-         "with a BROWSER user agent; the brief's seven symbols succeeded "
-         "minutes either side with a plain one. If these answer, the finding "
-         "was my client.")
-    for sym, why in (("IBIT", "the ETF's secondary market"),
-                     ("BZ=F", "Brent, for the Brent-WTI spread"),
-                     ("BTC=F", "CME BTC futures - the addendum's target 10")):
-        d = _get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
-                 {"range": "5d", "interval": "1d"}, note=why)
-        try:
-            res = d["chart"]["result"][0]
-            meta = res["meta"]
-            stamps = res.get("timestamp") or []
-            closes = (res["indicators"]["quote"][0].get("close") or [])
-            vols = (res["indicators"]["quote"][0].get("volume") or [])
-            last = (datetime.fromtimestamp(stamps[-1], timezone.utc)
-                    if stamps else None)
-            print(f"    {meta.get('symbol')} {meta.get('regularMarketPrice')} "
-                  f"{meta.get('currency')} · {meta.get('fullExchangeName')}")
-            print(f"    bars {len(stamps)} · last bar "
-                  f"{last:%Y-%m-%d %H:%M}Z · close {closes[-1] if closes else None}"
-                  f" · volume {vols[-1] if vols else None}")
-        except Exception:  # noqa: BLE001
-            pass
+                srs = meta["seriess"][0]
+                units = srs.get("units")
+                units_short = srs.get("units_short")
+                title = srs.get("title")
+            except Exception:  # noqa: BLE001
+                print(f"    unexpected shape: {json.dumps(meta)[:200]}")
+        obs = _get("https://api.stlouisfed.org/fred/series/observations",
+                   {"series_id": sid, "api_key": key, "file_type": "json",
+                    "sort_order": "desc", "limit": 1})
+        latest = "?"
+        if obs:
+            try:
+                latest = obs["observations"][0]["value"]
+            except Exception:  # noqa: BLE001
+                pass
+        print(f"    {sid:<10} assumed={assumed:<6} FRED units={units!r} "
+              f"({units_short!r})")
+        print(f"    {'':<10} latest={latest} · {title}")
+        rows.append((sid, assumed, units_short, latest))
 
     print("\n" + "=" * 64)
-    print("If target 4 answered, §3.28 was this probe's headers rather than")
-    print("Yahoo's policy, and IBIT / Brent / CME BTC have never been tested.")
+    print("VERDICT TABLE — what the brief must print for each series")
+    print("=" * 64)
+    for sid, assumed, units_short, latest in rows:
+        print(f"  {sid:<10} brief says {assumed:<6} FRED says {units_short}")
+    print()
+    print("A series FRED reports in Millions must be divided by 1,000 before")
+    print("the brief calls it billions - or printed with FRED's own unit. The")
+    print("scale is a property of the series, so it belongs beside the id.")
     return 0
 
 
