@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed (3 confirmed)** · 🟡 **v8 banner clears on a dispatch carrying v8; the INSTALLED copy is unproven until Google dispatches** · 🟠 **seven bugs found by running it, all fixed (§3.33–§3.38)** · 🟢 **COMMIT 5 CLOSED — v8 proven from Google's own dispatch, PM landed 13:00 on the dot** · 🟢 **weekend PM edition is crypto only (D25)** · 📋 **build order in §13** |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed (3 confirmed)** · 🟡 **v8 banner clears on a dispatch carrying v8; the INSTALLED copy is unproven until Google dispatches** · 🟠 **seven bugs found by running it, all fixed (§3.33–§3.38)** · 🟢 **COMMIT 5 CLOSED — v8 proven from Google's own dispatch, PM landed 13:00 on the dot** · 🟢 **weekend PM edition is crypto only (D25)** · ❌ **news expansion built and REVERTED — cadence was the wrong metric (§3.39)** · 📋 **build order in §13** |
 | **Last updated** | 2026-09-20 |
-| **Revision** | 30 (was: 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Revision** | 31 (was: 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -637,6 +637,16 @@ uses; the PM edition pays nothing since §3.36.
 > describing something that did not happen.
 
 *Verified live on run #105: `$877bn` and `$3,014bn`.*
+
+**§3.37a — The PM guard had no `FORCE_RUN` hatch, and the asymmetry only
+shows up when it hurts.** Found 2026-09-20 while trying to verify a change.
+
+`should_run` has honoured `FORCE_RUN` since the start. `should_run_pm` never
+did. That difference is invisible until a real PM edition has already gone out
+— and then the duplicate guard refuses every dry run for the rest of the day,
+**which is precisely when a change most needs proving on a runner.**
+
+Fixed, and tested by driving both guards rather than by reading for the line.
 
 **§3.37 — The shadow log was recording test dispatches as if they were
 editions.** Found while verifying §3.36 on a runner, 2026-09-19.
@@ -1533,11 +1543,18 @@ docs/trigger-setup.md      its walkthrough, checkpoint by checkpoint
 docs/retired-cowork-relay.md  the scheduled task deleted 2026-09-18, its
                            prompt kept verbatim so deleting the job did not
                            delete what it knew
-docs/BUILD_PLAN_ADDENDUM_1.md  the 2026-09-18 addendum. **OPEN** — a queue,
-                           not a spec, and nothing in it is built
+docs/BUILD_PLAN_ADDENDUM_1.md  the 2026-09-18 addendum. **CLOSED — all of it
+                           built 2026-09-18** (was: "OPEN — a queue, not a
+                           spec, and nothing in it is built")
 docs/BUILD_PLAN.md         the 2026-09-17 plan, verbatim, with a dated
-                           reconciliation preamble. Nothing in it is built
-docs/SYNOPSIS.md           the narrative account — the story, not the system
+                           reconciliation preamble. **Commits 1–5 all built
+                           and live** (was: "Nothing in it is built")
+docs/SYNOPSIS.md           the narrative account — the story, not the system.
+                           Rewritten 2026-09-20 for the tiers and the PM
+                           edition (was: eleven flat sections, to 18 Sep)
+docs/HANDOFF.md            **NEW 2026-09-20** — what an incoming chat reads
+                           first. The chain, the rules, the open questions in
+                           priority order, and how to work with Kabil
 README.md                  setup, source table, design rationale
 PROJECT_STATE.md           this file
 ```
@@ -1678,6 +1695,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 29 | 2026-09-20 | **A feature built and reverted the same day.** Kabil asked whether the brief watches four X accounts; it watches one, through its website. He asked for headlines in both editions, and probe rounds 21 and 22 chose sources on **cadence** — items per hour — because the PM window is short. Three runner checks printed baseball, Reuters ticker landing pages and Harry and Meghan, and he killed it: *"not what i asked for"*. **The mistake was the metric, not the noise** — every account he named is curated for relevance, and relevance was never a criterion (§3.39). Round 22 rated content-free pages the best feed of five and that was read as a scoping problem. Reverted byte-identical. Kept: the `FORCE_RUN` hatch on the PM guard (§3.37a). Handoff and synopsis rewritten for the incoming chat |
 | 28 | 2026-09-20 | **Commit 5 closes itself.** The morning brief dispatched from Google carrying `TRIGGER_VERSION: 8` and the PM edition fired at **12:00:09Z — 13:00 Lisbon to the second** — `sendPm` exists only in v8, so it is proof twice over of the thing rev 29 had to mark amber. Both sent; the PM wrote its marker and left the daily baseline alone. Saturday's PM had gone out 3h26m late via the **cron fallback**, which is the fallback doing its job and saying so. Then reading the delivered brief found two more defects the suite had never seen: `2th straight inflow`, and **bank reserves printed as three quadrillion dollars** because two layers each asserted a unit and neither checked it (§3.38). Probe round 20 asked FRED rather than guessing a second time |
 | 27 | 2026-09-19 | **Commit 5 and the first PM editions — five bugs, none of which a test could have caught.** Probe round 19 sized the OKX page (100 rows / 28 minutes) and settled that `sz` is in contracts, so liquidations ship as counts and skew with **no dollar figure**. The addendum was closed by building all of it. Then Commit 5 installed the PM timers and bumped the trigger to v8 — Kabil re-pasted, three timers confirmed, banner cleared. **Then the running started, and it found what reading had not:** the PM cron fallback was inert and its test only checked that a string was present (§3.33); `BRIEF LATE` judged every PM edition against the morning's 09:25 target and would have fired on half of all briefs for ever (§3.34); and the PM edition announced Friday's session as today's, poisoning the first row of the D20 shadow log on the way (§3.35). Then Kabil's weekend call (D25) and two more found while verifying it: the PM edition waited on FRED, which it never prints — 100s inside FRED's maintenance window against 4s after the fix (§3.36) — and the shadow log had been recording `skip_email` test dispatches as if they were editions (§3.37). **All five were found by dispatching, not by reading** — the suite was green through every one of them |
 | 26 | 2026-09-18 | **Probe round 18 and Commit 4.** The round overturned a verdict carried since rev 1: OKX returns liquidation orders keyless, with size, timestamp and side, so **the largest gap between Kabil's framework and this system is a wiring job rather than a subscription** (§3.31). Three other results corrected things this file asserted, two of them my own errors. Then Commit 4 — the state bundle and the PM edition, **the largest change on the delivery path** — with D21 proving itself on the first live render (§2.6). Two bugs of mine inside it: a per-cent change compared against a basis-point threshold, which would have fired the body on almost every afternoon, and a "still ahead today" line printing tomorrow's entry (§3.32) |
@@ -1720,6 +1738,52 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 31 · 2026-09-20 · A feature built and reverted the same day, and the handoff written
+
+**Sections touched:** header, §3.39 (rewritten as a reversal), §3.37a (new),
+§10, §12.2, plus `docs/SYNOPSIS.md` and `docs/HANDOFF.md`
+**Type:** CORRECTION + DECISION
+**Evidence:** Kabil, this session — *"it is not what i asked for, i don't need
+headlines that doesn't have relation with the markets and politics"*. Probe
+rounds 21 and 22 (runs 22–23), brief runs #106–#109. 643 offline checks.
+
+| Field | Was | Now |
+|---|---|---|
+| NEWS feeds | CNBC + ZeroHedge | **CNBC + ZeroHedge** — six were built and reverted (§3.39) |
+| NEWS in the PM edition | absent | **absent** — built, reverted |
+| `should_run_pm` | no `FORCE_RUN` hatch | **honours it, like the morning guard** (§3.37a) |
+| Plumbing units | asserted `$bn` in two layers | **read from FRED** (§3.38) |
+| Flow streak wording | `2th straight inflow` | `2nd straight inflow` |
+| `docs/SYNOPSIS.md` | 11 sections, to 18 Sep | **three tiers + PM edition, to 20 Sep** |
+| `docs/HANDOFF.md` | — | **written, for the incoming chat** |
+
+**Why:** he asked for headlines in both editions; what he got was a section
+that printed baseball, Reuters ticker landing pages and Harry and Meghan
+across three successive runner checks. He killed it. The revert is
+byte-identical to the pre-request state for `sources.py` and `render.py`.
+
+**Impact on prior conclusions:** §3.39's first version, written an hour
+earlier, concluded that *"cadence was the right metric"* and that the residual
+noise was a scoping problem. **That conclusion is retracted.** Cadence measures
+volume; every account Kabil named is curated for *relevance*, which was never a
+criterion in either probe round. Round 22's finding — that `/markets` scored
+**best on cadence while returning pages with no story in them** — was the
+evidence that the metric was wrong, and it was read as evidence that the scope
+was wrong. Nothing else in the file depended on it. §12.8's verdict on the four
+accounts is unaffected and still stands.
+
+**Not changed, deliberately:** the `FORCE_RUN` hatch on `should_run_pm` stays
+(§3.37a). It is unrelated to news, it fixes a real asymmetry — the morning
+guard has had it since the start — and without it the PM edition cannot be
+dry-run on a runner after a real send, which is exactly when a change most
+needs proving. Kabil was told it was kept and can have it removed.
+
+Probe rounds 21 and 22 also stay in `scripts/probe.py` and in §12.2. **A
+rejected source list is worth as much as an accepted one** (§12.3), and
+without it the next person re-probes FinancialJuice and finds the same 404.
+
+---
 
 ## rev 30 · 2026-09-20 · Commit 5 closes itself, and the brief turns out to have been printing quadrillions
 

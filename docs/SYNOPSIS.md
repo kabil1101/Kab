@@ -1,8 +1,8 @@
 # THE DAILY MARKET BRIEF — SYNOPSIS
 
 *A narrative account of how this was built, what it does, what it refuses to
-do, and everything that went wrong on the way. Covers 21 August – 18 September
-2026, nineteen working sessions.*
+do, and everything that went wrong on the way. Covers 21 August – 20 September
+2026, twenty-nine working sessions.*
 
 *For the operating document — decisions, open questions, the source register —
 see [`PROJECT_STATE.md`](../PROJECT_STATE.md). This is the story; that is the
@@ -12,26 +12,39 @@ system.*
 
 ## 1 · What it is
 
-A market brief that builds itself on GitHub's servers every morning at **09:25
-Europe/Lisbon**, seven days a week, and emails itself to `kabil.dh@gmail.com`.
-The laptop plays no part. It fetches around fifteen live sources, renders
-markdown and HTML, and sends over Gmail SMTP. It costs nothing to run.
+**Two editions a day**, both built on GitHub's servers and emailed to
+`kabil.dh@gmail.com`. The laptop plays no part. Twenty-one live sources,
+rendered to markdown and HTML, sent over Gmail SMTP. It costs nothing to run.
 
-Eleven sections, in order:
+| | Lands | Anchored to | Shape |
+|---|---|---|---|
+| **Morning** | 09:25 Europe/Lisbon, 7 days | a Lisbon hour | the full picture, three tiers |
+| **PM** | 08:00 New York (13:00 Lisbon most weeks) | **New York**, not Lisbon | a delta against the morning |
 
-| Section | What it carries |
-|---|---|
-| **THE SETUP** | Three lines: BTC with day-over-day move and range position, the top USD risk today, the latest ETF flow |
-| **CALENDAR** | Today's High/Medium events with forecast and previous; forward view to end of week |
-| **AHEAD** | Countdown to every dated policy and geopolitical event, repeated daily until it passes |
-| **FED PATH** | Target range and EFFR; priced odds for the next decision; CPI, core CPI and PPI held until superseded |
-| **POLICY DESK** | Warsh remarks and FOMC releases; buyback operations announced and completed; the coupon auction calendar |
-| **CRYPTO** | BTC/ETH/SOL with deltas, ranges, VWAP; options max pain and open interest |
-| **FLOWS** | BTC ETF net flow, per fund, six-day run with a sign-flip flag |
-| **DERIVATIVES** | Perp funding and open interest, flagged when elevated or negative |
-| **SENTIMENT** | Fear & Greed with day and week deltas; total market cap and dominance |
-| **MACRO & EQUITIES** | DXY, 10Y, gold, WTI, VIX, S&P and Nasdaq futures, each with an age stamp |
-| **RISK WINDOWS** | Only windows still ahead; weekends suppress the cash session; a policy date landing today appears here |
+The morning brief is in **three tiers**, and the tiers are the design:
+
+**Tier 1 — the first screen.** `CLOCKS` (four zones, three session states) ·
+`THE SETUP` (BTC with its day move and range position, today's top USD risk,
+the latest ETF flow) · `TODAY` (session windows, data prints with forecast and
+previous, anything dated landing today) · `CYCLE` (expiries, rolls, the CME
+weekend gap).
+
+**Tier 2 — the standing picture.** `CRYPTO` · `FLOWS` · `DERIVATIVES`
+(funding as an annual carry, basis, open-interest change against price, OKX
+liquidation counts and side skew) · `SENTIMENT` · `MACRO & EQUITIES`.
+
+**Tier 3 — the horizons.** `AHEAD` (every dated policy and geopolitical event
+out to a year, in five buckets) · `EXPECTATIONS` (target range, priced odds,
+CPI/PPI) · `POLICY DESK` (Fed releases, Treasury buybacks, the auction
+calendar) · `BACKDROP` (unemployment, the curve, inflation, and the three
+liquidity plumbing lines) · `NEWS`.
+
+**The PM edition is a delta, not a second brief.** A fixed spine — BTC and ETH
+since 09:20, cross-asset, what is still dated today — and a `MATERIAL CHANGE`
+body that only prints what crossed a threshold. Most afternoons it says *"No
+material change since 09:20"*, which is a real answer. **At weekends it runs
+crypto only** (D25): when every cross-asset quote is stale and timestamped, the
+dead section is dropped and funding plus liquidations take the slot.
 
 The subject line carries the date, BTC, the next USD event, and a policy
 countdown when one is within a week — so the inbox list alone says whether the
@@ -498,74 +511,82 @@ were reasoned the same way as the two retracted verdicts, and are now marked
 
 | | |
 |---|---|
-| Delivery | ✅ **SOLVED — 09:20 Lisbon, five mornings of five**, each read from the inbox before the run log |
-| Dispatch | 08:20:13 UTC on all five days. The same second, every time |
-| Schedule | Seven days a week |
+| Delivery | ✅ **SOLVED, both editions.** Morning dispatched from Google carrying `TRIGGER_VERSION: 8`; PM fired at **12:00:09Z — 13:00 Lisbon to the second** |
+| Fallback | ✅ **Proven in anger.** On 19 Sep the PM timer never fired and the cron fallback caught it at 16:26, with a banner naming the path and the cause |
+| Schedule | Seven days a week, two editions |
 | Cost | Zero |
-| Sources live | ~18, each degrading independently |
-| Code | ~4,200 lines across fetchers, renderer, orchestration, state, self-checks |
-| Tests | 1,176 lines, offline, gating every send |
-| Commits | 68 |
+| Sources | 21, fetched **lazily** — the PM edition takes about nine and never touches FRED |
+| Code | ~5,280 lines across fetchers, renderer, orchestration, state, cycles, self-checks |
+| Tests | 2,633 lines, **643 checks**, offline, 0.2s, gating every send |
+| Commits | 127 |
 
-**Nothing needs Kabil to keep the brief running.** The FRED key is in place,
-ZeroHedge is decided, the script is re-pasted and the timer is confirmed. Some
-things need a decision from him, and none is urgent this week:
+**Nothing needs Kabil to keep either edition running.**
 
-1. **Whether he accepts the build order.** It is written down now: close the
-   detection hole first, probe second, then rebuild the morning brief with the
-   stale-rate fix inside it. The reasoning is that bugs in the thing that ships
-   outrank additions to it, and the dates are set by the Fed and the token
-   rather than by preference.
-2. **What to do with the job that wakes up on 26 October** — switch it off, or
-   cut it back to a one-line alarm that says *no brief arrived today* instead
-   of writing a replacement one. My answer is the alarm, and switching it off
-   if that turns out to be more work than it is worth.
-3. **What he checks every morning that the brief still does not carry.** Asked
-   in the planning chat and not yet answered. **This is where the remaining
-   value is** — the easy additions are close to exhausted.
+---
 
-The one item still owed is the one owed since the beginning: **the events he
-already trades around**, which only he knows. The curated half of the radar is
-empty of everything he has not named.
+### What the last three days actually taught
 
-**And on the morning the measurement closed, it found a bug worth more than
-the celebration.** The Fed raised its target range to 3.75–4.00% on
-16 September. For the two mornings after, FED PATH printed
-`Target 3.50–3.75% · as of 16 Sep`.
+Seven defects were found between 18 and 20 September. **Not one was found by
+the test suite.** Every one was found by dispatching a run and reading the
+output.
 
-The cause is narrow and instructive. The target range is read off the *same
-row* as the effective rate, and the New York Fed publishes that rate one
-business day late — so the range inherits a lag it has no reason to have. A
-target range is knowable the second the statement drops, and **the brief was
-already fetching that statement**: it sat two sections below, correctly dated.
+| | What was wrong | What the suite said |
+|---|---|---|
+| §3.33 | the PM cron fallback was **inert** | green — the test asserted a string was *present* |
+| §3.34 | `BRIEF LATE` would have fired on **every** PM edition | green — no test ran it as the PM edition |
+| §3.35 | Friday's session announced as today's | green — every PM fixture had no timestamp |
+| §3.36 | the PM edition waited on FRED, which it never prints | green |
+| §3.37 | the shadow log recorded **test dispatches** as editions | green |
+| §3.38 | bank reserves printed as **three quadrillion dollars** | green — the fixture and the renderer agreed, and both were wrong |
+| §3.39 | six news feeds built to the wrong specification | green |
 
-The docstring claimed the opposite in as many words — *"this is the decision
-itself rather than a report of it"*. It is not. It is the range that was in
-force on the last day the effective rate was published.
+> **A green suite is evidence about the fixtures, not about production.** §8's
+> rule — *nothing is working until a runner says so* — paid for itself seven
+> times in three days, and the corollary is the sharper half.
 
-> Present. Sourced. Correctly age-stamped. And materially misleading on the two
-> mornings a year when that number is the one you open the mail for.
+---
 
-It was found because the day before, this file had marked that exact line
-**UNREAD** rather than inferring its value from the line beneath it, which had
-plainly updated. The inference would have been wrong.
+### The one that is worth reading twice
 
-**Ready and deliberately unbuilt:**
+On 20 September Kabil asked whether the brief watches four accounts he
+follows. It watched one, through its website — X costs $0.005 a read with no
+free tier. He asked for headlines in both editions.
 
-- The **14:00 Lisbon edition**, designed, costed, approved — and not written.
-- **FRED**, probed across three rounds with its method settled — and not wired.
-- **The news set** — ZeroHedge as marked commentary, CNBC as the wire.
+Two probe rounds chose sources on **cadence** — items per hour — because the PM
+window is only about three and a half hours and a slow feed would be empty most
+afternoons. The reasoning was sound and the metric was wrong. **Every account
+he named is curated for relevance**, which is the whole reason he named them,
+and relevance was never a criterion in either round. It appeared only as a
+defect to filter afterwards: baseball, then Reuters ticker landing pages, then
+Harry and Meghan.
 
-All three touch the path that produces the 09:20 brief. The measurement is now
-complete — and the queue still does not open, because a policy-critical bug in
-the brief that ships outranks three additions to it. **The next FOMC is
-28 October.**
+The second round said so out loud and it was misread. `site:reuters.com/markets`
+scored **best of five on cadence** while returning pages that carry no story at
+all. *A metric that rates content-free pages as the top source is not a metric
+with a scoping problem.*
 
-> Everything the next phase needs is proven, and the thing already working has
-> now been proven to keep working. **What the week actually demonstrated is
-> that a system can be perfectly punctual and still be wrong** — five flawless
-> deliveries carried a superseded policy rate on two of them. Timing and truth
-> are separate measurements, and only one of them was being run.
+He killed it the same day: *"it is not what i asked for."* Reverted
+byte-identical, and §3.39 records the reversal rather than deleting it.
+
+> **A high-cadence feed of things he does not care about is not closer to what
+> he asked for than a slow one. It is further away.**
+
+---
+
+### Open, and none of it urgent
+
+1. **What he checks every morning that the brief still does not carry.** Asked
+   in the planning chat, still unanswered. **This is where the remaining value
+   is** — the easy additions are exhausted, and the news attempt is what
+   happens when that question gets answered by inference instead.
+2. **The curated half of the radar** is still empty of everything he has not
+   named. Owed since the beginning.
+3. **The shadow log** (D20) needs about two weeks of real PM editions before
+   v1's fixed thresholds can be replaced with range-scaled ones. It has one
+   honest row; three test rows were removed on 20 Sep for measuring the wrong
+   interval.
+4. **The OKX contract multiplier** is unprobed, so liquidations print counts
+   and side skew and no dollar figure.
 
 **7 November** remains dated: the trigger token expires, and the brief counts
 down to its own maintenance in `data/watchlist.txt`.
