@@ -867,6 +867,32 @@ check_true("the series table no longer declares a unit at all",
            sources.PLUMBING_SERIES)
 
 
+print("\n-- the PM guard has the same escape hatch as the morning one --")
+# A real PM edition had gone out, so the duplicate guard refused a dry run on
+# the runner - the one moment a change most needs proving. The morning guard
+# has honoured FORCE_RUN since the start; this one did not.
+_pm_now = datetime(2026, 9, 20, 13, 0, tzinfo=LISBON)
+_sent_today = {"last_sent_pm_date": "2026-09-20"}
+_saved_force = _os.environ.get("FORCE_RUN")
+_saved_sched = _os.environ.get("BRIEF_SCHEDULE")
+try:
+    _os.environ.pop("FORCE_RUN", None)
+    _os.environ.pop("BRIEF_SCHEDULE", None)
+    check("without it, a second PM run is still refused",
+          main.should_run_pm(_pm_now, _sent_today), False)
+    _os.environ["FORCE_RUN"] = "1"
+    check("with it, a dry run gets through", main.should_run_pm(_pm_now, _sent_today), True)
+    check("and the morning guard behaves identically",
+          main.should_run(datetime(2026, 9, 20, 9, 25, tzinfo=LISBON),
+                          {"last_sent_date": "2026-09-20"}), True)
+finally:
+    for _k, _v in (("FORCE_RUN", _saved_force), ("BRIEF_SCHEDULE", _saved_sched)):
+        if _v is None:
+            _os.environ.pop(_k, None)
+        else:
+            _os.environ[_k] = _v
+
+
 print("\n-- headlines in both editions, on different windows --")
 # Kabil asked whether the brief watches @DeItaone, @zerohedge, @financialjuice
 # and @WatcherGuru. It watched one, through its website. Round 21 probed the

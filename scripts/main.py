@@ -107,6 +107,13 @@ def should_run_pm(now: datetime, prev: dict | None = None) -> bool:
     `last_sent_date` is today for the ordinary reason that the morning brief
     went out, and sharing the guard would suppress the PM edition every day.
     """
+    # Same escape hatch the morning guard has had since the start. Without
+    # it the PM edition cannot be dry-run on a runner once the real one has
+    # gone out - which is exactly when a change most needs proving, and it
+    # blocked a verification run on 20 Sep.
+    if os.environ.get("FORCE_RUN", "").lower() in ("1", "true", "yes"):
+        return True
+
     schedule = (os.environ.get("BRIEF_SCHEDULE") or "").strip()
     if prev and state.already_sent_pm_today(prev, now.date()):
         print(f"A PM edition for {now:%Y-%m-%d} was already sent. Exiting.",
