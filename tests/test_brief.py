@@ -867,6 +867,57 @@ check_true("the series table no longer declares a unit at all",
            sources.PLUMBING_SERIES)
 
 
+print("\n-- Reuters is scoped by its own sections, and quote pages are not news --")
+# Round 21 took this feed unscoped on cadence alone. The first live PM edition
+# printed "Pirates' Brandon Lowe takes HR barrage into finale vs. Royals".
+_reuters = [f for f in sources.NEWS_FEEDS if f[0] == "Reuters"][0][1]
+for _sec in ("reuters.com/markets", "reuters.com/business", "reuters.com/world"):
+    check_true(f"the query is scoped to {_sec}", _sec in _reuters, _reuters)
+check_true("sport is excluded structurally, not by a word list",
+           "reuters.com/sports" not in _reuters, _reuters)
+
+# Round 22's trap: /markets alone is 4.7 items/hour of ticker LANDING PAGES,
+# which cadence alone rates as the best feed of the lot.
+for _t in ("1928.SG - | Stock Price & Latest News - Reuters",
+           "(2CP.MU) | Stock Price & Latest News",
+           "HDP1.F - | Stock Price & Latest News",
+           "2Y7.DE", "7Z5.MU", "(JPX.F)"):
+    check_true(f"a quote page is dropped: {_t[:28]}",
+               sources._is_quote_page(_t), _t)
+# ...and the filter is structural, so a real story keeps its ticker.
+for _t in ("SAP.DE beats estimates as cloud revenue climbs",
+           "China keeps benchmark lending rates unchanged for 16th month",
+           "US Treasury's Bessent, China's He to launch talks on AI, trade",
+           "Bitcoin ETF sees $433m inflow",
+           "Reuters reports on stock price moves across Europe"):
+    check_true(f"a real headline survives: {_t[:30]}",
+               not sources._is_quote_page(_t), _t)
+
+# End to end through the fetcher: quote pages never reach the items list.
+def _mixed_feed(url, **kw):
+    class R:
+        content = (b'<rss><channel>'
+                   b'<item><title>1928.SG - | Stock Price &amp; Latest News</title>'
+                   b'<link>a</link>'
+                   b'<pubDate>Sun, 20 Sep 2026 12:00:00 +0100</pubDate></item>'
+                   b'<item><title>China keeps lending rates unchanged</title>'
+                   b'<link>b</link>'
+                   b'<pubDate>Sun, 20 Sep 2026 12:10:00 +0100</pubDate></item>'
+                   b'</channel></rss>')
+    return R()
+_orig = sources._get
+try:
+    sources._get = _mixed_feed
+    _mixed = sources.news(now=datetime(2026, 9, 20, 13, 0, tzinfo=LISBON))
+finally:
+    sources._get = _orig
+_titles = [i["title"] for i in _mixed["items"]]
+check_true("no quote page reaches the brief",
+           not any("Stock Price" in t for t in _titles), _titles)
+check_true("and the real headline does",
+           any("lending rates" in t for t in _titles), _titles)
+
+
 print("\n-- the PM guard has the same escape hatch as the morning one --")
 # A real PM edition had gone out, so the duplicate guard refused a dry run on
 # the runner - the one moment a change most needs proving. The morning guard

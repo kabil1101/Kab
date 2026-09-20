@@ -1488,8 +1488,21 @@ NEWS_FEEDS = (
     # Round 21 added four and rejected six. The measure that decided it was
     # CADENCE, which round 14 never took: a feed under ~1 item/hour can fill
     # the 18h morning window and will be empty most afternoons.
-    ("Reuters", "https://news.google.com/rss/search?q=when:1d+site:reuters.com"
-                "&hl=en-US&gl=US&ceid=US:en", "wire"),          # 4.3/h
+    # SCOPED TO REUTERS' OWN URL SECTIONS. Round 21 took this feed unscoped
+    # on cadence alone and the first live PM edition printed "Pirates'
+    # Brandon Lowe takes HR barrage into finale vs. Royals". Reuters puts
+    # sport under /sports, so excluding it is structural rather than a guess
+    # about the title - which is the only kind of filter §3.6 trusts.
+    #
+    # Round 22 measured every scope. /markets on its own is a trap: 4.7/h of
+    # Reuters QUOTE PAGES ("1928.SG - | Stock Price & Latest News"), which
+    # are not news at all and which cadence alone rates as the best feed of
+    # the lot. /business alone is clean and only 0.9/h. The three together
+    # keep 4.2/h and read as macro.
+    ("Reuters", "https://news.google.com/rss/search?q=when:1d+"
+                "(site:reuters.com/markets+OR+site:reuters.com/business"
+                "+OR+site:reuters.com/world)"
+                "&hl=en-US&gl=US&ceid=US:en", "wire"),          # 4.2/h
     ("CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml"
              "?partnerId=wrss01&id=100003114", "wire"),
     ("ForexLive", "https://www.forexlive.com/feed/", "press"),          # 0.5/h
@@ -1523,6 +1536,27 @@ NEWS_TOTAL_CAP = 12
 NEWS_KIND_ORDER = {"wire": 0, "press": 1, "commentary": 2}
 
 
+# Reuters' quote pages come back through Google News looking like articles:
+# "1928.SG - | Stock Price & Latest News", "(2CP.MU) | Stock Price & Latest
+# News", "2Y7.DE". They are landing pages for a ticker, they carry no story,
+# and round 22 measured 4.7 of them an hour on the /markets scope.
+#
+# This is a STRUCTURAL filter, not a semantic one. It matches a publisher's
+# own page-title template and a bare exchange-suffixed ticker - both of which
+# are artifacts, not subjects. That is the distinction §3.6 turns on: a word
+# list asked to judge what a headline is ABOUT put "Trademark" in the first
+# live brief, but a template is a template.
+_QUOTE_PAGE_RX = re.compile(
+    r"stock price\s*&\s*latest news"
+    r"|^\(?[A-Z0-9]{1,6}\.[A-Z]{1,4}\)?\s*[-|]?\s*$",
+    re.I)
+
+
+def _is_quote_page(title: str) -> bool:
+    """A ticker landing page wearing a headline's clothes."""
+    return bool(_QUOTE_PAGE_RX.search((title or "").strip()))
+
+
 def news(now: datetime | None = None, since: datetime | None = None) -> dict:
     """Recent headlines, each tagged with where it came from and how old.
 
@@ -1551,6 +1585,8 @@ def news(now: datetime | None = None, since: datetime | None = None) -> dict:
             continue
         fresh = []
         for title, link, when in parsed:
+            if _is_quote_page(title):
+                continue
             if when is None:
                 # An undated headline cannot be placed in a window, and
                 # "recent" is the whole claim this section makes.
