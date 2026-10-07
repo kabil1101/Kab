@@ -836,6 +836,14 @@ now a wiring job rather than a paid subscription.
 aggregate 24h total is derivable without paging, or how it behaves on a quiet
 day. That is round 19's work, and none of it is wired.
 
+> **⚠ Correction owed and now recorded (Addendum 2 §6, 2026-10-07).** The
+> brief's own footnote says the multiplier "is unprobed", which is true and
+> incomplete: **`ctVal` is published per instrument on OKX's public
+> `instruments` endpoint.** It is a value to be *read*, not a quantity to be
+> declared — which is the lesson §3.38 had just paid for in a different place,
+> three weeks earlier, on FRED's units. **Still unprobed and still unwired**;
+> what changed is that the route is now named instead of described as absent.
+
 **§3.30 — The first live NEWS run proved D16's marking necessary within
 three headlines.** ZeroHedge was admitted (D16) as commentary *on the
 condition that it is visibly marked*, because §12.8 warned it *"mixes market
@@ -1463,12 +1471,21 @@ Revised order in §13.
   needs no probe because it is already LIVE and keyless. That is true of
   `KXFEDDECISION`; **the midterm control tickers are different contracts and
   nobody has looked at them.** §12.3 applies to them like anything else.
-- 🟡 **`docs/BUILD_PLAN_ADDENDUM_1.md` — OPEN, and nothing in it is built.**
-  Its own §1: *"a queue, not an instruction set."* Three additions (OI change
-  against price, FRED liquidity plumbing, the CME weekend gap) plus three
-  candidates recorded as proposed-and-not-taken. **The largest of those is
-  liquidations** — see §12.2's `unconfirmed rather than settled` verdict and
-  §12.4a.
+- ✅ **CLOSED 2026-10-07: `docs/BUILD_PLAN_ADDENDUM_1.md`** (was: "🟡 OPEN, and
+  nothing in it is built", stale since 2026-09-18 — caught by Addendum 2 §6,
+  and missed on 2026-09-20 when only the §6 file-map copy was corrected).
+  - **Addition A — OI change against price:** 🟢 **live** in DERIVATIVES.
+  - **Addition B — the three FRED plumbing lines:** 🟢 **live** in BACKDROP,
+    **with §3.38 against it** — it printed bank reserves as three quadrillion
+    dollars for nineteen days because two layers each asserted a unit and
+    neither read FRED's own.
+  - **Addition C — the CME weekend gap:** 🟡 **built, unconfirmed.** It renders;
+    nobody has watched it across a weekend reopen.
+  - Liquidations, the largest of its candidates, are 🟢 live (§3.31, §12.12).
+- 🔒 **`docs/BUILD_PLAN_ADDENDUM_2.md` is the open queue** as of 2026-10-07.
+  One addition, **D** — the US monthly data calendar — and it came from Kabil
+  directly with a stated use, which is the §3.39 correction working. **Phase 1
+  only, by his instruction: forward dates, not actual-against-forecast.**
 - ✅ **CLOSED 2026-09-18: the nine probe targets are probed (§12.11).** Four
   pass, two fail, three inconclusive. Government hosts did **not** block the
   runner, which was the round's flagged risk. What remains open from it:
