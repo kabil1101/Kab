@@ -6,9 +6,9 @@
 | **Owner** | Kabil Dahmen |
 | **Repo** | `kabil1101/Kab` · branch `claude/daily-market-brief-kvfi35` (default) |
 | **Session 1** | 2026-08-21 |
-| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed (3 confirmed)** · 🟡 **v8 banner clears on a dispatch carrying v8; the INSTALLED copy is unproven until Google dispatches** · 🟠 **seven bugs found by running it, all fixed (§3.33–§3.38)** · 🟢 **COMMIT 5 CLOSED — v8 proven from Google's own dispatch, PM landed 13:00 on the dot** · 🟢 **weekend PM edition is crypto only (D25)** · ❌ **news expansion built and REVERTED — cadence was the wrong metric (§3.39)** · 📋 **build order in §13** |
-| **Last updated** | 2026-09-20 |
-| **Revision** | 31 (was: 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
+| **Status** | 🟢 Content complete · 🟢 Trigger v7 live · 🟢 **DELIVERY SOLVED — 5 of 5, gate 0 CLEARED** · 🟢 **§3.26 CLOSED — the brief now names its own lateness, proven live** · 🟢 **§3.25 CLOSED — the outside task is deleted** · 🟢 **§3.24 FIXED — the range now flags itself when a decision has overtaken it** · 🟢 **three tiers live: CLOCKS, TODAY, CYCLE** · 🟢 **LIQUIDATIONS ARE FREE — OKX answers keyless with sizes and sides (§12.12)** · 🟢 **PM edition and state bundle live (Commit 4)** · 🟢 **Commit 5 — PM timers installed (3 confirmed)** · 🟡 **v8 banner clears on a dispatch carrying v8; the INSTALLED copy is unproven until Google dispatches** · 🟠 **seven bugs found by running it, all fixed (§3.33–§3.38)** · 🟢 **COMMIT 5 CLOSED — v8 proven from Google's own dispatch, PM landed 13:00 on the dot** · 🟢 **weekend PM edition is crypto only (D25)** · ❌ **news expansion built and REVERTED — cadence was the wrong metric (§3.39)** · 🟢 **Addition D Phase 1 LIVE — the four US release dates in AHEAD, three states (§3.40, D26)** · 📋 **build order in §13** |
+| **Last updated** | 2026-10-07 |
+| **Revision** | 32 (was: 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6) |
 
 > ⚠ **MANDATORY.** Never overwrite a value in this file. The old one stays visible
 > as `was:`. Every edit gets a §11 change-log entry with a type and an evidence
@@ -554,6 +554,78 @@ permission is silently dropped**, producing a token that reads fine and cannot
 dispatch. *Evidence: four failed attempts 2026-09-07→08; the second trap was
 caught only because the token was tested with a real dispatch call before the
 Google setup began.* **Test a credential before building on it.**
+
+**§3.40 — The forward horizon was a source limit, not a window parameter.**
+Addendum 2's Addition D, Phase 1, built 2026-10-07.
+
+Kabil asked for the dates of CPI, PPI, the Employment Situation and GDP, far
+enough ahead to plan around — *"so i have plenty of time to plan my moves."*
+
+**Addendum 2's §4 Step 1 was already answered, and the answer was no.** It
+asks whether the wired calendar reaches a month out and says to check that
+before designing anything. It does not: `FF_THIS_WEEK` is the only
+ForexFactory feed, `ff_calendar_nextweek.json` was probed against a runner and
+404s, and `calendar()` returns `week_only: True`. **The brief was not
+truncating a longer source to five sessions — the source stops on Friday.**
+`select_forward(sessions=5)` is a ceiling, not the binding constraint. So the
+addition was never nearly free, and the round started at Step 2.
+
+### Probe round 23
+
+| Target | Verdict | Detail |
+|---|---|---|
+| **FRED `release/dates` — CPI** | ✅ PASS | next 14 Oct, 64d reach |
+| **— PPI** | ✅ PASS | next 15 Oct, 69d |
+| **— GDP** | ✅ PASS | next 29 Oct, 77d |
+| **— Employment Situation** | 🟡 THIN | next 6 Nov, 58d — **my `limit=40`, not FRED's ceiling** |
+| **scheduled vs released** | ✅ **PASS** | 3 dates in the with-no-data set only |
+| FRED `releases/dates` (all) | 🟡 THIN | 7d — 164 rows of every release crowds the limit |
+| `www.bls.gov` — .ics, schedule, RSS | ⚫ **`S1` — HTTP 403** | blocks the runner |
+| `www.bea.gov` — RSS | ⚫ 404 | |
+| `www.bea.gov/news/schedule` | ⚫ FAIL | 200 and **zero dates in the payload** — JS-rendered |
+
+> **⚠ A correction to a generalisation this file carries.** §12.11 records that
+> *"government hosts did not block the runner"*, which was that round's flagged
+> risk. **`www.bls.gov` does, with a 403.** The distinction is the host, not the
+> agency: **`api.bls.gov` is what `inflation()` has used successfully every
+> morning since September.** The website blocks; the API does not. The
+> generalisation needed narrowing, not reversing.
+
+### What shipped
+
+**One fetch, one reader.** The release calendar is a **third leg of
+`radar_events`**, beside the Federal Register and the watchlist — not a second
+section. Two sections sourcing one calendar drift apart and contradict each
+other on one screen, which is §3.9 rather than a tidiness preference. `lead 35`
+puts them in `THIS MONTH` with no special-casing.
+
+**Three states, not two — D26.** `scheduled` · `released` · `overdue`. A date
+that has passed with no data against it **says so** rather than counting down
+to the next one as though the last had happened. Same discipline D25 enforces
+on shut markets.
+
+> The wording never claims more than it knows. **`released` means FRED carries
+> data**, which is not the claim *"the agency published"* — FRED can lag by
+> hours. §12.10 stands unreopened: that endpoint still must not be used to
+> decide whether something **has** published, and nothing here does.
+
+**The reference period is derived, and that is flagged in the code** as the one
+piece here that is not fetched. US monthly releases report the month that just
+ended. Worth deriving rather than omitting: *"CPI · Wed 14 Oct"* alone does not
+say whether that is September's print or October's, and leaving a correct date
+ambiguous about what it refers to is the §3.9 habit exactly. Tested across year
+and quarter boundaries.
+
+**GDP carries no vintage.** FRED's payload does not name advance, second or
+third, so the line gives the date and the quarter and stops. **Read it, never
+declare it** — §3.38's lesson, applied before it could cost anything.
+
+*Live on run 2026-10-07: `T-7 · Wed 14 Oct — CPI — September 2026 data`,
+`T-22 · Thu 29 Oct — GDP — Q3 2026 data`, interleaved by date with the policy
+entries. The September CPI gap Addendum 2 identified is closed.*
+
+**Not seen live yet:** the month-start emphasis. Today is the 7th; it is
+covered by tests and **1 November is its first real morning.**
 
 **§3.39 — Six news feeds were built for both editions and REVERTED the same
 day, on Kabil's instruction.** 2026-09-20. Recorded rather than deleted so
@@ -1261,6 +1333,7 @@ built; they prove nothing about what works.
 | **D23** | **Policy scope is actions, scheduled announcements and dated plans — not remarks.** The wire is what catches an announced plan before it is signed |
 | **D24** | **Stablecoins always print supply and dominance together, never dominance alone.** Dominance is a ratio: it rises when the denominator falls. Printing it alone hands Kabil a risk-off signal that is sometimes just a falling market wearing a costume |
 | **D25** | **The weekend PM edition runs crypto only, and "shut" is decided by the quotes' own timestamps.** Kabil's call 2026-09-19 over skipping weekends. When every cross-asset quote is timestamped and every one is stale, the section is dropped and funding + liquidations take the slot — both 24/7. **A dead feed is never read as a shut market**: `failed` and `unknown` are separate states, because collapsing them would hide an outage behind a plausible story (§3.16) |
+| **D26** | **A release date carries three states, never two: `scheduled`, `released`, `overdue`.** A date on a calendar is a plan — releases slip for shutdowns and for schedule revisions. A line printing only the scheduled date asserts something that may not have happened. **`released` means FRED carries data for it**, which is not the same claim as the agency having published; §12.10 is unreopened |
 
 ### §4.5 D25 — a detector may only claim what it can tell apart
 
@@ -1712,6 +1785,7 @@ is the goal. **The section count is not the metric; the arrival time is.**
 | 6 | 2026-09-05 | Token scope measured (§2.2), D8 retracted. Apps Script trigger + walkthrough written and committed. **Not installed** |
 | 7 | 2026-09-05→06 | AHEAD section (probe rounds 4–6). Live run exposed three noise entries including `trade`⊂`Trademark`; two-tier filter shipped with regression tests. POLICY DESK for Warsh/Bessent/buybacks (rounds 7–9). This file created |
 | 8 | 2026-09-07 | `testNow()` added so the trigger install can be proved at a weekend. Walkthrough delivered. **Kabil reported no brief at 11:22 Lisbon; investigated and confirmed the scheduler had not fired 1h57m past target (§2.1a). Sent manually.** The failure this project has been describing for three weeks, observed live |
+| 30 | 2026-10-07 | **Addendum 2's Addition D, Phase 1.** Kabil shared the addendum, asked to break it down before building, and chose **Phase 1 only** — the dates, not actual-against-forecast. **Its §4 Step 1 was already answered and the answer was no:** the wired ForexFactory calendar stops on Friday, so the forward horizon was a source limit rather than a window parameter, and the addition was never nearly free. Probe round 23 settled it — FRED's per-release dates reach 60d+ and, decisively, distinguish a **scheduled** date from a **released** one. All four releases now sit in AHEAD as a third leg of the same merged list, with three states (D26) and a derived reference period. `www.bls.gov` blocks the runner with a 403, which narrows §12.11's generalisation to the host rather than the agency. Also the three corrections Addendum 2 owed, including the Addendum 1 status line I missed on 09-20 |
 | 29 | 2026-09-20 | **A feature built and reverted the same day.** Kabil asked whether the brief watches four X accounts; it watches one, through its website. He asked for headlines in both editions, and probe rounds 21 and 22 chose sources on **cadence** — items per hour — because the PM window is short. Three runner checks printed baseball, Reuters ticker landing pages and Harry and Meghan, and he killed it: *"not what i asked for"*. **The mistake was the metric, not the noise** — every account he named is curated for relevance, and relevance was never a criterion (§3.39). Round 22 rated content-free pages the best feed of five and that was read as a scoping problem. Reverted byte-identical. Kept: the `FORCE_RUN` hatch on the PM guard (§3.37a). Handoff and synopsis rewritten for the incoming chat |
 | 28 | 2026-09-20 | **Commit 5 closes itself.** The morning brief dispatched from Google carrying `TRIGGER_VERSION: 8` and the PM edition fired at **12:00:09Z — 13:00 Lisbon to the second** — `sendPm` exists only in v8, so it is proof twice over of the thing rev 29 had to mark amber. Both sent; the PM wrote its marker and left the daily baseline alone. Saturday's PM had gone out 3h26m late via the **cron fallback**, which is the fallback doing its job and saying so. Then reading the delivered brief found two more defects the suite had never seen: `2th straight inflow`, and **bank reserves printed as three quadrillion dollars** because two layers each asserted a unit and neither checked it (§3.38). Probe round 20 asked FRED rather than guessing a second time |
 | 27 | 2026-09-19 | **Commit 5 and the first PM editions — five bugs, none of which a test could have caught.** Probe round 19 sized the OKX page (100 rows / 28 minutes) and settled that `sz` is in contracts, so liquidations ship as counts and skew with **no dollar figure**. The addendum was closed by building all of it. Then Commit 5 installed the PM timers and bumped the trigger to v8 — Kabil re-pasted, three timers confirmed, banner cleared. **Then the running started, and it found what reading had not:** the PM cron fallback was inert and its test only checked that a string was present (§3.33); `BRIEF LATE` judged every PM edition against the morning's 09:25 target and would have fired on half of all briefs for ever (§3.34); and the PM edition announced Friday's session as today's, poisoning the first row of the D20 shadow log on the way (§3.35). Then Kabil's weekend call (D25) and two more found while verifying it: the PM edition waited on FRED, which it never prints — 100s inside FRED's maintenance window against 4s after the fix (§3.36) — and the shadow log had been recording `skip_email` test dispatches as if they were editions (§3.37). **All five were found by dispatching, not by reading** — the suite was green through every one of them |
@@ -1755,6 +1829,59 @@ later.
 **Why:**
 **Impact on prior conclusions:**
 ```
+
+## rev 32 · 2026-10-07 · Addition D Phase 1, and a horizon that was never a window parameter
+
+**Sections touched:** header, §3.40 (new), D26 (new), §5 (Addendum 1 closed,
+Addendum 2 opened), §10, §12.2, §12.11 (narrowed)
+**Type:** DATA + DECISION + CORRECTION
+**Evidence:** Kabil, this session — Addendum 2 shared, *"phase 1 only"*, then
+*"go with all recommendations"*. Probe round 23 (job 112775755600). Brief run
+2026-10-07 11:59Z, job 112780313350. 682 offline checks, up from 643.
+
+| Field | Was | Now |
+|---|---|---|
+| CPI forward date | **nowhere** — Sept CPI was ~a week out and invisible | **`T-7 · Wed 14 Oct`** in AHEAD |
+| PPI forward date | nowhere | `T-8 · Thu 15 Oct` |
+| Employment Situation | only `Unemployment` in BACKDROP | `T-30 · Fri 06 Nov`, labelled as the release |
+| GDP | **absent entirely** | `T-22 · Thu 29 Oct · Q3 2026`, no vintage claimed |
+| Sources fetched | 21 | **22** (`release_sched`) |
+| Release states | — | **three** (D26) |
+| Addendum 1 | "OPEN, and nothing in it is built" | **CLOSED** — A and B live, C unconfirmed |
+| Addendum 2 | — | **the open queue** |
+| `www.bls.gov` | untested | ⚫ **`S1` — 403 blocks the runner** |
+| Checks | 643 | 682 |
+
+**Why:** it came from Kabil directly with a stated use — planning lead time —
+rather than from inference, which is the §3.39 correction working as intended.
+Phase 1 only by his instruction: the dates, not actual-against-forecast.
+
+**Impact on prior conclusions:** two things narrow rather than fall.
+
+1. **§12.11's "government hosts did not block the runner" is too broad.**
+   `www.bls.gov` returns 403. But `api.bls.gov` has served CPI and PPI every
+   morning since September, so the claim is about the **host**, not the agency.
+   Narrowed in place; nothing built on it breaks.
+2. **§12.10 is untouched.** FRED's release-dates endpoint still must not be
+   used to decide whether something has published. Phase 1 asks it a different
+   question — *what is scheduled* — which §12.4a says is a different claim about
+   a different route. It got its own probe and its own entry, and the rendered
+   wording never says "published".
+
+**Not changed, deliberately:**
+
+- **Phase 2 — actual against forecast — is not built.** Kabil's own words were
+  *"not the numbers themselves, he gets those."* ForexFactory carries **no
+  `actual` field at all**, so it would need a forecast from there joined to an
+  actual from BLS/BEA across different reference-period conventions, plus
+  `PAYEMS` and a GDP series that are fetched nowhere. That join is where §3.9
+  lives, and the addendum's ~8-line estimate did not cover it.
+- **No new section**, which was the addendum's own decision and is the point.
+- **The OKX multiplier is still unprobed.** Correction 3 named the route —
+  `ctVal` on the public instruments endpoint — without wiring it. Naming a
+  route is not the same as having read it.
+
+---
 
 ## rev 31 · 2026-09-20 · A feature built and reverted the same day, and the handoff written
 
