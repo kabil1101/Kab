@@ -1664,6 +1664,155 @@ FRED_TO_BILLIONS = {
 }
 
 
+# ------------------------------------------------- the US release calendar
+
+FRED_RELEASES = "https://api.stlouisfed.org/fred/releases"
+FRED_RELEASE_DATES = "https://api.stlouisfed.org/fred/release/dates"
+
+# Addition D, Phase 1. Kabil asked for the DATES of these four, far enough
+# ahead to plan around - "so i have plenty of time to plan my moves". Not the
+# numbers; he has those.
+#
+# NFP is not a release. It is one number inside the EMPLOYMENT SITUATION,
+# which is the same release BACKDROP already reads the unemployment rate from.
+# One release, two sections, and they must not imply two separate events.
+#
+# Resolved by exact name rather than a hardcoded id, because a guessed id is a
+# guessed verdict and FRED renumbers nothing but adds plenty.
+RELEASE_CALENDAR = (
+    ("Consumer Price Index", "CPI", "month"),
+    ("Producer Price Index", "PPI", "month"),
+    ("Employment Situation", "Employment Situation (NFP)", "month"),
+    ("Gross Domestic Product", "GDP", "quarter"),
+)
+# Enough runway to plan a month around, with room for the quarterly one.
+RELEASE_LOOKAHEAD_DAYS = 150
+RELEASE_DATE_LIMIT = "200"
+
+
+def _release_ids(key: str) -> dict:
+    """Name -> FRED release id, for the four that matter."""
+    r = requests.get(FRED_RELEASES, headers=HEADERS, timeout=TIMEOUT,
+                     params={"api_key": key, "file_type": "json",
+                             "limit": "1000"})
+    if r.status_code != 200:
+        raise RuntimeError(f"releases HTTP {r.status_code}")
+    wanted = {name.lower() for name, _l, _p in RELEASE_CALENDAR}
+    out = {}
+    for rel in (r.json().get("releases") or []):
+        name = str(rel.get("name") or "").strip()
+        if name.lower() in wanted:
+            out[name.lower()] = rel.get("id")
+    return out
+
+
+def _release_dates(rid, key: str, today: date, with_no_data: bool) -> set:
+    """The dates FRED lists for one release, as a set."""
+    r = requests.get(FRED_RELEASE_DATES, headers=HEADERS, timeout=TIMEOUT,
+                     params={"release_id": str(rid), "api_key": key,
+                             "file_type": "json", "sort_order": "asc",
+                             "limit": RELEASE_DATE_LIMIT,
+                             "realtime_start": today.isoformat(),
+                             "include_release_dates_with_no_data":
+                                 "true" if with_no_data else "false"})
+    if r.status_code != 200:
+        raise RuntimeError(f"release/dates HTTP {r.status_code}")
+    out = set()
+    for row in (r.json().get("release_dates") or []):
+        try:
+            out.add(date.fromisoformat(row["date"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def _reference_period(when: date, period: str) -> str:
+    """What a release landing on `when` is reporting ON.
+
+    A RULE, not a fetch, and it is stated here because it is the one piece of
+    this that is derived. US monthly releases report the month that just
+    ended: CPI published 14 October covers September. The quarterly one
+    reports the quarter that just ended.
+
+    It is worth deriving rather than omitting. "CPI · Wed 14 Oct" alone does
+    not say whether that is the September print or the October one, and §3.9
+    is exactly the habit of leaving a correct number ambiguous about what it
+    refers to.
+    """
+    if period == "quarter":
+        q = (when.month - 1) // 3          # the quarter now ending or ended
+        if q == 0:
+            return f"Q4 {when.year - 1}"
+        return f"Q{q} {when.year}"
+    first = when.replace(day=1)
+    prior = first - timedelta(days=1)
+    return f"{prior:%B %Y}"
+
+
+def release_schedule(today: date | None = None) -> dict:
+    """When CPI, PPI, the Employment Situation and GDP are next published.
+
+    THREE STATES, NOT TWO - the same discipline D25 enforces on shut markets.
+    A date on a calendar is a plan: releases slip, for shutdowns and for
+    revisions to the publication schedule. A line that prints only the
+    scheduled date asserts something that may not have happened.
+
+      - `scheduled` - FRED lists the date and carries no data against it.
+      - `released`  - FRED carries data for it.
+      - `overdue`   - the date has PASSED and there is still no data. The
+                      brief says so rather than quietly counting down to the
+                      next one as though nothing were missing.
+
+    ⚠ `released` means **FRED carries data for it**, which is not the same
+    claim as "the agency published". FRED can lag the agency by hours. §12.10
+    stands: this endpoint must not be used to decide whether something has
+    published, and the wording never says it does.
+    """
+    key = (os.environ.get("FRED_API_KEY") or "").strip()
+    if not key:
+        raise RuntimeError("FRED_API_KEY is not set")
+    today = _fred_today(today)
+    horizon = today + timedelta(days=RELEASE_LOOKAHEAD_DAYS)
+
+    ids = _release_ids(key)
+    out, notes = [], []
+    for name, label, period in RELEASE_CALENDAR:
+        rid = ids.get(name.lower())
+        if rid is None:
+            notes.append(f"{label}: no release named {name!r}")
+            continue
+        try:
+            listed = _release_dates(rid, key, today, True)
+            with_data = _release_dates(rid, key, today, False)
+        except Exception as exc:  # noqa: BLE001 - one release, not the set
+            notes.append(f"{label}: {_reason(exc)}")
+            continue
+
+        # A date FRED lists but carries nothing for is scheduled, not done.
+        pending = sorted(d for d in listed if d not in with_data)
+        upcoming = [d for d in pending if d >= today and d <= horizon]
+        overdue = [d for d in pending if d < today]
+
+        row = {"release": name, "label": label, "period": period,
+               "next": upcoming[0] if upcoming else None,
+               "reference": (_reference_period(upcoming[0], period)
+                             if upcoming else None),
+               # Only the most recent miss matters; a list of them is a
+               # history lesson, not a warning.
+               "overdue": overdue[-1] if overdue else None,
+               "last_released": max(with_data) if with_data else None}
+        if row["next"] is None and row["overdue"] is None:
+            notes.append(f"{label}: no scheduled date inside "
+                         f"{RELEASE_LOOKAHEAD_DAYS}d")
+        out.append(row)
+
+    if not out:
+        raise RuntimeError("; ".join(notes) or "no releases resolved")
+    return {"releases": out, "partial": "; ".join(notes) or None,
+            "horizon_days": RELEASE_LOOKAHEAD_DAYS,
+            "source": "FRED release calendar (St. Louis Fed)"}
+
+
 def plumbing(today: date | None = None) -> dict:
     """Overnight RRP, the Treasury General Account, and reserve balances."""
     key = (os.environ.get("FRED_API_KEY") or "").strip()

@@ -302,6 +302,9 @@ def gather(now):
         "liquidations": lambda: safe(sources.liquidations),
         "yahoo_extra": lambda: safe(sources.yahoo_extra),
         "plumbing": lambda: safe(sources.plumbing, today),
+        # Addition D, Phase 1. Lazy, so the PM edition fetches it only
+        # because it reads it - no skip list to keep in step (§3.36).
+        "release_sched": lambda: safe(sources.release_schedule, today),
         "watchlist": _watchlist,
     })
 

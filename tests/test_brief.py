@@ -867,6 +867,137 @@ check_true("the series table no longer declares a unit at all",
            sources.PLUMBING_SERIES)
 
 
+print("\n-- the US release calendar: dates, with three states not two --")
+# Addendum 2, Addition D, Phase 1. Kabil asked for the DATES of CPI, PPI, the
+# Employment Situation and GDP, far enough ahead to plan around. Probe round
+# 23: the wired ForexFactory calendar stops on Friday, FRED's per-release
+# dates reach 60d+, and `include_release_dates_with_no_data` distinguishes a
+# scheduled date from a released one.
+
+# --- the reference period is DERIVED, so it is tested at the boundaries ---
+for _d, _per, _want in ((date(2026, 10, 14), "month", "September 2026"),
+                        (date(2026, 11, 6), "month", "October 2026"),
+                        (date(2026, 1, 13), "month", "December 2025"),
+                        (date(2026, 3, 11), "month", "February 2026"),
+                        (date(2026, 10, 29), "quarter", "Q3 2026"),
+                        (date(2026, 1, 29), "quarter", "Q4 2025"),
+                        (date(2026, 4, 29), "quarter", "Q1 2026"),
+                        (date(2026, 7, 30), "quarter", "Q2 2026")):
+    check(f"{_d} {_per} reports on {_want}",
+          sources._reference_period(_d, _per), _want)
+
+# --- the fetcher, against canned FRED answers, no network ----------------
+def _with_release_cal(listed, with_data, today=date(2026, 10, 7)):
+    _orig = (sources._release_ids, sources._release_dates,
+             _os.environ.get("FRED_API_KEY"))
+    try:
+        _os.environ["FRED_API_KEY"] = "test-key-not-real"
+        sources._release_ids = lambda key: {
+            n.lower(): i for i, (n, _l, _p)
+            in enumerate(sources.RELEASE_CALENDAR, start=1)}
+        sources._release_dates = (
+            lambda rid, key, t, with_no_data:
+                set(listed) if with_no_data else set(with_data))
+        return sources.release_schedule(today)
+    finally:
+        sources._release_ids, sources._release_dates = _orig[0], _orig[1]
+        if _orig[2] is None:
+            _os.environ.pop("FRED_API_KEY", None)
+        else:
+            _os.environ["FRED_API_KEY"] = _orig[2]
+
+_TODAY = date(2026, 10, 7)
+_sched = _with_release_cal(
+    listed=[date(2026, 9, 11), date(2026, 10, 14), date(2026, 11, 13)],
+    with_data=[date(2026, 9, 11)])
+_r0 = _sched["releases"][0]
+check("all four releases resolve", len(_sched["releases"]), 4)
+check("the next SCHEDULED date is the one with no data yet",
+      _r0["next"], date(2026, 10, 14))
+check("and it carries the period it reports on",
+      _r0["reference"], "September 2026")
+check("a date FRED has data for is not pending", _r0["overdue"], None)
+check("the last released date is kept", _r0["last_released"], date(2026, 9, 11))
+check_true("every release Kabil named is present",
+           {r["label"] for r in _sched["releases"]} ==
+           {"CPI", "PPI", "Employment Situation (NFP)", "GDP"},
+           [r["label"] for r in _sched["releases"]])
+check_true("NFP is labelled as the Employment Situation, not as a release",
+           any(r["label"] == "Employment Situation (NFP)"
+               for r in _sched["releases"]), _sched["releases"])
+
+# --- THE THIRD STATE. A date that passed with nothing published ----------
+_late = _with_release_cal(
+    listed=[date(2026, 10, 2), date(2026, 11, 13)], with_data=[])
+check("a passed date with no data is overdue",
+      _late["releases"][0]["overdue"], date(2026, 10, 2))
+check("and the next scheduled one is still found",
+      _late["releases"][0]["next"], date(2026, 11, 13))
+_late_ctx = copy.deepcopy(healthy)
+_late_ctx["now"] = datetime(2026, 10, 7, 9, 25, tzinfo=LISBON)
+_late_ctx["release_sched"] = {"ok": True, "error": None, "data": _late}
+_late_titles = [e["title"] for e in render.radar_events(_late_ctx, _TODAY)]
+check_true("the brief SAYS the date passed with nothing published",
+           any("was due" in t and "no data for it yet" in t
+               for t in _late_titles), _late_titles)
+check_true("it does not quietly count down to the next one instead",
+           any("Fri 02 Oct" in t for t in _late_titles), _late_titles)
+
+# --- one fetch, one reader. No second calendar to drift ------------------
+_cal_ctx = copy.deepcopy(healthy)
+_cal_ctx["now"] = datetime(2026, 10, 7, 9, 25, tzinfo=LISBON)
+_cal_ctx["release_sched"] = {"ok": True, "error": None, "data": _sched}
+_cal_events = render.radar_events(_cal_ctx, _TODAY)
+_cal_titles = [e["title"] for e in _cal_events]
+check_true("CPI reaches AHEAD with its reference month",
+           any("CPI — September 2026 data" in t for t in _cal_titles),
+           _cal_titles)
+check_true("and it is dated, not just named",
+           any(e["date"] == date(2026, 10, 14) for e in _cal_events),
+           [(e["date"], e["title"][:30]) for e in _cal_events])
+check("the release leg names its origin",
+      {e["origin"] for e in _cal_events if "CPI" in e["title"]},
+      {"FRED release calendar"})
+check_true("lead 35 puts it inside its window from the prior print",
+           all(e.get("lead") == render.RELEASE_LEAD_DAYS
+               for e in _cal_events if e["origin"] == "FRED release calendar"),
+           render.RELEASE_LEAD_DAYS)
+
+# A failed fetch is a named degradation, never a silently empty calendar.
+_dead = copy.deepcopy(_cal_ctx)
+_dead["release_sched"] = {"ok": False, "error": "HTTP 500", "data": None}
+check_true("a dead release calendar drops the entries rather than faking them",
+           not any("CPI —" in e["title"]
+                   for e in render.radar_events(_dead, _TODAY)),
+           [e["title"][:40] for e in render.radar_events(_dead, _TODAY)])
+
+# --- month-start emphasis, not month-start-only --------------------------
+_first = copy.deepcopy(_cal_ctx)
+_first["now"] = datetime(2026, 11, 1, 9, 25, tzinfo=LISBON)
+_first_lines = render._month_start_lines(_first, date(2026, 11, 1))
+check_true("on the first of the month the four dates lead the section",
+           any("November's US data" in l for l in _first_lines), _first_lines)
+check_true("each with a countdown",
+           any("T-" in l or "TODAY" in l for l in _first_lines), _first_lines)
+check("on any other morning it says nothing at all",
+      render._month_start_lines(_cal_ctx, date(2026, 10, 7)), [])
+check_true("but the dates are still in the radar that day",
+           any("CPI" in t for t in _cal_titles), _cal_titles)
+_fdead = copy.deepcopy(_first)
+_fdead["release_sched"] = {"ok": False, "error": "HTTP 500", "data": None}
+check_true("a month-start with a dead calendar says so, not nothing",
+           any("unavailable" in l
+               for l in render._month_start_lines(_fdead, date(2026, 11, 1))),
+           render._month_start_lines(_fdead, date(2026, 11, 1)))
+
+# --- D3 / D9 / D22. Dates and periods only, never a reading --------------
+_banned = ("key risk", "important", "watch for", "pressure", "could move",
+           "expect", "likely", "bullish", "bearish", "hot print")
+_all_text = " ".join(_cal_titles + _first_lines).lower()
+for _w in _banned:
+    check_true(f"the calendar never says {_w!r}", _w not in _all_text, _all_text[:200])
+
+
 print("\n-- the PM guard has the same escape hatch as the morning one --")
 # A real PM edition had gone out, so the duplicate guard refused a dry run on
 # the runner - the one moment a change most needs proving. The morning guard
@@ -1048,7 +1179,7 @@ check("and finds nothing failed when nothing failed", _failed_keys, [])
 _real = main.gather(datetime(2026, 9, 19, 13, 0, tzinfo=LISBON))
 check_true("the real gather returns a lazy context",
            isinstance(_real, main.LazyContext), type(_real))
-check("and fetches nothing on the way out", len(_real._pending), 21)
+check("and fetches nothing on the way out", len(_real._pending), 22)
 check_true("`now` is a plain value, never a fetcher",
            _real["now"].hour == 13 and "now" not in _real._pending, _real["now"])
 check_true("every source the old gather fetched still has a fetcher",
@@ -1056,7 +1187,8 @@ check_true("every source the old gather fetched still has a fetcher",
             "perp_eth", "options_btc", "cross_asset", "global_mcap",
             "policy_radar", "fed_officials", "treasury_ops", "policy_rate",
             "fed_odds", "inflation", "backdrop", "news", "liquidations",
-            "yahoo_extra", "plumbing", "watchlist"} == set(_real._pending),
+            "yahoo_extra", "plumbing", "watchlist",
+            "release_sched"} == set(_real._pending),
            sorted(_real._pending))
 
 

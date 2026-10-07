@@ -493,6 +493,19 @@ def build(ctx) -> tuple[str, str]:
     md.append("## AHEAD\n")
     html.append(_h_section("Ahead"))
 
+    # MONTH-START EMPHASIS, not month-start-only. On the first brief of the
+    # month the four US releases lead the section; every other morning they
+    # sit in their bucket with a countdown.
+    #
+    # Printing them once a month was what was asked for and is the one thing
+    # here that was argued down: the one morning he skims is then the month
+    # he loses, and his stated reason for the whole system is that he forgets
+    # and wants reminding daily. A thing that appears once and matters hugely
+    # is the $6bn buyback failure waiting to happen again (§3.9).
+    for line in _month_start_lines(ctx, today):
+        md.append(line)
+        html.append(f"<p>{_hb(line)}</p>")
+
     # The forward calendar moved here from CALENDAR when TODAY absorbed the
     # rest of it. Data prints and policy dates are the same question asked at
     # two ranges, and splitting them across tiers made the reader look twice.
@@ -1054,6 +1067,12 @@ def _setup_bullets(ctx):
 # everything, so a year of range costs nothing in noise.
 RADAR_HORIZON_DAYS = 365
 
+# Addition D. `lead 35` puts the four US releases in the THIS MONTH bucket
+# from the moment the prior month's print lands, so there is never a morning
+# without the next date in view - which is the whole ask: planning lead time.
+RELEASE_LEAD_DAYS = 35
+RELEASE_CALENDAR_URL = "https://fred.stlouisfed.org/releases"
+
 
 def _bn(v):
     """Par amounts arrive in dollars and are always in the billions."""
@@ -1307,6 +1326,31 @@ def _fed_path(ctx, today):
     return lines, notes
 
 
+def _month_start_lines(ctx, today):
+    """The four US release dates, led on the first brief of each month.
+
+    Silent on every other morning - the dates are still in AHEAD's buckets
+    with their countdowns, which is the daily half of the same answer.
+    """
+    if today.day != 1:
+        return []
+    rs = ctx.get("release_sched")
+    if rs is None:
+        return []
+    if not rs["ok"]:
+        return [f"**This month's US data** — unavailable: {rs['error']}", ""]
+    rows = [r for r in rs["data"]["releases"] if r.get("next")]
+    if not rows:
+        return ["**This month's US data** — no scheduled dates returned.", ""]
+    out = [f"**{today:%B}'s US data** — the dates, as early as they are known:"]
+    for r in sorted(rows, key=lambda x: x["next"]):
+        days = (r["next"] - today).days
+        out.append(f"- **{r['label']}** · {r['next']:%a %d %b} · "
+                   f"{_tminus(days)} · {r['reference']} data")
+    out.append("")
+    return out
+
+
 def radar_events(ctx, today):
     """Every dated policy event still ahead, both legs merged, nearest first.
 
@@ -1324,6 +1368,34 @@ def radar_events(ctx, today):
     if r and r["ok"]:
         for e in r["data"]["events"]:
             merged.append({**e, "origin": "Federal Register", "stale": False})
+
+    # Addition D, Phase 1. The US release calendar is a THIRD leg of the same
+    # merged list, deliberately - not a second section reading the same dates.
+    # Two sections sourcing one calendar drift apart and then contradict each
+    # other on one screen, which is §3.9 rather than a tidiness preference.
+    rs = ctx.get("release_sched")
+    if rs and rs["ok"]:
+        for row in rs["data"]["releases"]:
+            if row.get("next"):
+                title = f"{row['label']} — {row['reference']} data"
+                merged.append({
+                    "date": row["next"], "title": title,
+                    "url": RELEASE_CALENDAR_URL, "label": "data",
+                    "origin": "FRED release calendar", "stale": False,
+                    "klass": "data", "lead": RELEASE_LEAD_DAYS,
+                    "verified": None, "release_state": "scheduled"})
+            # A date that passed with nothing published is the thing the
+            # brief must not stay quiet about. It does not keep counting
+            # down to the next one as though the last had happened.
+            if row.get("overdue"):
+                merged.append({
+                    "date": today, "title":
+                        f"{row['label']} was due {row['overdue']:%a %d %b} "
+                        f"and FRED carries no data for it yet",
+                    "url": RELEASE_CALENDAR_URL, "label": "data",
+                    "origin": "FRED release calendar", "stale": False,
+                    "klass": "data", "lead": RELEASE_LEAD_DAYS,
+                    "verified": None, "release_state": "overdue"})
 
     wl = ctx.get("watchlist") or {"events": []}
     for e in wl["events"]:
